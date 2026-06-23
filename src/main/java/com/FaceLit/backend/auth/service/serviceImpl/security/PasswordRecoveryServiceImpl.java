@@ -11,6 +11,7 @@ import com.FaceLit.backend.auth.dto.request.security.RequestPasswordRecoveryDTO;
 import com.FaceLit.backend.auth.dto.request.security.ResetPasswordDTO;
 import com.FaceLit.backend.auth.dto.response.security.PasswordRecoveryResponseDTO;
 import com.FaceLit.backend.auth.exception.PasswordRecoveryException;
+import com.FaceLit.backend.auth.model.enums.AccountStatus;
 import com.FaceLit.backend.auth.model.enums.RecoveryState;
 import com.FaceLit.backend.auth.model.security.Credential;
 import com.FaceLit.backend.auth.model.security.PasswordRecovery;
@@ -25,7 +26,7 @@ import jakarta.transaction.Transactional;
 @Service
 public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
 
-      private final CredentialRepository credentialRepository;
+    private final CredentialRepository credentialRepository;
     private final PasswordRecoveryRepository passwordRecoveryRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
@@ -52,7 +53,12 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
 
         User user = credential.getUser();
 
-        // 2. Invalidar el código anterior si existe — igual que resendCode() en RegisterServiceImpl
+        // 2 Validar que la cuenta esté ACTIVA
+        if (user.getAccountStatus() !=AccountStatus.ACTIVE) {
+            throw new PasswordRecoveryException("La cuenta no se encuentra habilitada para recuperar contraseña"); 
+        }
+
+        //  2.1 Invalidar el código anterior si existe — igual que resendCode() en RegisterServiceImpl
         passwordRecoveryRepository.findActiveByUser(user).ifPresent(previous -> {
             previous.setUsed(true);
             passwordRecoveryRepository.save(previous);
