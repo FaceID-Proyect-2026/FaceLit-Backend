@@ -72,7 +72,7 @@ public class JwtFilter extends OncePerRequestFilter {
         // Ejemplo resultado:
         // [ROLE_INSTRUCTOR, VIEW_OWN_PROFILE, VIEW_ATTENDANCE]
         List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
-        authorities.add(new SimpleGrantedAuthority("ROLE" + role));
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
         authorities.addAll(
                 permissions.stream()
                         .map(SimpleGrantedAuthority::new)
