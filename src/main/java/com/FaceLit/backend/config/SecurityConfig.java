@@ -40,17 +40,17 @@ public class SecurityConfig {
                         .requestMatchers("/api/consent/**").permitAll()
                         .requestMatchers("/api/catalogos/**").permitAll()
 
-                        // ─── SOLO ADMINISTRATOR ──────────────────────────────────
+                        // ─── SOLO ADMINISTRATOR Y COORDINATOR ────────────────────────
                         // Ver todos los usuarios, asignar roles, gestionar todo
-                        .requestMatchers("/api/admin/**").hasRole("ADMINISTRATOR")
+                        .requestMatchers("/api/admin/**").hasAnyRole("ADMINISTRATOR", "COORDINATOR")
 
                         // ─── ADMINISTRATOR e INSTRUCTOR ──────────────────────────
                         // Ver asistencia de fichas, gestionar horarios
-                        .requestMatchers("/api/instructor/**").hasAnyRole("ADMINISTRATOR", "INSTRUCTOR")
+                        .requestMatchers("/api/instructor/**").hasAnyRole("ADMINISTRATOR", "COORDINATOR", "INSTRUCTOR")
 
                         // ─── TODOS LOS ROLES AUTENTICADOS ────────────────────────
                         // Ver perfil propio, ver propia asistencia
-                        .requestMatchers("/api/apprentice/**").hasAnyRole("ADMINISTRATOR", "INSTRUCTOR", "APPRENTICE")
+                        .requestMatchers("/api/apprentice/**").hasAnyRole("ADMINISTRATOR", "COORDINATOR", "INSTRUCTOR", "APPRENTICE")
 
                         // Cualquier otro endpoint requiere autenticación
                         .anyRequest().authenticated())
