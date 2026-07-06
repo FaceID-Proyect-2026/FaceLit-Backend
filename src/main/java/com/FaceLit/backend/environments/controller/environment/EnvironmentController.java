@@ -1,9 +1,13 @@
-package com.FaceLit.backend.environments.controller;
+package com.FaceLit.backend.environments.controller.environment;
 
-import com.FaceLit.backend.environments.dto.request.EnvironmentRequestDTO;
-import com.FaceLit.backend.environments.dto.response.EnvironmentResponseDTO;
+import com.FaceLit.backend.environments.dto.request.environment.EnvironmentRequestDTO;
+import com.FaceLit.backend.environments.dto.response.environment.EnvironmentResponseDTO;
 import com.FaceLit.backend.environments.model.enums.EnvironmentStatus;
-import com.FaceLit.backend.environments.service.EnvironmentService;
+import com.FaceLit.backend.environments.service.environment.EnvironmentService;
+
+import org.springframework.data.domain.Page;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,7 +17,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
@@ -73,5 +76,23 @@ public class EnvironmentController {
     public ResponseEntity<List<EnvironmentResponseDTO>> getByStatus(
             @RequestParam EnvironmentStatus status) {
         return ResponseEntity.ok(environmentService.getEnvironmentsByStatus(status));
+    }
+
+    // DELETE /api/admin/environments/{id}
+    // Eliminacion logica — cambia status a INACTIVE
+    // Solo ADMINISTRATOR y COORDINATOR
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteEnvironment(@PathVariable UUID id) {
+        environmentService.deleteEnvironment(id);
+        return ResponseEntity.noContent().build(); // 204 No Content
+    }
+
+    // GET /api/admin/environments/paged?page=0&size=10
+    // Listado paginado de ambientes
+    @GetMapping("/paged")
+    public ResponseEntity<Page<EnvironmentResponseDTO>> getAllPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(environmentService.getAllEnvironmentsPaged(page, size));
     }
 }

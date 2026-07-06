@@ -1,4 +1,4 @@
-package com.FaceLit.backend.environments.model;
+package com.FaceLit.backend.environments.model.environment;
 import jakarta.persistence.Id;
 
 import com.FaceLit.backend.environments.model.enums.EnvironmentStatus;

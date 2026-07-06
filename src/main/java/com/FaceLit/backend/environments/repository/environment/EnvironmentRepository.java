@@ -1,10 +1,11 @@
-package com.FaceLit.backend.environments.repository;
+package com.FaceLit.backend.environments.repository.environment;
 
 import java.util.Optional;
 import java.util.UUID;
 import java.util.List;
-import com.FaceLit.backend.environments.model.Environment;
+
 import com.FaceLit.backend.environments.model.enums.EnvironmentStatus;
+import com.FaceLit.backend.environments.model.environment.Environment;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

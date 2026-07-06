@@ -1,4 +1,4 @@
-package com.FaceLit.backend.environments.dto.request;
+package com.FaceLit.backend.environments.dto.request.environment;
 
 import com.FaceLit.backend.environments.model.enums.EnvironmentStatus;
 import jakarta.validation.constraints.Size;

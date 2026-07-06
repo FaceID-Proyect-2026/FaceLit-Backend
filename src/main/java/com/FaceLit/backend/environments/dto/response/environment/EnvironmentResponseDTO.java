@@ -1,4 +1,4 @@
-package com.FaceLit.backend.environments.dto.response;
+package com.FaceLit.backend.environments.dto.response.environment;
 
 import com.FaceLit.backend.environments.model.enums.EnvironmentStatus;
 import lombok.AllArgsConstructor;

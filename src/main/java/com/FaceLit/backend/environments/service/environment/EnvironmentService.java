@@ -1,8 +1,9 @@
-package com.FaceLit.backend.environments.service;
+package com.FaceLit.backend.environments.service.environment;
 
-import com.FaceLit.backend.environments.dto.request.EnvironmentRequestDTO;
-import com.FaceLit.backend.environments.dto.response.EnvironmentResponseDTO;
+import com.FaceLit.backend.environments.dto.request.environment.EnvironmentRequestDTO;
+import com.FaceLit.backend.environments.dto.response.environment.EnvironmentResponseDTO;
 import com.FaceLit.backend.environments.model.enums.EnvironmentStatus;
+import org.springframework.data.domain.Page;
 
 import java.util.List;
 import java.util.UUID;
@@ -26,5 +27,11 @@ public interface EnvironmentService {
 
     // Consulta por estado
     List<EnvironmentResponseDTO> getEnvironmentsByStatus(EnvironmentStatus status);
+
+    // Elimina logicamente el ambiente — cambia status a INACTIVE
+    void deleteEnvironment(UUID id);
+
+    // Listado paginado
+    Page<EnvironmentResponseDTO> getAllEnvironmentsPaged(int page, int size);
 
 }
