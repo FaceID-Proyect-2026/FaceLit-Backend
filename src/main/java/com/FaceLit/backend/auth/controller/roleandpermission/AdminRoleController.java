@@ -45,5 +45,5 @@ public class AdminRoleController {
             @PathVariable UUID userId,@Valid @RequestBody AssignRoleRequestDTO dto) {
                 return ResponseEntity.ok(adminRoleService.assignRole(userId, dto)); 
             }
-
+            
 }
