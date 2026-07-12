@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.UUID;
 
+import com.FaceLit.backend.academic.model.academic.UserChip;
 import com.FaceLit.backend.academic.model.enums.ChipState;
 import com.FaceLit.backend.academic.model.enums.WorkingDay;
 import com.FaceLit.backend.environments.model.environment.ChipEnvironment;
@@ -64,4 +65,8 @@ public class Chip extends AuditBase {
     // Una ficha puede estar asignada a muchos ambientes
     @OneToMany(mappedBy = "chip", fetch = FetchType.LAZY)
     private List<ChipEnvironment> chipEnvironments = new ArrayList<>();
+
+    // Una ficha puede estar asignada a muchos usuarios
+    @OneToMany(mappedBy = "chip", fetch = FetchType.LAZY)
+    private List<UserChip> userChips = new ArrayList<>();
 }
