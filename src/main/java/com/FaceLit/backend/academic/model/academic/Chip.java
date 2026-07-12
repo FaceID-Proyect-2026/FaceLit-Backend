@@ -10,14 +10,18 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.UUID;
 
 import com.FaceLit.backend.academic.model.enums.ChipState;
 import com.FaceLit.backend.academic.model.enums.WorkingDay;
+import com.FaceLit.backend.environments.model.environment.ChipEnvironment;
 import com.FaceLit.backend.shared.model.AuditBase;
 
 // RF-3.2 — Registro de fichas asociadas a un programa
@@ -56,4 +60,8 @@ public class Chip extends AuditBase {
     @Enumerated(EnumType.STRING)
     @Column(name = "workingday", length = 50)
     private WorkingDay workingDay;
+
+    // Una ficha puede estar asignada a muchos ambientes
+    @OneToMany(mappedBy = "chip", fetch = FetchType.LAZY)
+    private List<ChipEnvironment> chipEnvironments = new ArrayList<>();
 }
