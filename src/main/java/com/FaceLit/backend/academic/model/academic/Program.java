@@ -6,13 +6,17 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.UUID;
 
 // RF-3.1 — Registro de programas de formación
@@ -37,5 +41,12 @@ public class Program extends AuditBase {
     @Enumerated(EnumType.STRING)
     @Column(name = "state", nullable = false, length = 20)
     private ProgramState state = ProgramState.ACTIVE;
+
+    // Dentro de Program.java, agrega este atributo:
+
+    // Un programa tiene muchas fichas
+    // mappedBy = el campo en Chip que tiene la FK
+    @OneToMany(mappedBy = "program", fetch = FetchType.LAZY)
+    private List<Chip> chips = new ArrayList<>();
 
 }

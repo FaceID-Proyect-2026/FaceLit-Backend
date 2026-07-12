@@ -95,7 +95,15 @@ public class ChipServiceImpl implements ChipService {
         Program program = programRepository.findById(dto.getIdProgram())
                 .orElseThrow(() -> new ProgramException("Programa no encontrado"));
 
-        // 3. Actualizar campos — el chipCode NO se modifica, fue generado por el sistema
+        // 2.1 Validar que no se cambie el programa — una ficha pertenece a UN solo
+        // programa
+        if (!chip.getProgram().getIdProgram().equals(dto.getIdProgram())) {
+            throw new ChipException(
+                    "No se puede cambiar el programa de una ficha ya registrada");
+        }
+
+        // 3. Actualizar campos — el chipCode NO se modifica, fue generado por el
+        // sistema
         chip.setProgram(program);
         chip.setChipName(dto.getChipName());
         chip.setWorkingDay(dto.getWorkingDay());
@@ -155,4 +163,5 @@ public class ChipServiceImpl implements ChipService {
                 .map(c -> toDTO(c, null))
                 .collect(Collectors.toList());
     }
+
 }
