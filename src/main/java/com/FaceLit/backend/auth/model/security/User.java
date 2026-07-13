@@ -1,8 +1,12 @@
 package com.FaceLit.backend.auth.model.security;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
 
+import com.FaceLit.backend.academic.model.academic.UserChip;
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
 import com.FaceLit.backend.shared.model.AuditBase;
 
@@ -18,6 +22,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -30,26 +35,17 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-@Table(
-    name = "user_app",
-    schema = "security",
+@Table(name = "user_app", schema = "security",
 
-    // Índice para acelerar búsquedas por número de documento
-    indexes = {
-        @Index(
-            name = "idx_user_document",
-            columnList = "number_document"
-        )
-    },
+        // Índice para acelerar búsquedas por número de documento
+        indexes = {
+                @Index(name = "idx_user_document", columnList = "number_document")
+        },
 
-    // Restricción de unicidad para evitar documentos duplicados
-    uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uk_user_document",
-            columnNames = "number_document"
-        )
-    }
-)
+        // Restricción de unicidad para evitar documentos duplicados
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_user_document", columnNames = "number_document")
+        })
 public class User extends AuditBase {
 
     // =========================================================
@@ -101,7 +97,7 @@ public class User extends AuditBase {
     // VERIFICACIÓN DE CORREO ELECTRÓNICO
     //
     // false = pendiente
-    // true  = verificado
+    // true = verificado
     // =========================================================
     @Column(name = "email_verification", nullable = false)
     private boolean emailVerified = false;
@@ -116,11 +112,7 @@ public class User extends AuditBase {
     // - Actualizar usuario → actualiza credencial
     // - Eliminar usuario → elimina credencial
     // =========================================================
-    @OneToOne(
-        mappedBy = "user",
-        cascade = CascadeType.ALL,
-        fetch = FetchType.LAZY
-    )
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Credential credential;
 
     // =========================================================
@@ -130,9 +122,10 @@ public class User extends AuditBase {
     // de documento (CC, TI, CE, etc.)
     // =========================================================
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(
-        name = "id_type_document",
-        nullable = false
-    )
+    @JoinColumn(name = "id_type_document", nullable = false)
     private DocumentType documentType;
+
+    // Un usuario puede estar asignado a muchas fichas
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    private List<UserChip> userChips = new ArrayList<>();
 }
