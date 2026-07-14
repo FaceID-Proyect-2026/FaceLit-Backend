@@ -1,0 +1,29 @@
+package com.FaceLit.backend.schedule.service.schedule;
+
+import com.FaceLit.backend.schedule.dto.request.schedule.ScheduleRequestDTO;
+import com.FaceLit.backend.schedule.dto.response.schedule.ScheduleResponseDTO;
+
+import java.util.List;
+import java.util.UUID;
+
+public interface ScheduleService {
+
+    // Registra un nuevo horario con instructor y ambiente
+    ScheduleResponseDTO createSchedule(ScheduleRequestDTO dto);
+
+    // Actualiza un horario — elimina relaciones anteriores y crea nuevas
+    ScheduleResponseDTO updateSchedule(UUID id, ScheduleRequestDTO dto);
+
+    // Eliminacion logica
+    void deleteSchedule(UUID id);
+
+    // Lista todos los horarios
+    List<ScheduleResponseDTO> getAllSchedules();
+
+    // Consulta por ID
+    ScheduleResponseDTO getScheduleById(UUID id);
+
+    // Horarios de una ficha especifica
+    List<ScheduleResponseDTO> getSchedulesByChip(UUID idChip);
+
+}
