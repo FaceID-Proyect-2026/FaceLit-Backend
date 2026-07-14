@@ -9,9 +9,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface RecordEnvironmentRepository  extends JpaRepository<RecordEnvironment, UUID> {
+public interface RecordEnvironmentRepository extends JpaRepository<RecordEnvironment, UUID> {
 
     // Ambiente activo de un horario
     Optional<RecordEnvironment> findBySchedule_IdSchedule(UUID idSchedule);
+
+    // Ahora — trae solo el activo
+    Optional<RecordEnvironment> findBySchedule_IdScheduleAndActive(
+            UUID idSchedule, String active);
 
 }

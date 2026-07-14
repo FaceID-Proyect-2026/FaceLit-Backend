@@ -26,4 +26,13 @@ public interface ScheduleService {
     // Horarios de una ficha especifica
     List<ScheduleResponseDTO> getSchedulesByChip(UUID idChip);
 
+    // Por ambiente — admin y coordinator
+    List<ScheduleResponseDTO> getSchedulesByEnvironment(UUID idEnvironment);
+
+    // Horarios del instructor autenticado
+    List<ScheduleResponseDTO> getMySchedulesAsInstructor(UUID idUser);
+
+    // Horario del aprendiz autenticado
+    List<ScheduleResponseDTO> getMyScheduleAsApprentice(UUID idUser);
+
 }

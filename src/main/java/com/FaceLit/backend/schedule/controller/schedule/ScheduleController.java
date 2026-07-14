@@ -71,4 +71,13 @@ public class ScheduleController {
         return ResponseEntity.ok(scheduleService.getSchedulesByChip(idChip));
     }
 
+    // GET /api/admin/schedules/environment/{idEnvironment}
+    // Admin y Coordinator ven horarios de un ambiente especifico
+    @GetMapping("/environment/{idEnvironment}")
+    public ResponseEntity<List<ScheduleResponseDTO>> getByEnvironment(
+            @PathVariable UUID idEnvironment) {
+        return ResponseEntity.ok(
+                scheduleService.getSchedulesByEnvironment(idEnvironment));
+    }
+
 }

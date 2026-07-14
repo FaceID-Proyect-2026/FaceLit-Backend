@@ -120,4 +120,34 @@ public interface ScheduleRepository extends JpaRepository<Schedule, UUID> {
             @Param("endTime") LocalTime endTime,
             @Param("excludeId") UUID excludeId);
 
+    // Busca horarios por ambiente
+    @Query("""
+                SELECT s FROM Schedule s
+                JOIN RecordEnvironment re ON re.schedule.idSchedule = s.idSchedule
+                WHERE re.environment.idEnvironment = :idEnvironment
+                AND re.active = 'ACTIVE'
+                AND s.status = 'ACTIVE'
+            """)
+    List<Schedule> findByEnvironment(@Param("idEnvironment") UUID idEnvironment);
+
+    // Busca horarios de un instructor
+    @Query("""
+                SELECT s FROM Schedule s
+                JOIN ScheduleInstructor si ON si.schedule.idSchedule = s.idSchedule
+                WHERE si.user.idUser = :idUser
+                AND si.status = 'ACTIVE'
+                AND s.status = 'ACTIVE'
+            """)
+    List<Schedule> findByInstructor(@Param("idUser") UUID idUser);
+
+    // Busca horarios del aprendiz a través de su ficha activa
+    @Query("""
+                SELECT s FROM Schedule s
+                JOIN UserChip uc ON uc.chip.idChip = s.chip.idChip
+                WHERE uc.user.idUser = :idUser
+                AND uc.state = 'ACTIVE'
+                AND s.status = 'ACTIVE'
+            """)
+    List<Schedule> findByApprentice(@Param("idUser") UUID idUser);
+
 }
