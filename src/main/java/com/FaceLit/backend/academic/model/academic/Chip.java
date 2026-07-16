@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.UUID;
 
-import com.FaceLit.backend.academic.model.academic.UserChip;
+
 import com.FaceLit.backend.academic.model.enums.ChipState;
 import com.FaceLit.backend.academic.model.enums.WorkingDay;
 import com.FaceLit.backend.environments.model.environment.ChipEnvironment;

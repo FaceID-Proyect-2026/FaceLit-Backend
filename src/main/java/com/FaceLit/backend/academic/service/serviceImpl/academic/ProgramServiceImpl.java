@@ -16,9 +16,9 @@ import com.FaceLit.backend.academic.service.academic.ProgramService;
 import jakarta.transaction.Transactional;
 
 @Service
-public class ProgramServiceImpl implements ProgramService{
+public class ProgramServiceImpl implements ProgramService {
 
-      private final ProgramRepository programRepository;
+    private final ProgramRepository programRepository;
 
     public ProgramServiceImpl(ProgramRepository programRepository) {
         this.programRepository = programRepository;
@@ -122,6 +122,21 @@ public class ProgramServiceImpl implements ProgramService{
                 .map(p -> new ProgramResponseDTO(
                         p.getIdProgram(), p.getProgramName(), p.getState(), null))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public void permanentDeleteProgram(UUID id) {
+        Program program = programRepository.findById(id)
+                .orElseThrow(() -> new ProgramException("Programa no encontrado"));
+
+        if (program.getState() == ProgramState.ACTIVE) {
+            throw new ProgramException(
+                    "El programa debe estar inactivo antes de eliminarse permanentemente");
+        }
+
+        programRepository.deleteById(id);
+
     }
 
 }
