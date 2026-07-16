@@ -9,7 +9,7 @@ import com.FaceLit.backend.academic.model.enums.ProgramState;
 
 public interface ProgramService {
 
-     // Registra un nuevo programa
+    // Registra un nuevo programa
     ProgramResponseDTO createProgram(ProgramRequestDTO dto);
 
     // Edita un programa existente
@@ -29,5 +29,7 @@ public interface ProgramService {
 
     // Consulta por estado
     List<ProgramResponseDTO> getProgramsByState(ProgramState state);
+
+    void permanentDeleteProgram(UUID id);
 
 }

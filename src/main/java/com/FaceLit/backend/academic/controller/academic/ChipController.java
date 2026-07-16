@@ -79,4 +79,11 @@ public class ChipController {
         return ResponseEntity.ok(chipService.getChipsByState(state));
     }
 
+    // DELETE /api/admin/chips/{id}/permanent
+    @DeleteMapping("/{id}/permanent")
+    public ResponseEntity<Void> permanentDelete(@PathVariable UUID id) {
+        chipService.permanentDeleteChip(id);
+        return ResponseEntity.noContent().build();
+    }
+
 }

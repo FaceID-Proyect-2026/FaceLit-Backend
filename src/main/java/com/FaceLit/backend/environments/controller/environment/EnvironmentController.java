@@ -95,4 +95,12 @@ public class EnvironmentController {
             @RequestParam(defaultValue = "10") int size) {
         return ResponseEntity.ok(environmentService.getAllEnvironmentsPaged(page, size));
     }
+
+    // DELETE /api/admin/environments/{id}/permanent
+    // Elimina completamente — solo si ya está INACTIVE
+    @DeleteMapping("/{id}/permanent")
+    public ResponseEntity<Void> permanentDelete(@PathVariable UUID id) {
+        environmentService.permanentDeleteEnvironment(id);
+        return ResponseEntity.noContent().build();
+    }
 }

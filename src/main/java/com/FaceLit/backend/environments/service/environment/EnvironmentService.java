@@ -34,4 +34,7 @@ public interface EnvironmentService {
     // Listado paginado
     Page<EnvironmentResponseDTO> getAllEnvironmentsPaged(int page, int size);
 
+    // Elimina permanentemente — solo si ya está INACTIVE
+    void permanentDeleteEnvironment(UUID id);
+
 }

@@ -1,5 +1,5 @@
 package com.FaceLit.backend.academic.controller.academic;
- 
+
 // controller
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -76,5 +76,12 @@ public class ProgramController {
     public ResponseEntity<List<ProgramResponseDTO>> getByState(
             @RequestParam ProgramState state) {
         return ResponseEntity.ok(programService.getProgramsByState(state));
+    }
+
+    // DELETE /api/admin/programs/{id}/permanent
+    @DeleteMapping("/{id}/permanent")
+    public ResponseEntity<Void> permanentDelete(@PathVariable UUID id) {
+        programService.permanentDeleteProgram(id);
+        return ResponseEntity.noContent().build();
     }
 }

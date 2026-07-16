@@ -8,7 +8,7 @@ import com.FaceLit.backend.academic.dto.response.academic.ChipResponseDTO;
 import com.FaceLit.backend.academic.model.enums.ChipState;
 
 public interface ChipService {
-    
+
     // Registra una nueva ficha — el sistema genera el codigo automaticamente
     ChipResponseDTO createChip(ChipRequestDTO dto);
 
@@ -29,5 +29,7 @@ public interface ChipService {
 
     // Filtra por estado
     List<ChipResponseDTO> getChipsByState(ChipState state);
+
+    void permanentDeleteChip(UUID id);
 
 }

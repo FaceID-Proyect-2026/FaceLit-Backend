@@ -169,18 +169,34 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         }
 
         @Override
-public Page<EnvironmentResponseDTO> getAllEnvironmentsPaged(int page, int size) {
+        public Page<EnvironmentResponseDTO> getAllEnvironmentsPaged(int page, int size) {
 
-    // Pageable — page empieza en 0, size es cuantos por pagina
-    Pageable pageable = PageRequest.of(page, size, Sort.by("environmentName").ascending());
+                // Pageable — page empieza en 0, size es cuantos por pagina
+                Pageable pageable = PageRequest.of(page, size, Sort.by("environmentName").ascending());
 
-    return environmentRepository.findAll(pageable)
-            .map(env -> new EnvironmentResponseDTO(
-                    env.getIdEnvironment(),
-                    env.getEnvironmentName(),
-                    env.getCapacity(),
-                    env.getStatus(),
-           
-                              null));
-}
+                return environmentRepository.findAll(pageable)
+                                .map(env -> new EnvironmentResponseDTO(
+                                                env.getIdEnvironment(),
+                                                env.getEnvironmentName(),
+                                                env.getCapacity(),
+                                                env.getStatus(),
+
+                                                null));
+        }
+
+        @Override
+        @Transactional
+        public void permanentDeleteEnvironment(UUID id) {
+                Environment environment = environmentRepository.findById(id)
+                                .orElseThrow(() -> new EnvironmentException("Ambiente no encontrado"));
+
+                // Solo se puede eliminar permanentemente si ya está INACTIVE
+                if (environment.getStatus() == EnvironmentStatus.ACTIVE) {
+                        throw new EnvironmentException(
+                                        "El ambiente debe estar inactivo antes de eliminarse permanentemente");
+                }
+
+                environmentRepository.deleteById(id);
+
+        }
 }

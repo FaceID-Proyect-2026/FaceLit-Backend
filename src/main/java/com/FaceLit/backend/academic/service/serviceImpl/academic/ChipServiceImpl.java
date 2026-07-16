@@ -164,4 +164,18 @@ public class ChipServiceImpl implements ChipService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    @Transactional
+    public void permanentDeleteChip(UUID id) {
+        Chip chip = chipRepository.findById(id)
+                .orElseThrow(() -> new ChipException("Ficha no encontrada"));
+
+        if (chip.getState() == ChipState.ACTIVE) {
+            throw new ChipException(
+                    "La ficha debe estar inactiva antes de eliminarse permanentemente");
+        }
+
+        chipRepository.deleteById(id);
+    }
+
 }
