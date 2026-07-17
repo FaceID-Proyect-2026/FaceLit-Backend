@@ -52,6 +52,14 @@ public class ScheduleController {
         return ResponseEntity.noContent().build();
     }
 
+    // DELETE /api/admin/schedules/{id}/permanent
+    // Elimina completamente — solo si ya está INACTIVE
+    @DeleteMapping("/{id}/permanent")
+    public ResponseEntity<Void> permanentDelete(@PathVariable UUID id) {
+        scheduleService.permanentDeleteSchedule(id);
+        return ResponseEntity.noContent().build();
+    }
+
     // GET /api/admin/schedules
     @GetMapping
     public ResponseEntity<List<ScheduleResponseDTO>> getAll() {
@@ -78,6 +86,14 @@ public class ScheduleController {
             @PathVariable UUID idEnvironment) {
         return ResponseEntity.ok(
                 scheduleService.getSchedulesByEnvironment(idEnvironment));
+    }
+
+    // GET /api/admin/schedules/user/{idUser}
+    // Admin ve el horario de un aprendiz especifico
+    @GetMapping("/user/{idUser}")
+    public ResponseEntity<List<ScheduleResponseDTO>> getByUser(
+            @PathVariable UUID idUser) {
+        return ResponseEntity.ok(scheduleService.getSchedulesByUser(idUser));
     }
 
 }

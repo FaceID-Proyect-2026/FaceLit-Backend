@@ -150,4 +150,14 @@ public interface ScheduleRepository extends JpaRepository<Schedule, UUID> {
             """)
     List<Schedule> findByApprentice(@Param("idUser") UUID idUser);
 
+    // Admin busca horarios de un aprendiz especifico por su UUID
+    @Query("""
+                SELECT s FROM Schedule s
+                JOIN UserChip uc ON uc.chip.idChip = s.chip.idChip
+                WHERE uc.user.idUser = :idUser
+                AND uc.state = 'ACTIVE'
+                AND s.status = 'ACTIVE'
+            """)
+    List<Schedule> findByApprenticeId(@Param("idUser") UUID idUser);
+
 }

@@ -273,6 +273,30 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
 
         @Override
+        @Transactional
+        public void permanentDeleteSchedule(UUID id) {
+                Schedule schedule = scheduleRepository.findById(id)
+                                .orElseThrow(() -> new ScheduleException("Horario no encontrado"));
+
+                // Solo se puede eliminar permanentemente si ya está INACTIVE
+                if (schedule.getStatus() == ScheduleStatus.ACTIVE) {
+                        throw new ScheduleException(
+                                        "El horario debe estar inactivo antes de eliminarse permanentemente");
+                }
+
+                // Elimina primero las relaciones para evitar errores de FK
+                scheduleInstructorRepository
+                                .findBySchedule_IdScheduleAndStatus(id, ScheduleStatus.INACTIVE)
+                                .ifPresent(si -> scheduleInstructorRepository.delete(si));
+
+                recordEnvironmentRepository
+                                .findBySchedule_IdScheduleAndActive(id, "INACTIVE")
+                                .ifPresent(re -> recordEnvironmentRepository.delete(re));
+
+                scheduleRepository.deleteById(id);
+        }
+
+        @Override
         public List<ScheduleResponseDTO> getAllSchedules() {
                 return scheduleRepository.findAll().stream()
                                 .map(s -> toDTO(s, null))
@@ -333,6 +357,24 @@ public class ScheduleServiceImpl implements ScheduleService {
                 if (schedules.isEmpty()) {
                         throw new ScheduleException(
                                         "No hay horarios disponibles para esta ficha");
+                }
+
+                return schedules.stream()
+                                .map(s -> toDTO(s, null))
+                                .collect(Collectors.toList());
+        }
+
+        @Override
+        public List<ScheduleResponseDTO> getSchedulesByUser(UUID idUser) {
+                // Verifica que el usuario existe
+                userRepository.findById(idUser)
+                                .orElseThrow(() -> new ScheduleException("Usuario no encontrado"));
+
+                List<Schedule> schedules = scheduleRepository.findByApprenticeId(idUser);
+
+                if (schedules.isEmpty()) {
+                        throw new ScheduleException(
+                                        "No hay horarios disponibles para este usuario");
                 }
 
                 return schedules.stream()

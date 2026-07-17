@@ -17,6 +17,9 @@ public interface ScheduleService {
     // Eliminacion logica
     void deleteSchedule(UUID id);
 
+    // Elimina permanentemente — solo si ya está INACTIVE
+    void permanentDeleteSchedule(UUID id);
+
     // Lista todos los horarios
     List<ScheduleResponseDTO> getAllSchedules();
 
@@ -34,5 +37,8 @@ public interface ScheduleService {
 
     // Horario del aprendiz autenticado
     List<ScheduleResponseDTO> getMyScheduleAsApprentice(UUID idUser);
+
+    // Admin consulta horario de un aprendiz especifico por su UUID
+    List<ScheduleResponseDTO> getSchedulesByUser(UUID idUser);
 
 }
