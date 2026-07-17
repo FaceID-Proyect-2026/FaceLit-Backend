@@ -71,4 +71,8 @@ public class Schedule extends AuditBase {
     @OneToMany(mappedBy = "schedule", fetch = FetchType.LAZY)
     private List<ScheduleInstructor> instructors = new ArrayList<>();
 
+    // Un horario puede tener muchas excepciones registradas
+    @OneToMany(mappedBy = "schedule", fetch = FetchType.LAZY)
+    private List<ScheduleException> scheduleExceptions = new ArrayList<>();
+
 }

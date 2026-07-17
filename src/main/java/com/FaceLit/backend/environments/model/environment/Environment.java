@@ -3,6 +3,7 @@ package com.FaceLit.backend.environments.model.environment;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 
+import com.FaceLit.backend.schedule.model.schedule.ScheduleException;
 import com.FaceLit.backend.environments.model.enums.EnvironmentStatus;
 import com.FaceLit.backend.shared.model.AuditBase;
 import jakarta.persistence.EnumType;
@@ -50,4 +51,8 @@ public class Environment extends AuditBase {
     // Un ambiente puede tener muchas fichas asignadas
     @OneToMany(mappedBy = "environment", fetch = FetchType.LAZY)
     private List<ChipEnvironment> chipEnvironments = new ArrayList<>();
+
+    // Un ambiente puede tener muchas excepciones registradas
+    @OneToMany(mappedBy = "environment", fetch = FetchType.LAZY)
+    private List<ScheduleException> scheduleExceptions = new ArrayList<>();
 }
