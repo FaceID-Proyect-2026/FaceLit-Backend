@@ -1,7 +1,9 @@
 package com.FaceLit.backend.auth.service.serviceImpl.legal;
 
 import java.time.LocalDateTime;
+import java.util.Random;
 import java.util.UUID;
+import java.time.Duration;
 
 import org.springframework.stereotype.Service;
 
@@ -85,19 +87,19 @@ public class ConsentServiceImpl implements ConsentService {
         consent.setRequestDate(LocalDateTime.now());
         Consent savedConsent = consentRepository.save(consent);
 
-        // 6. Generar token UUID único de un solo uso
-        String token = UUID.randomUUID().toString();
+        // 6. Generar código de 6 dígitos (antes: UUID.randomUUID().toString())
+        String code = String.format("%06d", new Random().nextInt(999999));
 
         // 7. Guardar el token con expiración de 5 minutos
         ConsentVerification verification = new ConsentVerification();
         verification.setConsent(savedConsent);
-        verification.setToken(token);
+        verification.setToken(code);
         verification.setExpirationDate(LocalDateTime.now().plusMinutes(5));
         consentVerificationRepository.save(verification);
 
         // 8. Enviar correo al acudiente con el enlace de confirmación
         // El enlace lleva el token para que el acudiente acepte o rechace
-        emailService.sendConsentRequest(dto.getEmailGuardian(), dto.getFullName(), token);
+        emailService.sendConsentRequest(dto.getEmailGuardian(), dto.getFullName(), code);
 
         // 9. Responder al frontend — estado pendiente
         return ConsentResponseDTO.waitingGuardian(savedConsent.getIdConsent());
@@ -107,65 +109,75 @@ public class ConsentServiceImpl implements ConsentService {
     @Override
     @Transactional
     public ConsentVerificationResponseDTO confirmConsent(ConsentVerificationRequestDTO dto) {
-        // 1. Buscar el token en BD
+        // 1. Buscar el usuario menor
+        User user = userRepository.findById(dto.getId_user())
+                .orElseThrow(() -> new RegisterException("Usuario no encontrado"));
 
-        ConsentVerification verification = consentVerificationRepository.findByToken(dto.getToken())
-                .orElseThrow(() -> new RegisterException("Token inválido"));
+        // 2. Buscar el consentimiento del menor
+        Consent consent = consentRepository.findByUser(user)
+                .orElseThrow(() -> new RegisterException("No existe una solicitud de consentimiento"));
 
-        // 2. Verificar que no esté expirado ni usado
+        // 3. Buscar la verificación asociada
+        ConsentVerification verification = consentVerificationRepository.findByConsent(consent)
+                .orElseThrow(() -> new RegisterException("No hay código de verificación activo"));
+
+        // 4. Verificar vigencia
         if (!verification.isCurrent()) {
             return ConsentVerificationResponseDTO.expired();
-
         }
-        // 3. Marcar token como usado
+
+        // 5. Verificar que el código sea correcto
+        if (!verification.getToken().equals(dto.getCode())) {
+            throw new RegisterException("Código incorrecto");
+        }
+
+        // 6. Marcar como usado
         verification.setUsed(true);
         consentVerificationRepository.save(verification);
 
-        // 4. Actualizar el estado del consentimiento a ACCEPTED
-        Consent consent = verification.getConsent();
+        // 7. Actualizar el consentimiento
         consent.setConsentStatus(ConsentStatus.ACCEPTED);
         consent.setResponseDate(LocalDateTime.now());
         consentRepository.save(consent);
 
-        // 5. Activar la cuenta del usuario
-        User user = consent.getUser();
+        // 8. Activar la cuenta del menor
         user.setAccountStatus(AccountStatus.ACTIVE);
         userRepository.save(user);
 
-        // 5.1 Activar la cuenta del menor (handled elsewhere) - no direct user field
-        // update here
         return ConsentVerificationResponseDTO.accepted();
-
     }
 
     @Override
     @Transactional
     public ConsentVerificationResponseDTO refuseConsent(ConsentVerificationRequestDTO dto) {
 
-        // 1. Buscar el token en BD
-        ConsentVerification verification = consentVerificationRepository.findByToken(dto.getToken())
-                .orElseThrow(() -> new RegisterException("Token inválido"));
+        User user = userRepository.findById(dto.getId_user())
+                .orElseThrow(() -> new RegisterException("Usuario no encontrado"));
 
-        // 2. Verificar que no esté expirado ni usado
+        Consent consent = consentRepository.findByUser(user)
+                .orElseThrow(() -> new RegisterException("No existe una solicitud de consentimiento"));
+
+        ConsentVerification verification = consentVerificationRepository.findByConsent(consent)
+                .orElseThrow(() -> new RegisterException("No hay código de verificación activo"));
+
         if (!verification.isCurrent()) {
             return ConsentVerificationResponseDTO.expired();
-
         }
-        // 3. Marcar token como usado
+
+        if (!verification.getToken().equals(dto.getCode())) {
+            throw new RegisterException("Código incorrecto");
+        }
+
         verification.setUsed(true);
         consentVerificationRepository.save(verification);
 
-        // 4. Actualizar el estado del consentimiento a REJECTED
-        Consent consent = verification.getConsent();
         consent.setConsentStatus(ConsentStatus.REJECTED);
         consent.setResponseDate(LocalDateTime.now());
         consentRepository.save(consent);
 
-        User user = consent.getUser();
         user.setAccountStatus(AccountStatus.INACTIVE);
         userRepository.save(user);
 
-        // 5. El menor queda inactivo — handled elsewhere
         return ConsentVerificationResponseDTO.refused();
     }
 
@@ -192,6 +204,13 @@ public class ConsentServiceImpl implements ConsentService {
         ConsentVerification verification = consentVerificationRepository.findByConsent(consent)
                 .orElseThrow(() -> new RegisterException("No existe verificación asociada"));
 
+        // ── NUEVO: cooldown de 60 segundos ──
+        long secondsSinceLast = Duration.between(verification.getCreatedAt(), LocalDateTime.now()).getSeconds();
+        if (secondsSinceLast < 60) {
+            long remaining = 60 - secondsSinceLast;
+            throw new RegisterException("Debes esperar " + remaining + " segundos antes de solicitar otro código");
+        }
+
         // 4.1 Verificar que el token realmente haya expirado
         if (verification.isCurrent()) {
             throw new RegisterException(
@@ -203,13 +222,13 @@ public class ConsentServiceImpl implements ConsentService {
         consentVerificationRepository.save(verification);
 
         // 6. Crear nuevo token
-        String token = UUID.randomUUID().toString();
+        String code = String.format("%06d", new Random().nextInt(999999));
 
         // 7. Crear nuevo registro
 
         ConsentVerification newVerification = new ConsentVerification();
         newVerification.setConsent(consent);
-        newVerification.setToken(token);
+        newVerification.setToken(code);
         newVerification.setExpirationDate(LocalDateTime.now().plusMinutes(5));
 
         consentVerificationRepository.save(newVerification);
@@ -219,7 +238,7 @@ public class ConsentServiceImpl implements ConsentService {
         Guardian guardin = consent.getGuardian();
 
         // 9. Enviar nuevamente el correo
-        emailService.sendConsentRequest(guardin.getEmailGuardian(), guardin.getFullName(), token);
+        emailService.sendConsentRequest(guardin.getEmailGuardian(), guardin.getFullName(), code);
 
         // 10. Responder
         return ConsentResponseDTO.waitingGuardian(consent.getIdConsent());

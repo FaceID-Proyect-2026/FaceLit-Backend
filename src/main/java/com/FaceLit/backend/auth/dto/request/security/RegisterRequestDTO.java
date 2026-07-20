@@ -60,6 +60,10 @@ public class RegisterRequestDTO {
     @NotNull(message = "El tipo de documento es obligatorio")
     private UUID idDocumentType; // debe tener Tipo de documento
 
+    // ── NUEVO ──
+    @NotNull(message = "Debe aceptar los términos y condiciones")
+    private Boolean accepted;
+
     // Request DTO Es el objeto que se recibe desde el cliente ( datos que envia el
     // usuario)
 }
