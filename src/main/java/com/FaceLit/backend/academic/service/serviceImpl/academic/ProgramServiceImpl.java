@@ -8,10 +8,18 @@ import java.util.UUID;
 import com.FaceLit.backend.academic.dto.request.academic.ProgramRequestDTO;
 import com.FaceLit.backend.academic.dto.response.academic.ProgramResponseDTO;
 import com.FaceLit.backend.academic.exception.ProgramException;
+import com.FaceLit.backend.academic.model.academic.Chip;
 import com.FaceLit.backend.academic.model.academic.Program;
 import com.FaceLit.backend.academic.model.enums.ProgramState;
+import com.FaceLit.backend.academic.repository.academic.ChipRepository;
 import com.FaceLit.backend.academic.repository.academic.ProgramRepository;
+import com.FaceLit.backend.academic.repository.academic.UserChipRepository;
 import com.FaceLit.backend.academic.service.academic.ProgramService;
+import com.FaceLit.backend.environments.repository.environment.ChipEnvironmentRepository;
+import com.FaceLit.backend.environments.repository.environment.RecordEnvironmentRepository;
+import com.FaceLit.backend.schedule.repository.schedule.ScheduleExceptionRepository;
+import com.FaceLit.backend.schedule.repository.schedule.ScheduleInstructorRepository;
+import com.FaceLit.backend.schedule.repository.schedule.ScheduleRepository;
 
 import jakarta.transaction.Transactional;
 
@@ -19,9 +27,30 @@ import jakarta.transaction.Transactional;
 public class ProgramServiceImpl implements ProgramService {
 
     private final ProgramRepository programRepository;
+    private final ChipRepository chipRepository;
+    private final UserChipRepository userChipRepository;
+    private final ChipEnvironmentRepository chipEnvironmentRepository;
+    private final ScheduleRepository scheduleRepository;
+    private final ScheduleInstructorRepository scheduleInstructorRepository;
+    private final RecordEnvironmentRepository recordEnvironmentRepository;
+    private final ScheduleExceptionRepository scheduleExceptionRepository;
 
-    public ProgramServiceImpl(ProgramRepository programRepository) {
+    public ProgramServiceImpl(ProgramRepository programRepository,
+            ChipRepository chipRepository,
+            UserChipRepository userChipRepository,
+            ChipEnvironmentRepository chipEnvironmentRepository,
+            ScheduleRepository scheduleRepository,
+            ScheduleInstructorRepository scheduleInstructorRepository,
+            RecordEnvironmentRepository recordEnvironmentRepository,
+            ScheduleExceptionRepository scheduleExceptionRepository) {
         this.programRepository = programRepository;
+        this.chipRepository = chipRepository;
+        this.userChipRepository = userChipRepository;
+        this.chipEnvironmentRepository = chipEnvironmentRepository;
+        this.scheduleRepository = scheduleRepository;
+        this.scheduleInstructorRepository = scheduleInstructorRepository;
+        this.recordEnvironmentRepository = recordEnvironmentRepository;
+        this.scheduleExceptionRepository = scheduleExceptionRepository;
     }
 
     @Override
@@ -135,8 +164,48 @@ public class ProgramServiceImpl implements ProgramService {
                     "El programa debe estar inactivo antes de eliminarse permanentemente");
         }
 
-        programRepository.deleteById(id);
+        // 1. Obtener todas las fichas del programa
+        List<Chip> chips = chipRepository.findByProgram_IdProgram(id);
 
+        for (Chip chip : chips) {
+            UUID idChip = chip.getIdChip();
+
+            // 2. Eliminar aprendices vinculados a la ficha
+            userChipRepository.findByChip_IdChip(idChip)
+                    .forEach(uc -> userChipRepository.delete(uc));
+
+            // 3. Eliminar asignaciones de ambiente de la ficha
+            chipEnvironmentRepository.findByChip_IdChip(idChip)
+                    .forEach(ce -> chipEnvironmentRepository.delete(ce));
+
+            // 4. Obtener horarios de la ficha y eliminar sus dependencias
+            scheduleRepository.findByChip_IdChip(idChip).forEach(schedule -> {
+                UUID idSchedule = schedule.getIdSchedule();
+
+                // 4.1 Eliminar excepciones del horario
+                scheduleExceptionRepository
+                        .findBySchedule_IdSchedule(idSchedule)
+                        .forEach(ex -> scheduleExceptionRepository.delete(ex));
+
+                // 4.2 Eliminar instructores del horario
+                scheduleInstructorRepository
+                        .findBySchedule_IdSchedule(idSchedule)
+                        .forEach(si -> scheduleInstructorRepository.delete(si));
+
+                // 4.3 Eliminar registro de ambiente del horario
+                recordEnvironmentRepository
+                        .findAllBySchedule_IdSchedule(idSchedule)
+                        .forEach(re -> recordEnvironmentRepository.delete(re));
+
+                scheduleRepository.delete(schedule);
+            });
+
+            // 5. Eliminar la ficha
+            chipRepository.delete(chip);
+        }
+
+        // 6. Eliminar el programa
+        programRepository.deleteById(id);
     }
 
 }

@@ -11,6 +11,9 @@ import java.time.Duration;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.FaceLit.backend.auth.dto.response.security.RegistrationStatusResponseDTO;
+import com.FaceLit.backend.auth.model.legal.Consent;
+import com.FaceLit.backend.auth.repository.legal.ConsentRepository;
 import com.FaceLit.backend.auth.dto.request.security.EmailVerificationRequestDTO;
 import com.FaceLit.backend.auth.dto.request.security.RegisterRequestDTO;
 import com.FaceLit.backend.auth.dto.response.security.EmailVerificationResponseDTO;
@@ -45,6 +48,7 @@ public class RegisterServiceImpl implements RegisterService {
     // final = significa que una vez asignada estos atributos en el contructor no
     // puede carmbiar
     private final UserRepository userRepository;
+    private final ConsentRepository consentRepository;
     private final CredentialRepository credentialRepository;
     private final PasswordEncoder passwordEncoder;
     private final DocumentTypeRepository documentTypeRepository;
@@ -70,7 +74,8 @@ public class RegisterServiceImpl implements RegisterService {
             EmailVerificationRepository emailVerificationRepository,
             EmailService emailService, RoleRepository roleRepository,
             UserRoleRepository userRoleRepository,
-            AcceptanceTermsRepository acceptanceTermsRepository) {
+            AcceptanceTermsRepository acceptanceTermsRepository,
+            ConsentRepository consentRepository) {
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
         this.passwordEncoder = passwordEncoder;
@@ -80,6 +85,7 @@ public class RegisterServiceImpl implements RegisterService {
         this.roleRepository = roleRepository; // ← nuevo
         this.userRoleRepository = userRoleRepository;
         this.acceptanceTermsRepository = acceptanceTermsRepository;
+        this.consentRepository = consentRepository;
     }
 
     @Override
@@ -295,4 +301,47 @@ public class RegisterServiceImpl implements RegisterService {
         String email = user.getCredential().getEmail();
         emailService.sendVerificationCode(email, code);
     }
+
+    // Método nuevo
+@Override
+public RegistrationStatusResponseDTO checkStatus(String documentNumber, String email) {
+    User user = null;
+
+    if (documentNumber != null && !documentNumber.isBlank()) {
+        user = userRepository.findByDocumentNumber(documentNumber).orElse(null);
+    }
+    if (user == null && email != null && !email.isBlank()) {
+        user = credentialRepository.findByEmail(email).map(Credential::getUser).orElse(null);
+    }
+    if (user == null) {
+        throw new RegisterException("No se encontró un registro con esos datos");
+    }
+
+    String abbreviation = user.getDocumentType().getAbbreviation();
+    int age = Period.between(user.getBirthDate(), LocalDate.now()).getYears();
+    boolean isMinor = age < 18 || "TI".equals(abbreviation);
+
+    String consentStatus = null;
+    String guardianEmail = null;
+
+    if (isMinor) {
+        Optional<Consent> consentOpt = consentRepository.findByUser(user);
+        if (consentOpt.isPresent()) {
+            consentStatus = consentOpt.get().getConsentStatus().name();
+            if (consentOpt.get().getGuardian() != null) {
+                guardianEmail = consentOpt.get().getGuardian().getEmailGuardian();
+            }
+        }
+    }
+
+    return new RegistrationStatusResponseDTO(
+            user.getIdUser(),
+            user.isEmailVerified(),
+            user.getAccountStatus().name(),
+            isMinor,
+            consentStatus,
+            guardianEmail
+    );
+}
+
 }

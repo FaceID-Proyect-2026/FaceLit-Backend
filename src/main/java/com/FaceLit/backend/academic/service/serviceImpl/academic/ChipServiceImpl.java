@@ -2,6 +2,7 @@ package com.FaceLit.backend.academic.service.serviceImpl.academic;
 
 import com.FaceLit.backend.academic.repository.academic.ChipRepository;
 import com.FaceLit.backend.academic.repository.academic.ProgramRepository;
+import com.FaceLit.backend.academic.repository.academic.UserChipRepository;
 import com.FaceLit.backend.academic.dto.request.academic.ChipRequestDTO;
 import com.FaceLit.backend.academic.dto.response.academic.ChipResponseDTO;
 import com.FaceLit.backend.academic.exception.ChipException;
@@ -10,6 +11,11 @@ import com.FaceLit.backend.academic.model.academic.Chip;
 import com.FaceLit.backend.academic.model.academic.Program;
 import com.FaceLit.backend.academic.model.enums.ChipState;
 import com.FaceLit.backend.academic.service.academic.ChipService;
+import com.FaceLit.backend.environments.repository.environment.ChipEnvironmentRepository;
+import com.FaceLit.backend.schedule.repository.schedule.ScheduleRepository;
+import com.FaceLit.backend.schedule.repository.schedule.ScheduleExceptionRepository;
+import com.FaceLit.backend.schedule.repository.schedule.ScheduleInstructorRepository;
+import com.FaceLit.backend.environments.repository.environment.RecordEnvironmentRepository;
 
 import jakarta.transaction.Transactional;
 
@@ -23,12 +29,30 @@ public class ChipServiceImpl implements ChipService {
 
     private final ChipRepository chipRepository;
     private final ProgramRepository programRepository;
+    private final UserChipRepository userChipRepository;
+    private final ChipEnvironmentRepository chipEnvironmentRepository;
+    private final ScheduleRepository scheduleRepository;
+        private final ScheduleExceptionRepository scheduleExceptionRepository;
+        private final ScheduleInstructorRepository scheduleInstructorRepository;
+        private final RecordEnvironmentRepository recordEnvironmentRepository;
 
     public ChipServiceImpl(
             ChipRepository chipRepository,
-            ProgramRepository programRepository) {
+            ProgramRepository programRepository,
+            UserChipRepository userChipRepository,
+                        ChipEnvironmentRepository chipEnvironmentRepository,
+                        ScheduleRepository scheduleRepository,
+                        ScheduleExceptionRepository scheduleExceptionRepository,
+                        ScheduleInstructorRepository scheduleInstructorRepository,
+                        RecordEnvironmentRepository recordEnvironmentRepository) {
         this.chipRepository = chipRepository;
         this.programRepository = programRepository;
+        this.userChipRepository = userChipRepository; 
+        this.chipEnvironmentRepository = chipEnvironmentRepository; 
+        this.scheduleRepository = scheduleRepository; 
+                this.scheduleExceptionRepository = scheduleExceptionRepository;
+                this.scheduleInstructorRepository = scheduleInstructorRepository;
+                this.recordEnvironmentRepository = recordEnvironmentRepository;
     }
 
     // Genera codigo alfanumerico de 8 caracteres en mayusculas
@@ -165,17 +189,45 @@ public class ChipServiceImpl implements ChipService {
     }
 
     @Override
-    @Transactional
-    public void permanentDeleteChip(UUID id) {
-        Chip chip = chipRepository.findById(id)
-                .orElseThrow(() -> new ChipException("Ficha no encontrada"));
+@Transactional
+public void permanentDeleteChip(UUID id) {
+    Chip chip = chipRepository.findById(id)
+            .orElseThrow(() -> new ChipException("Ficha no encontrada"));
 
-        if (chip.getState() == ChipState.ACTIVE) {
-            throw new ChipException(
-                    "La ficha debe estar inactiva antes de eliminarse permanentemente");
-        }
-
-        chipRepository.deleteById(id);
+    if (chip.getState() == ChipState.ACTIVE) {
+        throw new ChipException(
+            "La ficha debe estar inactiva antes de eliminarse permanentemente");
     }
+
+    // 1. Eliminar aprendices vinculados
+    userChipRepository.findByChip_IdChip(id)
+            .forEach(uc -> userChipRepository.delete(uc));
+
+    // 2. Eliminar asignaciones de ambiente
+    chipEnvironmentRepository.findByChip_IdChip(id)
+            .forEach(ce -> chipEnvironmentRepository.delete(ce));
+
+    // 3. Eliminar horarios y sus dependencias
+    scheduleRepository.findByChip_IdChip(id).forEach(schedule -> {
+        UUID idSchedule = schedule.getIdSchedule();
+
+        scheduleExceptionRepository
+                .findBySchedule_IdSchedule(idSchedule)
+                .forEach(ex -> scheduleExceptionRepository.delete(ex));
+
+        scheduleInstructorRepository
+                .findBySchedule_IdSchedule(idSchedule)
+                .forEach(si -> scheduleInstructorRepository.delete(si));
+
+        recordEnvironmentRepository
+                .findAllBySchedule_IdSchedule(idSchedule)
+                .forEach(re -> recordEnvironmentRepository.delete(re));
+
+        scheduleRepository.delete(schedule);
+    });
+
+    // 4. Eliminar la ficha
+    chipRepository.deleteById(id);
+}
 
 }
