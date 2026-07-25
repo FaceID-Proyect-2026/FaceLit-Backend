@@ -321,6 +321,16 @@ public RegistrationStatusResponseDTO checkStatus(String documentNumber, String e
     int age = Period.between(user.getBirthDate(), LocalDate.now()).getYears();
     boolean isMinor = age < 18 || "TI".equals(abbreviation);
 
+    // Si falta verificar el email, reenviamos el código automáticamente.
+    // Así, retomar el registro siempre exige demostrar acceso real al correo.
+    if (!user.isEmailVerified()) {
+        try {
+            resendCode(user.getIdUser());
+        } catch (RegisterException ignored) {
+            // Si está en cooldown, el código anterior sigue vigente — no pasa nada
+        }
+    }
+
     String consentStatus = null;
     String guardianEmail = null;
 
@@ -343,5 +353,4 @@ public RegistrationStatusResponseDTO checkStatus(String documentNumber, String e
             guardianEmail
     );
 }
-
 }
