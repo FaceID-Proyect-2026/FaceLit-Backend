@@ -22,4 +22,6 @@ public interface RecordEnvironmentRepository extends JpaRepository<RecordEnviron
     // Busca todos los registros de ambiente de un horario
     List<RecordEnvironment> findAllBySchedule_IdSchedule(UUID idSchedule);
 
+    List<RecordEnvironment> findAllByEnvironment_IdEnvironment(UUID idEnvironment);
+
 }

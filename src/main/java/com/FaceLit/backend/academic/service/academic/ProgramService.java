@@ -30,6 +30,7 @@ public interface ProgramService {
     // Consulta por estado
     List<ProgramResponseDTO> getProgramsByState(ProgramState state);
 
+    // Eliminar completamente el programa
     void permanentDeleteProgram(UUID id);
 
 }
