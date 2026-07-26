@@ -7,6 +7,7 @@ import com.FaceLit.backend.environments.model.environment.RecordEnvironment;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 
 @Repository
 public interface RecordEnvironmentRepository extends JpaRepository<RecordEnvironment, UUID> {
@@ -17,5 +18,10 @@ public interface RecordEnvironmentRepository extends JpaRepository<RecordEnviron
     // Ahora — trae solo el activo
     Optional<RecordEnvironment> findBySchedule_IdScheduleAndActive(
             UUID idSchedule, String active);
+
+    // Busca todos los registros de ambiente de un horario
+    List<RecordEnvironment> findAllBySchedule_IdSchedule(UUID idSchedule);
+
+    List<RecordEnvironment> findAllByEnvironment_IdEnvironment(UUID idEnvironment);
 
 }

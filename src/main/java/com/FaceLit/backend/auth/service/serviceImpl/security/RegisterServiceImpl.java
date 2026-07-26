@@ -6,9 +6,14 @@ import java.time.OffsetDateTime;
 import java.time.Period;
 import java.util.Random;
 import java.util.UUID;
+import java.util.Optional;
+import java.time.Duration;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.FaceLit.backend.auth.dto.response.security.RegistrationStatusResponseDTO;
+import com.FaceLit.backend.auth.model.legal.Consent;
+import com.FaceLit.backend.auth.repository.legal.ConsentRepository;
 import com.FaceLit.backend.auth.dto.request.security.EmailVerificationRequestDTO;
 import com.FaceLit.backend.auth.dto.request.security.RegisterRequestDTO;
 import com.FaceLit.backend.auth.dto.response.security.EmailVerificationResponseDTO;
@@ -21,8 +26,10 @@ import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
 import com.FaceLit.backend.auth.model.enums.CredentialStatus;
 import com.FaceLit.backend.auth.model.enums.RoleName;
+import com.FaceLit.backend.auth.model.legal.AcceptanceTerms;
 import com.FaceLit.backend.auth.model.roleandpermission.UserRole;
 import com.FaceLit.backend.auth.model.roleandpermission.Role;
+import com.FaceLit.backend.auth.repository.legal.AcceptanceTermsRepository;
 import com.FaceLit.backend.auth.repository.roleandpermission.RoleRepository;
 import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
@@ -41,6 +48,7 @@ public class RegisterServiceImpl implements RegisterService {
     // final = significa que una vez asignada estos atributos en el contructor no
     // puede carmbiar
     private final UserRepository userRepository;
+    private final ConsentRepository consentRepository;
     private final CredentialRepository credentialRepository;
     private final PasswordEncoder passwordEncoder;
     private final DocumentTypeRepository documentTypeRepository;
@@ -48,6 +56,7 @@ public class RegisterServiceImpl implements RegisterService {
     private final EmailService emailService;
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
+    private final AcceptanceTermsRepository acceptanceTermsRepository;
 
     // Inyecion por contructor - es la mejor firma correcta. no por usar @Autowired
     // - (UserRepository9 - Guarda y consulta usuario en BD
@@ -64,7 +73,9 @@ public class RegisterServiceImpl implements RegisterService {
             DocumentTypeRepository documentTypeRepository,
             EmailVerificationRepository emailVerificationRepository,
             EmailService emailService, RoleRepository roleRepository,
-            UserRoleRepository userRoleRepository) {
+            UserRoleRepository userRoleRepository,
+            AcceptanceTermsRepository acceptanceTermsRepository,
+            ConsentRepository consentRepository) {
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
         this.passwordEncoder = passwordEncoder;
@@ -73,6 +84,8 @@ public class RegisterServiceImpl implements RegisterService {
         this.emailService = emailService;
         this.roleRepository = roleRepository; // ← nuevo
         this.userRoleRepository = userRoleRepository;
+        this.acceptanceTermsRepository = acceptanceTermsRepository;
+        this.consentRepository = consentRepository;
     }
 
     @Override
@@ -89,6 +102,11 @@ public class RegisterServiceImpl implements RegisterService {
         if (credentialRepository.existsByEmail(dto.getEmail())) {
             throw new RegisterException("El email ya esta registrado");
         }
+        // ── NUEVO — 2.1 Validar que haya aceptado los términos ──
+        if (!dto.getAccepted()) {
+            throw new RegisterException("No puede continuar sin confirmar lectura o aceptar responsabilidad");
+        }
+
         // // 3. Buscar el tipo de documento que mandó el frontend
         DocumentType documentType = documentTypeRepository.findById(dto.getIdDocumentType())
                 .orElseThrow(() -> new RegisterException("Tipo de documento inválido"));
@@ -139,7 +157,12 @@ public class RegisterServiceImpl implements RegisterService {
         credential.setPassword(passwordEncoder.encode(dto.getPassword()));
         credential.setCredentialStatus(CredentialStatus.ACTIVE);
         credential.setFailedAttempts(0);
-        credential.setUser(savedUser); // se asocia con el usuario guardado
+        credential.setUser(savedUser); // se
+                                       // asocia
+                                       // con
+                                       // el
+                                       // usuario
+                                       // guardado
         // 8.1. Guardar la credencial
         credentialRepository.save(credential);
 
@@ -156,6 +179,13 @@ public class RegisterServiceImpl implements RegisterService {
         userRole.setAssignmentDate(LocalDate.now());
         userRole.setAssignedAt(OffsetDateTime.now());
         userRoleRepository.save(userRole);
+
+        // ── NUEVO — 9.5 Registrar la aceptación de términos ──
+        // Reutilizamos la entidad AcceptanceTerms que ya existe en legal/
+        AcceptanceTerms acceptanceTerms = new AcceptanceTerms();
+        acceptanceTerms.setUser(savedUser);
+        acceptanceTerms.setAccepted(true);
+        acceptanceTermsRepository.save(acceptanceTerms);
 
         // 9.1 Genera el codigo de 6 dijitos aleatorios
         // String.format("%06d", ...) DICE QUE ES DE 6 DIJITOS]
@@ -236,6 +266,17 @@ public class RegisterServiceImpl implements RegisterService {
         // 1. Buscar el usuario
         User user = userRepository.findById(id_user).orElseThrow(() -> new RegisterException("Usuario no encontrado"));
 
+        // ── NUEVO: validar cooldown de 60 segundos ──
+        Optional<EmailVerification> lastVerification = emailVerificationRepository.findByUser(user);
+        if (lastVerification.isPresent()) {
+            LocalDateTime lastCreated = lastVerification.get().getCreatedAt();
+            long secondsSinceLast = Duration.between(lastCreated, LocalDateTime.now()).getSeconds();
+            if (secondsSinceLast < 60) {
+                long remaining = 60 - secondsSinceLast;
+                throw new RegisterException("Debes esperar " + remaining + " segundos antes de solicitar otro código");
+            }
+        }
+
         // 2. Invalidar el código anterior si existe
         // ifPresent — solo ejecuta si encontró un código previo
         emailVerificationRepository.findByUser(user).ifPresent(v -> {
@@ -260,4 +301,56 @@ public class RegisterServiceImpl implements RegisterService {
         String email = user.getCredential().getEmail();
         emailService.sendVerificationCode(email, code);
     }
+
+    // Método nuevo
+@Override
+public RegistrationStatusResponseDTO checkStatus(String documentNumber, String email) {
+    User user = null;
+
+    if (documentNumber != null && !documentNumber.isBlank()) {
+        user = userRepository.findByDocumentNumber(documentNumber).orElse(null);
+    }
+    if (user == null && email != null && !email.isBlank()) {
+        user = credentialRepository.findByEmail(email).map(Credential::getUser).orElse(null);
+    }
+    if (user == null) {
+        throw new RegisterException("No se encontró un registro con esos datos");
+    }
+
+    String abbreviation = user.getDocumentType().getAbbreviation();
+    int age = Period.between(user.getBirthDate(), LocalDate.now()).getYears();
+    boolean isMinor = age < 18 || "TI".equals(abbreviation);
+
+    // Si falta verificar el email, reenviamos el código automáticamente.
+    // Así, retomar el registro siempre exige demostrar acceso real al correo.
+    if (!user.isEmailVerified()) {
+        try {
+            resendCode(user.getIdUser());
+        } catch (RegisterException ignored) {
+            // Si está en cooldown, el código anterior sigue vigente — no pasa nada
+        }
+    }
+
+    String consentStatus = null;
+    String guardianEmail = null;
+
+    if (isMinor) {
+        Optional<Consent> consentOpt = consentRepository.findByUser(user);
+        if (consentOpt.isPresent()) {
+            consentStatus = consentOpt.get().getConsentStatus().name();
+            if (consentOpt.get().getGuardian() != null) {
+                guardianEmail = consentOpt.get().getGuardian().getEmailGuardian();
+            }
+        }
+    }
+
+    return new RegistrationStatusResponseDTO(
+            user.getIdUser(),
+            user.isEmailVerified(),
+            user.getAccountStatus().name(),
+            isMinor,
+            consentStatus,
+            guardianEmail
+    );
+}
 }

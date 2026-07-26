@@ -6,6 +6,7 @@ import com.FaceLit.backend.auth.dto.request.security.EmailVerificationRequestDTO
 import com.FaceLit.backend.auth.dto.request.security.RegisterRequestDTO;
 import com.FaceLit.backend.auth.dto.response.security.EmailVerificationResponseDTO;
 import com.FaceLit.backend.auth.dto.response.security.RegisterResponseDTO;
+import com.FaceLit.backend.auth.dto.response.security.RegistrationStatusResponseDTO;
 
 public interface RegisterService {
     // impementamos un metodo
@@ -24,5 +25,7 @@ public interface RegisterService {
     // este metodo llamado register que recibe datos de RegisterRequestDTO y
     // devolver una respuesta
     // que en esye caso seria (RegisterResponseDTO )
+
+    RegistrationStatusResponseDTO checkStatus(String documentNumber, String email);
 
 }

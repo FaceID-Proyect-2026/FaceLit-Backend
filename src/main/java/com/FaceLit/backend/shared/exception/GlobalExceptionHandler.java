@@ -7,13 +7,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestController;
-
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import com.FaceLit.backend.auth.exception.PasswordRecoveryException;
 import com.FaceLit.backend.auth.exception.AcceptanceTermsException;
 import com.FaceLit.backend.auth.exception.RegisterException;
 
-@RestController // esta anotacion funciona para que se escuchen TODOS los errores que ocurre en
-                // los controller
+@RestControllerAdvice // esta anotacion funciona para que se escuchen TODOS los errores que ocurre en
+// los controller
 public class GlobalExceptionHandler { // esta clase es para que capture errores feos y devuelve un JSON bonito
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -34,7 +34,7 @@ public class GlobalExceptionHandler { // esta clase es para que capture errores 
 
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
-                .body(Map.of("error", ex.getMessage()));
+                .body(Map.of("message", ex.getMessage()));
 
     }
 
@@ -43,11 +43,18 @@ public class GlobalExceptionHandler { // esta clase es para que capture errores 
 
         return ResponseEntity
                 .internalServerError()
-                .body(Map.of("error", "Error interno del servidor"));
+                .body(Map.of("message", "Error interno del servidor"));
     }
 
     @ExceptionHandler(AcceptanceTermsException.class)
     public ResponseEntity<Map<String, String>> handleTerminos(AcceptanceTermsException ex) {
-        return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+    }
+
+    @ExceptionHandler(PasswordRecoveryException.class)
+    public ResponseEntity<Map<String, String>> handlePasswordRecovery(PasswordRecoveryException ex) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("message", ex.getMessage()));
     }
 }

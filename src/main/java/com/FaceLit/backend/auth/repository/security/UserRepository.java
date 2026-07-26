@@ -1,6 +1,7 @@
 package com.FaceLit.backend.auth.repository.security;
 
 import java.util.UUID;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -15,11 +16,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     // documento
     boolean existsByDocumentNumber(String documentNumber);
 
-    // -- PARA RECOERDAR ---- // 
-    
+    // -- PARA RECOERDAR ---- //
+
     // solo se necesita definir el metodo, existsByDocumentNumber (verificar si
     // existe numero de documento)
     // no pone mas metodos porque el JpaRepository ya tiene metodos predefinidos
     // como save, findById, deleteById
+
+    Optional<User> findByDocumentNumber(String documentNumber);
 
 }

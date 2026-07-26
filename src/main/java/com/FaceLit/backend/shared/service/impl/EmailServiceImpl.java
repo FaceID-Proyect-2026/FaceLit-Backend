@@ -53,19 +53,16 @@ public class EmailServiceImpl implements EmailService {
 
         // Se crea un objeto que representará el correo electrónico.
         SimpleMailMessage message = new SimpleMailMessage();
-
-        // Correo del destinatario al que se enviará el mensaje ( Acudiente).
         message.setTo(toEmail);
-        // Asunto o título del correo.
-        message.setSubject("FaceLit  — Solicitud de autorización para menor de edad");
-        // Contenido del correo.
+        message.setSubject("FaceLit — Solicitud de autorización para menor de edad");
         message.setText(
                 "Estimado/a " + fullName + ",\n\n" +
                         "Un menor de edad bajo su responsabilidad se ha registrado en FaceLit.\n\n" +
-                        "Para ACEPTAR la autorización responda con este token:\n" +
+                        "Para autorizar o rechazar el tratamiento de sus datos personales, " +
+                        "ingrese el siguiente código de verificación en la aplicación:\n\n" +
                         token + "\n\n" +
-                        "Para RECHAZAR la autorización ignore este mensaje.\n\n" +
-                        "Este enlace expira en 5 minutos.\n\n" +
+                        "Este código expira en 5 minutos.\n" +
+                        "Si no reconoce esta solicitud, ignore este mensaje.\n\n" +
                         "FaceLit");
         mailSender.send(message);
 

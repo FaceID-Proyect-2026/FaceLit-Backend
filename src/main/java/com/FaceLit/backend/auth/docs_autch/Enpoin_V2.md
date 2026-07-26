@@ -6,6 +6,8 @@
 http://localhost:8080
 ```
 
+> ⚠️ **Formato de errores (actualizado):** todos los errores del backend ahora devuelven la clave `"message"`, no `"error"`. Ejemplo: `{ "message": "El email ya esta registrado" }`.
+
 ---
 
 ## 1. Módulo: Catálogos
@@ -37,6 +39,8 @@ GET /api/catalogos/document-types
 
 ### 2.1 Registro de Usuario
 
+> ⚠️ **ACTUALIZADO:** el request ahora incluye el campo `accepted` (aceptación de términos y condiciones), que antes se mandaba por separado al endpoint `/api/auth/aceptar-terminos`. Ahora todo se guarda en una sola transacción.
+
 **Endpoint**
 
 ```http
@@ -53,7 +57,8 @@ POST /api/auth/register
   "documentNumber": "1234567890",
   "birthDate": "2000-05-10",
   "email": "maria@gmail.com",
-  "password": "Maria@123"
+  "password": "Maria@123",
+  "accepted": true
 }
 ```
 
@@ -67,7 +72,8 @@ POST /api/auth/register
   "documentNumber": "1099999999",
   "birthDate": "2012-08-15",
   "email": "juan@gmail.com",
-  "password": "Juan@123"
+  "password": "Juan@123",
+  "accepted": true
 }
 ```
 
@@ -106,6 +112,11 @@ La Tarjeta de Identidad es solo para menores de edad
 CC siendo menor de edad — debe mostrar:
 ```
 La Cedula de cuidadania solo es para mayores de edad
+```
+
+No aceptó los términos (`"accepted": false`) — debe mostrar:
+```
+No puede continuar sin confirmar lectura o aceptar responsabilidad
 ```
 
 ---
@@ -173,6 +184,8 @@ POST /api/auth/resend-code?id_user=UUID_DEL_USUARIO
 }
 ```
 
+> ⚠️ **ACTUALIZADO:** ahora tiene un cooldown de 5 minutos entre reenvíos. Si se solicita antes de tiempo, responde con un mensaje indicando cuántos segundos faltan.
+
 ---
 
 ### 2.4 Solicitar Consentimiento del Acudiente
@@ -213,7 +226,7 @@ El correo del acudiente debe ser diferente al del usuario
 
 #### 2.4.1 Reenviar Solicitud de Consentimiento
 
-Se utiliza cuando el token anterior expiró y el menor necesita que el acudiente reciba un nuevo enlace.
+Se utiliza cuando el código anterior expiró y el menor necesita que el acudiente reciba uno nuevo.
 
 **Endpoint**
 
@@ -239,9 +252,13 @@ POST /api/consent/resend
 }
 ```
 
+> ⚠️ **ACTUALIZADO:** también tiene cooldown de 5 minutos entre reenvíos, igual que 2.3.
+
 ---
 
 ### 2.5 Aceptar Consentimiento
+
+> ⚠️ **CAMBIÓ COMPLETAMENTE:** ya no se usa un `token` UUID largo (por link de correo). Ahora el acudiente recibe un **código de 6 dígitos** por correo y lo ingresa junto con el `id_user` del menor, igual que la verificación de email.
 
 **Endpoint**
 
@@ -253,7 +270,8 @@ POST /api/consent/confirm
 
 ```json
 {
-  "token": "TOKEN_UUID"
+  "id_user": "UUID_DEL_USUARIO_MENOR",
+  "code": "123456"
 }
 ```
 
@@ -261,13 +279,31 @@ POST /api/consent/confirm
 
 ```json
 {
-  "message": "CONSENT_ACCEPTED"
+  "message": "Autorización aceptada. El menor ya puede acceder al sistema.",
+  "status": "ACCEPTED"
+}
+```
+
+**Validaciones**
+
+Código incorrecto:
+```json
+{ "message": "Código incorrecto" }
+```
+
+Código expirado:
+```json
+{
+  "message": "El enlace ha expirado. El menor debe solicitar uno nuevo.",
+  "status": "EXPIRED"
 }
 ```
 
 ---
 
 ### 2.6 Rechazar Consentimiento
+
+> ⚠️ **CAMBIÓ COMPLETAMENTE:** mismo cambio que 2.5 — código de 6 dígitos + `id_user`, ya no `token`.
 
 **Endpoint**
 
@@ -279,7 +315,8 @@ POST /api/consent/refuse
 
 ```json
 {
-  "token": "TOKEN_UUID"
+  "id_user": "UUID_DEL_USUARIO_MENOR",
+  "code": "123456"
 }
 ```
 
@@ -287,13 +324,16 @@ POST /api/consent/refuse
 
 ```json
 {
-  "message": "CONSENT_REFUSED"
+  "message": "Autorización rechazada. El registro del menor no fue completado.",
+  "status": "REFUSED"
 }
 ```
 
 ---
 
 ### 2.7 Aceptar Términos y Condiciones
+
+> ⚠️ **YA NO SE USA EN EL FLUJO DE REGISTRO.** El endpoint sigue existiendo y funcionando en el backend, pero el frontend ya no lo llama por separado — la aceptación de términos ahora viaja dentro del mismo `POST /api/auth/register` (ver sección 2.1, campo `accepted`). Se deja documentado por si se necesita a futuro (ej: re-aceptar términos actualizados).
 
 **Endpoint**
 
@@ -317,10 +357,6 @@ POST /api/auth/aceptar-terminos
   "message": "Términos aceptados correctamente"
 }
 ```
-
-**Descripción**
-
-Este endpoint permite registrar la aceptación de los términos y condiciones por parte de un usuario. La dirección IP de origen ya no se almacena ni se solicita en la petición.
 
 **Validaciones**
 
@@ -551,13 +587,43 @@ Login con APPRENTICE:
 
 ---
 
-## 3. Módulo: Restablecimiento de Contraseña (HU-05)
+### 2.9 Consultar Estado de un Registro (NUEVO)
 
-### BASE URL
+> Se usa cuando alguien intenta registrarse de nuevo con un documento o correo que ya existe. El frontend consulta este endpoint para saber exactamente en qué paso quedó ese registro (falta verificar email, falta consentimiento del acudiente, o falta el reconocimiento facial) y redirige automáticamente ahí, en vez de dejar al usuario sin opciones.
 
+**Endpoint**
+
+```http
+GET /api/auth/registration-status?document=1234567890&email=maria@gmail.com
 ```
-http://localhost:8080
+
+> Se puede mandar solo `document` o solo `email` — no hace falta enviar los dos parámetros.
+
+**Respuesta esperada**
+
+```json
+{
+  "idUser": "UUID_DEL_USUARIO",
+  "emailVerified": true,
+  "accountStatus": "PENDING_CONSENT",
+  "isMinor": true,
+  "consentStatus": "PENDING",
+  "guardianEmail": "acudiente@gmail.com"
+}
 ```
+
+**Validaciones**
+
+Sin coincidencias:
+```json
+{
+  "message": "No se encontró un registro con esos datos"
+}
+```
+
+---
+
+## 3. Módulo: Restablecimiento de Contraseña (NUEVO)
 
 ### 3.1 Solicitar Recuperación de Contraseña
 
@@ -723,271 +789,25 @@ Respuesta:
 
 ---
 
-## 4. Módulo: Asignación de Roles
+## 4. Flujo Completo de Prueba — Registro (actualizado)
 
-### BASE URL
-
-```text
-http://localhost:8080
 ```
+1. GET /api/catalogos/document-types
+   → copia el idDocumentType del tipo que vayas a usar
 
-### 4.1 Scripts SQL de Apoyo
+2. POST /api/auth/register (con "accepted": true incluido)
+   → copia el id_user de la respuesta
 
-```sql
--- 1. Ver los usuarios que tienes
-SELECT u.id_user_app, u.first_name, u.last_name, c.email, ur.id_role
-FROM security.user_app u
-JOIN security.credential c ON c.id_user_app = u.id_user_app
-LEFT JOIN roleandpermission.user_role ur ON ur.id_user_app = u.id_user_app;
+3. POST /api/auth/verify-email con ese id_user + el código de 6 dígitos del correo
+   → si es mayor de edad: "ACCOUNT_ACTIVE" → ya puede hacer login
+   → si es menor de edad: "PENDING_GUARDIAN_CONSENT" → continúa al paso 4
 
--- 2. Ver los roles disponibles
-SELECT id_role, name_role FROM roleandpermission.role;
+4. (Solo menores) POST /api/consent/request con los datos del acudiente
+   → copia el id_user del menor (ya lo tenías)
 
--- 3. Actualizar el rol del usuario que quieres hacer ADMINISTRATOR
--- Reemplaza los UUIDs con los que obtuviste arriba
-UPDATE roleandpermission.user_role
-SET id_role = 'UUID_DEL_ROL_ADMINISTRATOR',
-    assignment_date = NOW(),
-    assigned_at = NOW(),
-    updated_at = NOW()
-WHERE id_user_app = 'UUID_DEL_USUARIO';
-```
+5. (Solo menores) POST /api/consent/confirm con id_user + código de 6 dígitos
+   que llegó al correo del acudiente
+   → "ACCEPTED" → el menor ya puede hacer login
 
----
-
-### 4.2 Listar Todos los Usuarios
-
-**Endpoint**
-
-```http
-GET /api/admin/users
-```
-
-**Headers**
-
-```http
-Authorization: Bearer TOKEN_DEL_ADMIN
-```
-
-**Respuesta esperada (200 OK)**
-
-```json
-[
-  {
-    "userId": "uuid-del-usuario",
-    "firstName": "Maria",
-    "lastName": "Oyola",
-    "email": "maria@gmail.com",
-    "documentNumber": "1234567890",
-    "currentRole": "APPRENTICE"
-  },
-  {
-    "userId": "uuid-de-otro",
-    "firstName": "Juan",
-    "lastName": "Perez",
-    "email": "juan@gmail.com",
-    "documentNumber": "0987654321",
-    "currentRole": "APPRENTICE"
-  }
-]
-```
-
----
-
-### 4.3 Cambiar Rol de un Usuario
-
-**Endpoint**
-
-```http
-PUT /api/admin/users/{UUID_DEL_USUARIO}/role
-```
-
-**Headers**
-
-```http
-Authorization: Bearer TOKEN_DEL_ADMIN
-Content-Type: application/json
-```
-
-**JSON de prueba**
-
-```json
-{
-  "role": "INSTRUCTOR"
-}
-```
-
-**Respuesta esperada (200 OK)**
-
-```json
-{
-  "userId": "uuid-del-usuario",
-  "role": "INSTRUCTOR",
-  "message": "Rol asignado correctamente"
-}
-```
-
----
-
-### 4.4 Validaciones
-
-#### 4.4.1 Solicitud sin token
-
-**Endpoint**
-
-```http
-GET /api/admin/users
-```
-
-**Respuesta esperada**
-
-```http
-403 Forbidden
-```
-
----
-
-#### 4.4.2 Token de APPRENTICE o INSTRUCTOR
-
-**Endpoint**
-
-```http
-GET /api/admin/users
-```
-
-**Headers**
-
-```http
-Authorization: Bearer TOKEN_DEL_APPRENTICE
-```
-
-o
-
-```http
-Authorization: Bearer TOKEN_DEL_INSTRUCTOR
-```
-
-**Respuesta esperada**
-
-```http
-403 Forbidden
-```
-
----
-
-#### 4.4.3 Usuario inexistente
-
-**Endpoint**
-
-```http
-PUT /api/admin/users/UUID_INEXISTENTE/role
-```
-
-**Headers**
-
-```http
-Authorization: Bearer TOKEN_DEL_ADMIN
-Content-Type: application/json
-```
-
-**JSON**
-
-```json
-{
-  "role": "INSTRUCTOR"
-}
-```
-
-**Respuesta esperada**
-
-```json
-{
-  "message": "Usuario no encontrado"
-}
-```
-
----
-
-#### 4.4.4 Rol inválido
-
-**Endpoint**
-
-```http
-PUT /api/admin/users/{UUID_DEL_USUARIO}/role
-```
-
-**Headers**
-
-```http
-Authorization: Bearer TOKEN_DEL_ADMIN
-Content-Type: application/json
-```
-
-**JSON**
-
-```json
-{
-  "role": "SUPERADMIN"
-}
-```
-
-**Respuesta esperada**
-
-```http
-400 Bad Request
-```
-
----
-
-### 4.5 Resumen de Pruebas
-
-| Caso                            | Resultado esperado      |
-| ------------------------------- | ----------------------- |
-| Listar usuarios con token ADMIN | ✅ 200 OK                |
-| Cambiar rol correctamente       | ✅ 200 OK                |
-| Sin token                       | ❌ 403 Forbidden         |
-| Token APPRENTICE                | ❌ 403 Forbidden         |
-| Token INSTRUCTOR                | ❌ 403 Forbidden         |
-| Usuario inexistente             | ❌ Usuario no encontrado |
-| Rol no válido                   | ❌ 400 Bad Request       |
-
----
-
-### 4.6 Endpoints Protegidos por Rol
-
-| Endpoint | ADMINISTRATOR | INSTRUCTOR | APPRENTICE |
-|---|---|---|---|
-| `/api/admin/**` | ✅ | ❌ | ❌ |
-| `/api/instructor/**` | ✅ | ✅ | ❌ |
-| `/api/apprentice/**` | ✅ | ✅ | ✅ |
-
-Si un rol intenta acceder a un endpoint que no le corresponde, el sistema devuelve:
-```
-HTTP 403 Forbidden
-```
-
----
-
-### 4.7 Anexo — Script SQL (repetido en el documento original)
-
-> Nota: este bloque aparece nuevamente al final del documento original. Se conserva aquí tal cual, sin eliminarlo, para no perder contenido.
-
-```sql
--- 1. Ver los usuarios que tienes
-SELECT u.id_user_app, u.first_name, u.last_name, c.email, ur.id_role
-FROM security.user_app u
-JOIN security.credential c ON c.id_user_app = u.id_user_app
-LEFT JOIN roleandpermission.user_role ur ON ur.id_user_app = u.id_user_app;
-
--- 2. Ver los roles disponibles
-SELECT id_role, name_role FROM roleandpermission.role;
-
--- 3. Actualizar el rol del usuario que quieres hacer ADMINISTRATOR
--- Reemplaza los UUIDs con los que obtuviste arriba
-UPDATE roleandpermission.user_role
-SET id_role = 'UUID_DEL_ROL_ADMINISTRATOR',
-    assignment_date = NOW(),
-    assigned_at = NOW(),
-    updated_at = NOW()
-WHERE id_user_app = 'UUID_DEL_USUARIO';
+6. POST /api/auth/login con el email y password del usuario
 ```
