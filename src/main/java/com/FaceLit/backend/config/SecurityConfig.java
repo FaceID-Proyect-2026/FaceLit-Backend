@@ -48,9 +48,13 @@ public class SecurityConfig {
                         // Ver asistencia de fichas, gestionar horarios
                         .requestMatchers("/api/instructor/**").hasAnyRole("ADMINISTRATOR", "COORDINATOR", "INSTRUCTOR")
 
+                        // ─── PERFIL PERSONAL — cualquier usuario autenticado, sin importar rol ───
+                        .requestMatchers("/api/profile/**").authenticated()
+
                         // ─── TODOS LOS ROLES AUTENTICADOS ────────────────────────
                         // Ver perfil propio, ver propia asistencia
-                        .requestMatchers("/api/apprentice/**").hasAnyRole("ADMINISTRATOR", "COORDINATOR", "INSTRUCTOR", "APPRENTICE")
+                        .requestMatchers("/api/apprentice/**")
+                        .hasAnyRole("ADMINISTRATOR", "COORDINATOR", "INSTRUCTOR", "APPRENTICE")
 
                         // Cualquier otro endpoint requiere autenticación
                         .anyRequest().authenticated())
