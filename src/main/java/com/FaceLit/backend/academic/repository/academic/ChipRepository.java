@@ -23,4 +23,7 @@ public interface ChipRepository extends JpaRepository<Chip, UUID> {
 
     // Busca por codigo de ficha — usado cuando el aprendiz ingresa el codigo
     Optional<Chip> findByChipCode(String chipCode);
+
+    // Cuenta fichas de un programa — usado en permanentDeleteProgram
+    long countByProgram_IdProgram(UUID idProgram);
 }

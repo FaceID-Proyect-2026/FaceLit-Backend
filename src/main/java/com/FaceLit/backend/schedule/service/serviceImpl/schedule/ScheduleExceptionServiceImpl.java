@@ -3,6 +3,7 @@ package com.FaceLit.backend.schedule.service.serviceImpl.schedule;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
+import com.FaceLit.backend.environments.model.enums.RecordEnvironmentStatus;
 import com.FaceLit.backend.environments.repository.environment.EnvironmentRepository;
 import com.FaceLit.backend.environments.model.environment.Environment;
 import com.FaceLit.backend.environments.repository.environment.RecordEnvironmentRepository;
@@ -46,7 +47,7 @@ public class ScheduleExceptionServiceImpl implements ScheduleExceptionService {
         // Obtiene el ambiente original del horario
         String originalEnvironment = recordEnvironmentRepository
                 .findBySchedule_IdScheduleAndActive(
-                        ex.getSchedule().getIdSchedule(), "ACTIVE")
+                        ex.getSchedule().getIdSchedule(), RecordEnvironmentStatus.ACTIVE)
                 .map(re -> re.getEnvironment().getEnvironmentName())
                 .orElse("Sin ambiente original");
 
@@ -89,7 +90,7 @@ public class ScheduleExceptionServiceImpl implements ScheduleExceptionService {
         // 4. Verificar que el ambiente alterno sea diferente al original
         String originalEnvironmentId = recordEnvironmentRepository
                 .findBySchedule_IdScheduleAndActive(
-                        dto.getIdSchedule(), "ACTIVE")
+                        dto.getIdSchedule(), RecordEnvironmentStatus.ACTIVE)
                 .map(re -> re.getEnvironment().getIdEnvironment().toString())
                 .orElse("");
 
@@ -115,7 +116,7 @@ public class ScheduleExceptionServiceImpl implements ScheduleExceptionService {
                 saved.getSchedule().getChip().getChipName(),
                 recordEnvironmentRepository
                         .findBySchedule_IdScheduleAndActive(
-                                dto.getIdSchedule(), "ACTIVE")
+                                dto.getIdSchedule(), RecordEnvironmentStatus.ACTIVE)
                         .map(re -> re.getEnvironment().getEnvironmentName())
                         .orElse("Sin ambiente original"),
                 saved.getEnvironment().getEnvironmentName(),

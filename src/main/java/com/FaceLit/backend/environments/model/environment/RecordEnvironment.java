@@ -1,9 +1,12 @@
 package com.FaceLit.backend.environments.model.environment;
 
+import com.FaceLit.backend.environments.model.enums.RecordEnvironmentStatus;
 import com.FaceLit.backend.schedule.model.schedule.Schedule;
 import com.FaceLit.backend.shared.model.AuditBase;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -46,7 +49,8 @@ public class RecordEnvironment extends AuditBase {
     private OffsetDateTime assignmentDate;
 
     // Estado de la asignacion
+    @Enumerated(EnumType.STRING)
     @Column(name = "active", length = 10)
-    private String active = "ACTIVE";
-    
+    private RecordEnvironmentStatus active = RecordEnvironmentStatus.ACTIVE;
+
 }

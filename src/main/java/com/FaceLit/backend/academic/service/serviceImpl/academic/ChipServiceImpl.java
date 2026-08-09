@@ -15,10 +15,9 @@ import com.FaceLit.backend.academic.service.academic.ChipService;
 import com.FaceLit.backend.environments.model.environment.ChipEnvironment;
 import com.FaceLit.backend.environments.repository.environment.ChipEnvironmentRepository;
 import com.FaceLit.backend.schedule.repository.schedule.ScheduleRepository;
+import com.FaceLit.backend.shared.constants.AppConstants;
+import com.FaceLit.backend.shared.util.DeletionGuard;
 import com.FaceLit.backend.schedule.model.schedule.Schedule;
-import com.FaceLit.backend.schedule.repository.schedule.ScheduleExceptionRepository;
-import com.FaceLit.backend.schedule.repository.schedule.ScheduleInstructorRepository;
-import com.FaceLit.backend.environments.repository.environment.RecordEnvironmentRepository;
 
 import jakarta.transaction.Transactional;
 
@@ -41,16 +40,12 @@ public class ChipServiceImpl implements ChipService {
                         ProgramRepository programRepository,
                         UserChipRepository userChipRepository,
                         ChipEnvironmentRepository chipEnvironmentRepository,
-                        ScheduleRepository scheduleRepository,
-                        ScheduleExceptionRepository scheduleExceptionRepository,
-                        ScheduleInstructorRepository scheduleInstructorRepository,
-                        RecordEnvironmentRepository recordEnvironmentRepository) {
+                        ScheduleRepository scheduleRepository) {
                 this.chipRepository = chipRepository;
                 this.programRepository = programRepository;
                 this.userChipRepository = userChipRepository;
                 this.chipEnvironmentRepository = chipEnvironmentRepository;
                 this.scheduleRepository = scheduleRepository;
-
         }
 
         // Genera codigo alfanumerico de 8 caracteres en mayusculas
@@ -62,7 +57,7 @@ public class ChipServiceImpl implements ChipService {
                         code = UUID.randomUUID()
                                         .toString()
                                         .replace("-", "")
-                                        .substring(0, 8)
+                                        .substring(0, AppConstants.CHIP_CODE_LENGTH)
                                         .toUpperCase();
                 } while (chipRepository.existsByChipCode(code));
                 return code;
@@ -198,31 +193,24 @@ public class ChipServiceImpl implements ChipService {
                 }
 
                 // Verifica aprendices vinculados
-                List<UserChip> apprentices = userChipRepository.findByChip_IdChip(id);
-                if (!apprentices.isEmpty()) {
-                        throw new ChipException(
-                                        "No se puede eliminar la ficha porque tiene "
-                                                        + apprentices.size()
-                                                        + " aprendiz(ces) vinculado(s). Desvincula primero los aprendices.");
-                }
+                // DESPUÉS
+                DeletionGuard.assertNoDependents(
+                                userChipRepository.countByChip_IdChip(id),
+                                "aprendiz",
+                                "Desvincula primero los aprendices.",
+                                ChipException::new);
 
-                // Verifica ambientes asignados
-                List<ChipEnvironment> environments = chipEnvironmentRepository.findByChip_IdChip(id);
-                if (!environments.isEmpty()) {
-                        throw new ChipException(
-                                        "No se puede eliminar la ficha porque tiene "
-                                                        + environments.size()
-                                                        + " ambiente(s) asignado(s). Elimina primero las asignaciones.");
-                }
+                DeletionGuard.assertNoDependents(
+                                chipEnvironmentRepository.countByChip_IdChip(id),
+                                "ambiente",
+                                "Elimina primero las asignaciones.",
+                                ChipException::new);
 
-                // Verifica horarios activos
-                List<Schedule> schedules = scheduleRepository.findByChip_IdChip(id);
-                if (!schedules.isEmpty()) {
-                        throw new ChipException(
-                                        "No se puede eliminar la ficha porque tiene "
-                                                        + schedules.size()
-                                                        + " horario(s) registrado(s). Elimina primero los horarios.");
-                }
+                DeletionGuard.assertNoDependents(
+                                scheduleRepository.countByChip_IdChip(id),
+                                "horario",
+                                "Elimina primero los horarios.",
+                                ChipException::new);
 
                 chipRepository.deleteById(id);
         }

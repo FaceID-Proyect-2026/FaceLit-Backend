@@ -160,4 +160,8 @@ public interface ScheduleRepository extends JpaRepository<Schedule, UUID> {
             """)
     List<Schedule> findByApprenticeId(@Param("idUser") UUID idUser);
 
+    // Cuenta horarios de una ficha — usado en permanentDeleteChip
+    // (asumiendo que ya existe findByChip_IdChip, agregamos su equivalente count)
+    long countByChip_IdChip(UUID idChip);
+
 }

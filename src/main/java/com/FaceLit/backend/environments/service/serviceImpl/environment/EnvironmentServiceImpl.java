@@ -14,6 +14,8 @@ import com.FaceLit.backend.environments.repository.environment.ChipEnvironmentRe
 import com.FaceLit.backend.environments.repository.environment.EnvironmentRepository;
 import com.FaceLit.backend.environments.repository.environment.RecordEnvironmentRepository;
 import com.FaceLit.backend.environments.service.environment.EnvironmentService;
+import com.FaceLit.backend.shared.util.DeletionGuard;
+
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -206,22 +208,17 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                 }
 
                 // Verifica fichas asignadas a este ambiente
-                List<ChipEnvironment> chipEnvironments = chipEnvironmentRepository.findByEnvironment_IdEnvironment(id);
-                if (!chipEnvironments.isEmpty()) {
-                        throw new EnvironmentException(
-                                        "No se puede eliminar el ambiente porque tiene "
-                                                        + chipEnvironments.size()
-                                                        + " ficha(s) asignada(s). Elimina primero las asignaciones.");
-                }
+                DeletionGuard.assertNoDependents(
+                                chipEnvironmentRepository.countByEnvironment_IdEnvironment(id),
+                                "ficha",
+                                "Elimina primero las asignaciones.",
+                                EnvironmentException::new);
 
-                // Verifica horarios que usan este ambiente
-                List<RecordEnvironment> records = recordEnvironmentRepository.findAllByEnvironment_IdEnvironment(id);
-                if (!records.isEmpty()) {
-                        throw new EnvironmentException(
-                                        "No se puede eliminar el ambiente porque está asignado a "
-                                                        + records.size()
-                                                        + " horario(s). Elimina primero los horarios.");
-                }
+                DeletionGuard.assertNoDependents(
+                                recordEnvironmentRepository.countAllByEnvironment_IdEnvironment(id),
+                                "horario",
+                                "Elimina primero los horarios.",
+                                EnvironmentException::new);
 
                 environmentRepository.deleteById(id);
         }

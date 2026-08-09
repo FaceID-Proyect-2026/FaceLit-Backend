@@ -20,6 +20,7 @@ import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.PasswordRecoveryRepository;
 import com.FaceLit.backend.auth.service.security.PasswordRecoveryService;
 import com.FaceLit.backend.shared.service.EmailService;
+import com.FaceLit.backend.shared.util.VerificationCodeGenerator;
 
 import jakarta.transaction.Transactional;
 
@@ -30,16 +31,19 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
     private final PasswordRecoveryRepository passwordRecoveryRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final VerificationCodeGenerator verificationCodeGenerator;
 
     public PasswordRecoveryServiceImpl(
             CredentialRepository credentialRepository,
             PasswordRecoveryRepository passwordRecoveryRepository,
             PasswordEncoder passwordEncoder,
-            EmailService emailService) {
+            EmailService emailService,
+            VerificationCodeGenerator verificationCodeGenerator) {
         this.credentialRepository = credentialRepository;
         this.passwordRecoveryRepository = passwordRecoveryRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
+        this.verificationCodeGenerator = verificationCodeGenerator;
     }
 
     @Override
@@ -65,7 +69,7 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
         });
 
         // 3. Generar el código de 6 dígitos — mismo patrón que EmailVerification
-        String code = String.format("%06d", new Random().nextInt(999999));
+        String code = verificationCodeGenerator.generate();
 
         // 4. Guardar el nuevo registro de recuperación con expiración de 5 minutos
         PasswordRecovery recovery = new PasswordRecovery();

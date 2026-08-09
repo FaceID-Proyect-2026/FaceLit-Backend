@@ -3,6 +3,7 @@ package com.FaceLit.backend.environments.repository.environment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import com.FaceLit.backend.environments.model.enums.RecordEnvironmentStatus;
 import com.FaceLit.backend.environments.model.environment.RecordEnvironment;
 
 import java.util.Optional;
@@ -17,11 +18,14 @@ public interface RecordEnvironmentRepository extends JpaRepository<RecordEnviron
 
     // Ahora — trae solo el activo
     Optional<RecordEnvironment> findBySchedule_IdScheduleAndActive(
-            UUID idSchedule, String active);
+            UUID idSchedule, RecordEnvironmentStatus active);
 
     // Busca todos los registros de ambiente de un horario
     List<RecordEnvironment> findAllBySchedule_IdSchedule(UUID idSchedule);
 
     List<RecordEnvironment> findAllByEnvironment_IdEnvironment(UUID idEnvironment);
+
+    // Cuenta horarios asignados a un ambiente — usado en permanentDeleteEnvironment
+    long countAllByEnvironment_IdEnvironment(UUID idEnvironment);
 
 }

@@ -24,7 +24,9 @@ import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.legal.GuardianRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.service.legal.ConsentService;
+import com.FaceLit.backend.shared.constants.AppConstants;
 import com.FaceLit.backend.shared.service.EmailService;
+import com.FaceLit.backend.shared.util.VerificationCodeGenerator;
 
 import jakarta.transaction.Transactional;
 
@@ -37,6 +39,7 @@ public class ConsentServiceImpl implements ConsentService {
     private final ConsentVerificationRepository consentVerificationRepository;
     private final CredentialRepository credentialRepository;
     private final EmailService emailService;
+    private final VerificationCodeGenerator verificationCodeGenerator;
 
     public ConsentServiceImpl(
             UserRepository userRepository,
@@ -44,7 +47,8 @@ public class ConsentServiceImpl implements ConsentService {
             ConsentRepository consentRepository,
             ConsentVerificationRepository consentVerificationRepository,
             CredentialRepository credentialRepository,
-            EmailService emailService) {
+            EmailService emailService,
+            VerificationCodeGenerator verificationCodeGenerator) {
 
         this.userRepository = userRepository;
         this.guardianRepository = guardianRepository;
@@ -52,6 +56,7 @@ public class ConsentServiceImpl implements ConsentService {
         this.consentVerificationRepository = consentVerificationRepository;
         this.credentialRepository = credentialRepository;
         this.emailService = emailService;
+        this.verificationCodeGenerator = verificationCodeGenerator;
 
     }
 
@@ -88,13 +93,13 @@ public class ConsentServiceImpl implements ConsentService {
         Consent savedConsent = consentRepository.save(consent);
 
         // 6. Generar código de 6 dígitos (antes: UUID.randomUUID().toString())
-        String code = String.format("%06d", new Random().nextInt(999999));
+        String code = verificationCodeGenerator.generate();
 
         // 7. Guardar el token con expiración de 5 minutos
         ConsentVerification verification = new ConsentVerification();
         verification.setConsent(savedConsent);
         verification.setToken(code);
-        verification.setExpirationDate(LocalDateTime.now().plusMinutes(5));
+        verification.setExpirationDate(LocalDateTime.now().plusMinutes(AppConstants.VERIFICATION_EXPIRY_MINUTES));
         consentVerificationRepository.save(verification);
 
         // 8. Enviar correo al acudiente con el enlace de confirmación
@@ -206,8 +211,8 @@ public class ConsentServiceImpl implements ConsentService {
 
         // ── NUEVO: cooldown de 60 segundos ──
         long secondsSinceLast = Duration.between(verification.getCreatedAt(), LocalDateTime.now()).getSeconds();
-        if (secondsSinceLast < 60) {
-            long remaining = 60 - secondsSinceLast;
+        if (secondsSinceLast < AppConstants.RESEND_COOLDOWN_SECONDS) {
+            long remaining = AppConstants.RESEND_COOLDOWN_SECONDS - secondsSinceLast;
             throw new RegisterException("Debes esperar " + remaining + " segundos antes de solicitar otro código");
         }
 
@@ -222,14 +227,14 @@ public class ConsentServiceImpl implements ConsentService {
         consentVerificationRepository.save(verification);
 
         // 6. Crear nuevo token
-        String code = String.format("%06d", new Random().nextInt(999999));
+        String code = verificationCodeGenerator.generate();
 
         // 7. Crear nuevo registro
 
         ConsentVerification newVerification = new ConsentVerification();
         newVerification.setConsent(consent);
         newVerification.setToken(code);
-        newVerification.setExpirationDate(LocalDateTime.now().plusMinutes(5));
+        newVerification.setExpirationDate(LocalDateTime.now().plusMinutes(AppConstants.VERIFICATION_EXPIRY_MINUTES));
 
         consentVerificationRepository.save(newVerification);
 

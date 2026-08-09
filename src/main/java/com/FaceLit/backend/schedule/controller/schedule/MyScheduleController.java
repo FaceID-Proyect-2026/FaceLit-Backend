@@ -24,8 +24,7 @@ public class MyScheduleController {
     // El userId se extrae del JWT — no del body
     @GetMapping("/api/instructor/schedules/my-schedules")
     public ResponseEntity<List<ScheduleResponseDTO>> mySchedulesAsInstructor(
-            @AuthenticationPrincipal Object principal) {
-        UUID userId = UUID.fromString(principal.toString());
+            @AuthenticationPrincipal UUID userId) {
         return ResponseEntity.ok(
                 scheduleService.getMySchedulesAsInstructor(userId));
     }
@@ -35,8 +34,7 @@ public class MyScheduleController {
     // El userId se extrae del JWT — no del body
     @GetMapping("/api/apprentice/schedules/my-schedule")
     public ResponseEntity<List<ScheduleResponseDTO>> myScheduleAsApprentice(
-            @AuthenticationPrincipal Object principal) {
-        UUID userId = UUID.fromString(principal.toString());
+            @AuthenticationPrincipal UUID userId) {
         return ResponseEntity.ok(
                 scheduleService.getMyScheduleAsApprentice(userId));
     }
