@@ -19,7 +19,9 @@ import lombok.Setter;
 import java.time.LocalDate;
 import java.util.UUID;
 
+import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.schedule.model.enums.ScheduleExceptionStatus;
+import com.FaceLit.backend.schedule.model.enums.ScheduleExceptionType;
 import com.FaceLit.backend.shared.model.AuditBase;
 
 @Entity
@@ -39,14 +41,28 @@ public class ScheduleException extends AuditBase {
     @JoinColumn(name = "id_schedule", nullable = false)
     private Schedule schedule;
 
+     // Tipo de excepción — determina qué campo de reemplazo aplica
+    @Enumerated(EnumType.STRING)
+    @Column(name = "exception_type", nullable = false, length = 30)
+    private ScheduleExceptionType exceptionType;
+
     // Relación N:1 — muchas excepciones pertenecen a un ambiente
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_environment", nullable = false)
     private Environment environment;
 
+    // Solo se usa si exceptionType = INSTRUCTOR_CHANGE
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_instructor_replacement", nullable = true)
+    private User instructorReplacement;
+
     // Fecha en la que el horario presenta la excepción
     @Column(name = "exception_date", nullable = false)
     private LocalDate exceptionDate;
+
+    // Si es null, la excepción aplica solo a exceptionDate (un solo día)
+    @Column(name = "end_date")
+    private LocalDate endDate;
 
     // Motivo por el cual el ambiente no estará disponible
     @Column(name = "reason", length = 255)

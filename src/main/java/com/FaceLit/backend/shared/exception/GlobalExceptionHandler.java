@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.springframework.http.HttpStatus;
+import com.FaceLit.backend.schedule.exception.ScheduleExceptionException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -16,7 +17,7 @@ import com.FaceLit.backend.auth.exception.RegisterException;
 // los controller
 public class GlobalExceptionHandler { // esta clase es para que capture errores feos y devuelve un JSON bonito
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
+      @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, String>> handleValidacion(
             MethodArgumentNotValidException ex) {
 
@@ -27,7 +28,6 @@ public class GlobalExceptionHandler { // esta clase es para que capture errores 
         return ResponseEntity.badRequest().body(errores);
     }
 
-    // Captura Error del registro - email duplicado, documento duplicado etc.
     @ExceptionHandler(RegisterException.class)
     public ResponseEntity<Map<String, String>> handleRegistro(
             RegisterException ex) {
@@ -35,15 +35,6 @@ public class GlobalExceptionHandler { // esta clase es para que capture errores 
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(Map.of("message", ex.getMessage()));
-
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, String>> handleGeneral(Exception ex) {
-
-        return ResponseEntity
-                .internalServerError()
-                .body(Map.of("message", "Error interno del servidor"));
     }
 
     @ExceptionHandler(AcceptanceTermsException.class)
@@ -56,5 +47,21 @@ public class GlobalExceptionHandler { // esta clase es para que capture errores 
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(Map.of("message", ex.getMessage()));
+    }
+
+    // Nuevo — el que faltaba agregar
+    @ExceptionHandler(ScheduleExceptionException.class)
+    public ResponseEntity<Map<String, String>> handleScheduleException(ScheduleExceptionException ex) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("message", ex.getMessage()));
+    }
+
+    // Genérico — se queda al final y aparece UNA sola vez
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, String>> handleGeneral(Exception ex) {
+        return ResponseEntity
+                .internalServerError()
+                .body(Map.of("message", "Error interno del servidor"));
     }
 }
