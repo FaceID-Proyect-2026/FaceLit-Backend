@@ -8,6 +8,8 @@ import java.util.List;
 
 import com.FaceLit.backend.academic.model.academic.UserChip;
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
+import com.FaceLit.backend.face.model.facialrecognition.FacialEvent;
+import com.FaceLit.backend.face.model.facialrecognition.UserFace;
 import com.FaceLit.backend.shared.model.AuditBase;
 
 import jakarta.persistence.CascadeType;
@@ -128,4 +130,12 @@ public class User extends AuditBase {
     // Un usuario puede estar asignado a muchas fichas
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
     private List<UserChip> userChips = new ArrayList<>();
+
+    // Un usuario puede tener varias caras biométricas registradas
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    private List<UserFace> userFaces = new ArrayList<>();
+
+    // Un usuario puede generar muchos eventos faciales
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    private List<FacialEvent> facialEvents = new ArrayList<>();
 }

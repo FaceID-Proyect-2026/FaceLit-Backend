@@ -5,6 +5,7 @@ import jakarta.persistence.OneToMany;
 
 import com.FaceLit.backend.schedule.model.schedule.ScheduleException;
 import com.FaceLit.backend.environments.model.enums.EnvironmentStatus;
+import com.FaceLit.backend.face.model.facialrecognition.FacialEvent;
 import com.FaceLit.backend.shared.model.AuditBase;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Column;
@@ -55,4 +56,8 @@ public class Environment extends AuditBase {
     // Un ambiente puede tener muchas excepciones registradas
     @OneToMany(mappedBy = "environment", fetch = FetchType.LAZY)
     private List<ScheduleException> scheduleExceptions = new ArrayList<>();
+
+    // Un ambiente puede registrar muchos eventos faciales
+    @OneToMany(mappedBy = "environment", fetch = FetchType.LAZY)
+    private List<FacialEvent> facialEvents = new ArrayList<>();
 }

@@ -23,6 +23,7 @@ import java.util.UUID;
 import com.FaceLit.backend.academic.model.enums.ChipState;
 import com.FaceLit.backend.academic.model.enums.WorkingDay;
 import com.FaceLit.backend.environments.model.environment.ChipEnvironment;
+import com.FaceLit.backend.face.model.facialrecognition.FacialEvent;
 import com.FaceLit.backend.shared.model.AuditBase;
 
 // RF-3.2 — Registro de fichas asociadas a un programa
@@ -69,4 +70,8 @@ public class Chip extends AuditBase {
     // Una ficha puede estar asignada a muchos usuarios
     @OneToMany(mappedBy = "chip", fetch = FetchType.LAZY)
     private List<UserChip> userChips = new ArrayList<>();
+
+    // Una ficha puede registrar muchos eventos faciales
+    @OneToMany(mappedBy = "chip", fetch = FetchType.LAZY)
+    private List<FacialEvent> facialEvents = new ArrayList<>();
 }
