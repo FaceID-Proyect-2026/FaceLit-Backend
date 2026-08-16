@@ -331,46 +331,54 @@ El módulo expone endpoints bajo rutas administrativas del tipo `/api/admin/...`
 
 ### DeviceController
 
-Gestiona dispositivos:
+Base: `/api/admin/devices`
 
-- crear
-- actualizar
-- listar
-- buscar por ID
-- buscar por estado
-- eliminar
+- `POST /api/admin/devices` → Crear dispositivo
+- `PUT /api/admin/devices/{id}` → Actualizar dispositivo
+- `GET /api/admin/devices` → Listar dispositivos
+- `GET /api/admin/devices/{id}` → Obtener dispositivo por ID
+- `GET /api/admin/devices/code?deviceCode=...` → Buscar por código
+- `GET /api/admin/devices/status?status=...` → Filtrar por estado
+- `DELETE /api/admin/devices/{id}` → Eliminar dispositivo
 
 ### UserFaceController
 
-Gestiona rostros biométricos:
+Base: `/api/admin/user-faces`
 
-- registro de cara por usuario
-- consulta por usuario
-- consulta por estado
-- eliminación
+- `POST /api/admin/user-faces` → Crear registro facial
+- `PUT /api/admin/user-faces/{id}` → Actualizar registro facial
+- `GET /api/admin/user-faces` → Listar registros faciales
+- `GET /api/admin/user-faces/{id}` → Obtener por ID
+- `GET /api/admin/user-faces/user/{idUserApp}` → Obtener rostros por usuario
+- `GET /api/admin/user-faces/status?status=...` → Filtrar por estado
+- `DELETE /api/admin/user-faces/{id}` → Eliminar registro facial
 
 ### FacialEventController
 
-Gestiona los eventos de reconocimiento facial:
+Base: `/api/admin/facial-events`
 
-- creación del evento
-- actualización
-- consulta general
-- consulta por usuario
-- consulta por ambiente
-- consulta por dispositivo
-- consulta por tipo
-- consulta por resultado de reconocimiento
-- consulta por estado de envío
+- `POST /api/admin/facial-events` → Crear evento facial
+- `PUT /api/admin/facial-events/{id}` → Actualizar evento facial
+- `GET /api/admin/facial-events` → Listar eventos
+- `GET /api/admin/facial-events/{id}` → Obtener evento por ID
+- `GET /api/admin/facial-events/user/{idUserApp}` → Eventos por usuario
+- `GET /api/admin/facial-events/environment/{idEnvironment}` → Eventos por ambiente
+- `GET /api/admin/facial-events/device/{idDevice}` → Eventos por dispositivo
+- `GET /api/admin/facial-events/type?eventType=...` → Eventos por tipo
+- `GET /api/admin/facial-events/recognition-result?recognitionResult=...` → Eventos por resultado
+- `GET /api/admin/facial-events/send-status?sendStatus=...` → Eventos por estado de envío
+- `DELETE /api/admin/facial-events/{id}` → Eliminar evento
 
 ### BiometricLogController
 
-Gestiona la trazabilidad de los logs biométricos:
+Base: `/api/admin/biometric-logs`
 
-- listar logs
-- consultar por ID
-- consultar por evento facial
-- crear o actualizar registros
+- `POST /api/admin/biometric-logs` → Crear log biométrico
+- `PUT /api/admin/biometric-logs/{id}` → Actualizar log
+- `GET /api/admin/biometric-logs` → Listar logs
+- `GET /api/admin/biometric-logs/{id}` → Obtener log por ID
+- `GET /api/admin/biometric-logs/facial-event/{idFacialEvent}` → Logs por evento facial
+- `DELETE /api/admin/biometric-logs/{id}` → Eliminar log
 
 ---
 
