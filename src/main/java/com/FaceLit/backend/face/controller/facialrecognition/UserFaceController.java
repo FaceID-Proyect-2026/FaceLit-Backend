@@ -23,7 +23,7 @@ import com.FaceLit.backend.face.service.facialrecognition.UserFaceService;
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/api/admin/user-faces")
+@RequestMapping("/api/user-faces")
 public class UserFaceController {
 
     private final UserFaceService userFaceService;

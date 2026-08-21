@@ -55,6 +55,16 @@ public class SecurityConfig {
                         // Ver perfil propio, ver propia asistencia
                         .requestMatchers("/api/apprentice/**")
                         .hasAnyRole("ADMINISTRATOR", "COORDINATOR", "INSTRUCTOR", "APPRENTICE")
+                    
+                         // ─── Swagger ( OPENAPI ) ────────────────────────
+                        //herramientas para la manipulacion de Endpoints
+
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html","/v3/api-docs/**").permitAll()
+
+                        .requestMatchers("/api/devices").authenticated()
+
+                        .requestMatchers("/api/user-faces").authenticated()
+
 
                         // Cualquier otro endpoint requiere autenticación
                         .anyRequest().authenticated())

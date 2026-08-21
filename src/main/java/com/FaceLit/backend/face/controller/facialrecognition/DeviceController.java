@@ -23,7 +23,7 @@ import com.FaceLit.backend.face.service.facialrecognition.DeviceService;
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/api/admin/devices")
+@RequestMapping("/api/devices")
 public class DeviceController {
 
     private final DeviceService deviceService;

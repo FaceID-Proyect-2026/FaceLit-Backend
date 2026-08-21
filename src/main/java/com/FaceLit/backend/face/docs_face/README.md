@@ -1,432 +1,1029 @@
-# Módulo Face
+Endpoints y JSON de prueba — FaceLit Backend — Dispositivos
+5. Módulo: Dispositivos
+BASE URL
 
-## Descripción general
+```
+http://localhost:8080
+```
+5.1 Crear Dispositivo
 
-El módulo `face` centraliza toda la lógica relacionada con reconocimiento facial, gestión de biometría, eventos de acceso y dispositivos de captura dentro del backend de FaceLit.
-
-Su objetivo es manejar de forma organizada:
-
-- registro y validación de rostros de usuarios
-- control de dispositivos de captura
-- eventos de reconocimiento facial
-- trazabilidad de logs biométricos
-- comunicación con otras entidades del sistema como usuarios, ambientes y chips
-
-Este módulo sigue la misma estructura de capas usada en el proyecto:
-
-- model
-- repository
-- dto
-- service
-- exception
-- controller
-
----
-
-## Estructura del módulo
-
-```text
-face/
-├── controller/
-│   └── facialrecognition/
-│       ├── DeviceController.java
-│       ├── UserFaceController.java
-│       ├── FacialEventController.java
-│       └── BiometricLogController.java
-├── dto/
-│   ├── request/
-│   │   └── facialrecognition/
-│   │       ├── DeviceRequestDTO.java
-│   │       ├── UserFaceRequestDTO.java
-│   │       ├── FacialEventRequestDTO.java
-│   │       └── BiometricLogRequestDTO.java
-│   ├── response/
-│   │   └── facialrecognition/
-│   │       ├── DeviceResponseDTO.java
-│   │       ├── UserFaceResponseDTO.java
-│   │       ├── FacialEventResponseDTO.java
-│   │       └── BiometricLogResponseDTO.java
-│   └── validation/
-│       └── ValidBiometricVector.java
-├── exception/
-│   ├── DeviceNotFoundException.java
-│   ├── UserFaceNotFoundException.java
-│   ├── FacialEventNotFoundException.java
-│   └── BiometricLogNotFoundException.java
-├── model/
-│   ├── enums/
-│   │   ├── DeviceStatus.java
-│   │   ├── FaceStatus.java
-│   │   ├── EventType.java
-│   │   ├── RecognitionResult.java
-│   │   ├── SendStatus.java
-│   │   └── EventOrigin.java
-│   └── facialrecognition/
-│       ├── Device.java
-│       ├── UserFace.java
-│       ├── FacialEvent.java
-│       └── BiometricLog.java
-├── repository/
-│   └── facialrecognition/
-│       ├── DeviceRepository.java
-│       ├── UserFaceRepository.java
-│       ├── FacialEventRepository.java
-│       └── BiometricLogRepository.java
-├── service/
-│   ├── facialrecognition/
-│   │   ├── DeviceService.java
-│   │   ├── UserFaceService.java
-│   │   ├── FacialEventService.java
-│   │   └── BiometricLogService.java
-│   └── facialrecognition/impl/
-│       ├── DeviceServiceImpl.java
-│       ├── UserFaceServiceImpl.java
-│       ├── FacialEventServiceImpl.java
-│       └── BiometricLogServiceImpl.java
-└── README.md
+Endpoint
+```
+POST /api/devices
 ```
 
----
-
-## Entidades del módulo
-
-### 1. Device
-
-Representa un dispositivo físico o lógico que participa en el proceso de reconocimiento facial.
-
-Campos principales:
-
-- idDevice
-- deviceCode
-- location
-- status
-- originIp
-
-Relaciones:
-
-- un dispositivo puede generar varios eventos de reconocimiento
-- mapea la tabla `facialrecognition.device`
-
-Estado:
-
-- enum `DeviceStatus`
-- valores típicos: `ACTIVE`, `INACTIVE`, `MAINTENANCE`
-
----
-
-### 2. UserFace
-
-Representa la biometría asociada a un usuario de la aplicación.
-
-Campos principales:
-
-- idUserFace
-- user
-- biometricVector
-- registrationDate
-- status
-
-Relaciones:
-
-- muchos rostros pertenecen a un usuario
-- cada usuario puede tener varios registros faciales
-- se relaciona con `User` mediante `id_user_app`
-
-Estado:
-
-- enum `FaceStatus`
-- valores típicos: `PENDING`, `ACTIVE`, `REJECTED`, `INACTIVE`
-
-El campo `biometricVector` se almacena como arreglo de bytes y valida que no venga vacío.
-
----
-
-### 3. FacialEvent
-
-Es la entidad central del flujo de reconocimiento.
-
-Campos principales:
-
-- idFacialEvent
-- user
-- environment
-- chip
-- device
-- eventDatetime
-- eventType
-- recognitionResult
-- sendStatus
-- origin
-
-Relaciones:
-
-- un evento pertenece a un usuario
-- un evento ocurre en un ambiente
-- puede involucrar un chip
-- se registra desde un dispositivo
-- tiene muchos logs biométricos asociados
-
-Enums relevantes:
-
-- `EventType`: tipo del evento
-- `RecognitionResult`: resultado del reconocimiento
-- `SendStatus`: estado del envío del evento
-- `EventOrigin`: origen del evento
-
----
-
-### 4. BiometricLog
-
-Representa el historial de eventos asociados a una lectura biométrica o reconocimiento.
-
-Campos principales:
-
-- idBiometricLog
-- facialEvent
-- description
-- logDate
-
-Relaciones:
-
-- muchos logs corresponden a un facialEvent
-- usado para auditoría y trazabilidad del proceso
-
----
-
-## Relación entre entidades
-
-La estructura del módulo está diseñada para reflejar los flujos reales del reconocimiento facial:
-
-- `User` puede tener varios `UserFace`
-- `UserFace` representa la huella biométrica del usuario
-- `Device` genera eventos de reconocimiento
-- `Environment` recibe los eventos en un punto físico
-- `Chip` puede estar ligado al evento cuando la captura usa hardware asociado
-- `FacialEvent` centraliza la operación
-- `BiometricLog` registra la trazabilidad del evento
-
-### Diagrama conceptual
-
-```text
-User 1 --- * UserFace
-User 1 --- * FacialEvent
-Environment 1 --- * FacialEvent
-Device 1 --- * FacialEvent
-Chip 1 --- * FacialEvent
-FacialEvent 1 --- * BiometricLog
+JSON
+```
+{
+  "deviceCode": "DEVICE-001",
+  "location": "Entrada principal",
+  "status": "ACTIVE",
+  "originIp": "192.168.1.100"
+}
 ```
 
----
+Respuesta — 201 CREATED
+```
+{
+  "idDevice": "UUID_DEL_DISPOSITIVO",
+  "deviceCode": "DEVICE-001",
+  "location": "Entrada principal",
+  "status": "ACTIVE",
+  "originIp": "192.168.1.100",
+  "createdAt": "2026-08-21T08:30:00",
+  "updatedAt": "2026-08-21T08:30:00",
+  "message": "Dispositivo creado correctamente"
+}
+```
+5.2 Actualizar Dispositivo
+
+Endpoint
+```
+PUT /api/devices/{id}
+```
+
+JSON
+```
+{
+  "deviceCode": "DEVICE-001",
+  "location": "Entrada secundaria",
+  "status": "INACTIVE",
+  "originIp": "192.168.1.101"
+}
+```
+
+Respuesta — 200 OK
+```
+{
+  "idDevice": "UUID_DEL_DISPOSITIVO",
+  "deviceCode": "DEVICE-001",
+  "location": "Entrada secundaria",
+  "status": "INACTIVE",
+  "originIp": "192.168.1.101",
+  "createdAt": "2026-08-21T08:30:00",
+  "updatedAt": "2026-08-21T08:45:00",
+  "message": "Dispositivo actualizado correctamente"
+}
+```
+5.3 Listar Dispositivos
+
+Endpoint
+```
+GET /api/devices
+```
+
+Respuesta — 200 OK
+```
+[
+  {
+    "idDevice": "UUID_DEL_DISPOSITIVO",
+    "deviceCode": "DEVICE-001",
+    "location": "Entrada principal",
+    "status": "ACTIVE",
+    "originIp": "192.168.1.100",
+    "createdAt": "2026-08-21T08:30:00",
+    "updatedAt": "2026-08-21T08:30:00",
+    "message": null
+  }
+]
+```
+5.4 Consultar por ID
+
+Endpoint
+```
+GET /api/devices/{id}
+```
+
+Respuesta — 200 OK
+```
+{
+  "idDevice": "UUID_DEL_DISPOSITIVO",
+  "deviceCode": "DEVICE-001",
+  "location": "Entrada principal",
+  "status": "ACTIVE",
+  "originIp": "192.168.1.100",
+  "createdAt": "2026-08-21T08:30:00",
+  "updatedAt": "2026-08-21T08:30:00",
+  "message": null
+}
+```
+5.5 Consultar por Código
+
+Endpoint
+```
+GET /api/devices/code?deviceCode=DEVICE-001
+```
+
+Respuesta — 200 OK
+```
+{
+  "idDevice": "UUID_DEL_DISPOSITIVO",
+  "deviceCode": "DEVICE-001",
+  "location": "Entrada principal",
+  "status": "ACTIVE",
+  "originIp": "192.168.1.100",
+  "createdAt": "2026-08-21T08:30:00",
+  "updatedAt": "2026-08-21T08:30:00",
+  "message": null
+}
+```
+5.6 Filtrar por Estado
+
+Endpoint
+```
+GET /api/devices/status?status=ACTIVE
+```
+
+Respuesta — 200 OK
+```
+[
+  {
+    "idDevice": "UUID_DEL_DISPOSITIVO",
+    "deviceCode": "DEVICE-001",
+    "location": "Entrada principal",
+    "status": "ACTIVE",
+    "originIp": "192.168.1.100",
+    "createdAt": "2026-08-21T08:30:00",
+    "updatedAt": "2026-08-21T08:30:00",
+    "message": null
+  }
+]
+```
+5.7 Eliminar Dispositivo
+
+Endpoint
+```
+DELETE /api/devices/{id}
+```
+
+Respuesta
+
+204 NO CONTENT
+
+
+No devuelve JSON.
+
+5.8 Validaciones
+
+deviceCode:
+```
+El código del dispositivo es obligatorio
+El código del dispositivo no puede superar los 50 caracteres
+```
+
+location:
+```
+La ubicación no puede superar los 100 caracteres
+```
+
+status:
+```
+El estado del dispositivo es obligatorio
+```
+
+originIp:
+```
+La IP de origen no puede superar los 50 caracteres
+```
+
+Ejemplo de error
+```
+{
+  "message": "El código del dispositivo es obligatorio"
+}
+```
+5.9 Flujo de Prueba
+1. POST /api/devices
+   → crear dispositivo
+
+2. GET /api/devices
+   → verificar listado
+
+3. GET /api/devices/{id}
+   → consultar dispositivo
+
+4. GET /api/devices/code?deviceCode=DEVICE-001
+   → consultar por código
+
+5. GET /api/devices/status?status=ACTIVE
+   → consultar por estado
+
+6. PUT /api/devices/{id}
+   → actualizar dispositivo
+
+7. DELETE /api/devices/{id}
+   → eliminar dispositivo
+   → 204 NO CONTENT
+
+# Endpoints y JSON de prueba — FaceLit Backend — User Faces
+
+## 6. Módulo: User Faces
+
+### BASE URL
+
+```text
+http://localhost:8080
+```
+
+### 6.1 Crear Cara Biométrica
+
+**Endpoint**
+
+```http
+POST /api/user-faces
+```
+
+**JSON**
+
+```json
+{
+  "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+  "biometricVector": [1, 2, 3, 4, 5],
+  "registrationDate": "2026-08-21T08:30:00",
+  "status": "ACTIVE"
+}
+```
+
+**Respuesta — 201 CREATED**
+
+```json
+{
+  "idUserFace": "UUID_DE_LA_CARA",
+  "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "ACTIVE",
+  "registrationDate": "2026-08-21T08:30:00",
+  "createdAt": "2026-08-21T08:30:00",
+  "updatedAt": "2026-08-21T08:30:00",
+  "message": "Cara biométrica registrada correctamente"
+}
+```
+
+### 6.2 Actualizar Cara Biométrica
+
+**Endpoint**
+
+```http
+PUT /api/user-faces/{id}
+```
+
+**JSON**
+
+```json
+{
+  "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+  "biometricVector": [1, 2, 3, 4, 5],
+  "registrationDate": "2026-08-21T08:45:00",
+  "status": "ACTIVE"
+}
+```
+
+**Respuesta — 200 OK**
+
+```json
+{
+  "idUserFace": "UUID_DE_LA_CARA",
+  "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "ACTIVE",
+  "registrationDate": "2026-08-21T08:45:00",
+  "createdAt": "2026-08-21T08:30:00",
+  "updatedAt": "2026-08-21T08:45:00",
+  "message": "Cara biométrica actualizada correctamente"
+}
+```
+
+### 6.3 Listar Caras Biométricas
+
+**Endpoint**
+
+```http
+GET /api/user-faces
+```
+
+**Respuesta — 200 OK**
+
+```json
+[
+  {
+    "idUserFace": "UUID_DE_LA_CARA",
+    "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "ACTIVE",
+    "registrationDate": "2026-08-21T08:30:00",
+    "createdAt": "2026-08-21T08:30:00",
+    "updatedAt": "2026-08-21T08:30:00",
+    "message": null
+  }
+]
+```
+
+### 6.4 Consultar por ID
+
+**Endpoint**
+
+```http
+GET /api/user-faces/{id}
+```
+
+**Respuesta — 200 OK**
+
+```json
+{
+  "idUserFace": "UUID_DE_LA_CARA",
+  "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "ACTIVE",
+  "registrationDate": "2026-08-21T08:30:00",
+  "createdAt": "2026-08-21T08:30:00",
+  "updatedAt": "2026-08-21T08:30:00",
+  "message": null
+}
+```
+
+### 6.5 Consultar por Usuario
+
+**Endpoint**
+
+```http
+GET /api/user-faces/user/{idUserApp}
+```
+
+**Respuesta — 200 OK**
+
+```json
+[
+  {
+    "idUserFace": "UUID_DE_LA_CARA",
+    "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "ACTIVE",
+    "registrationDate": "2026-08-21T08:30:00",
+    "createdAt": "2026-08-21T08:30:00",
+    "updatedAt": "2026-08-21T08:30:00",
+    "message": null
+  }
+]
+```
+
+### 6.6 Filtrar por Estado
+
+**Endpoint**
+
+```http
+GET /api/user-faces/status?status=ACTIVE
+```
+
+**Estados**
+
+```text
+ACTIVE
+PENDING
+INACTIVE
+```
 
-## Enums del módulo
+**Respuesta — 200 OK**
 
-Los enums están definidos bajo el paquete `face.model.enums`:
+```json
+[
+  {
+    "idUserFace": "UUID_DE_LA_CARA",
+    "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "ACTIVE",
+    "registrationDate": "2026-08-21T08:30:00",
+    "createdAt": "2026-08-21T08:30:00",
+    "updatedAt": "2026-08-21T08:30:00",
+    "message": null
+  }
+]
+```
 
-- `DeviceStatus`
-- `FaceStatus`
-- `EventType`
-- `RecognitionResult`
-- `SendStatus`
-- `EventOrigin`
+### 6.7 Eliminar Cara Biométrica
 
-Estos valores permiten guardar estados y resultados de forma consistente en base de datos, usando `EnumType.STRING` para facilitar lectura y mantenimiento.
+**Endpoint**
 
----
+```http
+DELETE /api/user-faces/{id}
+```
+
+**Respuesta**
+
+```text
+204 NO CONTENT
+```
 
-## Repositorios
+No devuelve JSON.
+
+> La eliminación cambia el estado a `INACTIVE`; no elimina físicamente el registro.
+
+### 6.8 Validaciones
+
+**idUserApp**
+
+```text
+El usuario es obligatorio
+```
+
+**biometricVector**
+
+```text
+El vector biométrico es obligatorio
+```
+
+**registrationDate**
+
+```text
+La fecha de registro es obligatoria
+```
+
+**status**
+
+```text
+El estado de la cara es obligatorio
+```
+
+**Ejemplo de error**
+
+```json
+{
+  "message": "El usuario es obligatorio"
+}
+```
+
+### 6.9 Flujo de Prueba
+
+1. `POST /api/user-faces`
+   → crear cara
+
+2. `GET /api/user-faces`
+   → listar caras
+
+3. `GET /api/user-faces/{id}`
+   → consultar por ID
+
+4. `GET /api/user-faces/user/{idUserApp}`
+   → consultar por usuario
+
+5. `GET /api/user-faces/status?status=ACTIVE`
+   → consultar por estado
+
+6. `PUT /api/user-faces/{id}`
+   → actualizar cara
+
+7. `DELETE /api/user-faces/{id}`
+   → cambiar a `INACTIVE`
+   → `204 NO CONTENT`
+
+# Endpoints y JSON de prueba — FaceLit Backend — Facial Events
+
+## 7. Módulo: Facial Events
+
+### BASE URL
+
+```text
+http://localhost:8080
+```
+
+### 7.1 Crear Evento Facial
+
+**Endpoint**
+
+```http
+POST /api/admin/facial-events
+```
+
+**JSON**
+
+```json
+{
+  "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+  "idEnvironment": "650e8400-e29b-41d4-a716-446655440000",
+  "idChip": "750e8400-e29b-41d4-a716-446655440000",
+  "idDevice": "850e8400-e29b-41d4-a716-446655440000",
+  "eventDatetime": "2026-08-21T08:30:00",
+  "eventType": "ENTRY",
+  "recognitionResult": "RECOGNIZED",
+  "sendStatus": "PENDING",
+  "origin": "ONLINE"
+}
+```
+
+**Respuesta — 201 CREATED**
+
+```json
+{
+  "idFacialEvent": "UUID_DEL_EVENTO",
+  "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+  "idEnvironment": "650e8400-e29b-41d4-a716-446655440000",
+  "idChip": "750e8400-e29b-41d4-a716-446655440000",
+  "idDevice": "850e8400-e29b-41d4-a716-446655440000",
+  "eventDatetime": "2026-08-21T08:30:00",
+  "eventType": "ENTRY",
+  "recognitionResult": "RECOGNIZED",
+  "sendStatus": "PENDING",
+  "origin": "ONLINE",
+  "createdAt": "2026-08-21T08:30:00",
+  "updatedAt": "2026-08-21T08:30:00",
+  "message": "Evento facial registrado correctamente"
+}
+```
+
+### 7.2 Actualizar Evento Facial
+
+**Endpoint**
+
+```http
+PUT /api/admin/facial-events/{id}
+```
+
+**JSON**
+
+```json
+{
+  "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+  "idEnvironment": "650e8400-e29b-41d4-a716-446655440000",
+  "idChip": "750e8400-e29b-41d4-a716-446655440000",
+  "idDevice": "850e8400-e29b-41d4-a716-446655440000",
+  "eventDatetime": "2026-08-21T08:45:00",
+  "eventType": "EXIT",
+  "recognitionResult": "RECOGNIZED",
+  "sendStatus": "SENT",
+  "origin": "ONLINE"
+}
+```
+
+**Respuesta — 200 OK**
+
+```json
+{
+  "idFacialEvent": "UUID_DEL_EVENTO",
+  "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+  "idEnvironment": "650e8400-e29b-41d4-a716-446655440000",
+  "idChip": "750e8400-e29b-41d4-a716-446655440000",
+  "idDevice": "850e8400-e29b-41d4-a716-446655440000",
+  "eventDatetime": "2026-08-21T08:45:00",
+  "eventType": "EXIT",
+  "recognitionResult": "RECOGNIZED",
+  "sendStatus": "SENT",
+  "origin": "ONLINE",
+  "createdAt": "2026-08-21T08:30:00",
+  "updatedAt": "2026-08-21T08:45:00",
+  "message": "Evento facial actualizado correctamente"
+}
+```
+
+### 7.3 Listar Eventos Faciales
+
+**Endpoint**
+
+```http
+GET /api/admin/facial-events
+```
+
+**Respuesta — 200 OK**
+
+```json
+[
+  {
+    "idFacialEvent": "UUID_DEL_EVENTO",
+    "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+    "idEnvironment": "650e8400-e29b-41d4-a716-446655440000",
+    "idChip": "750e8400-e29b-41d4-a716-446655440000",
+    "idDevice": "850e8400-e29b-41d4-a716-446655440000",
+    "eventDatetime": "2026-08-21T08:30:00",
+    "eventType": "ENTRY",
+    "recognitionResult": "RECOGNIZED",
+    "sendStatus": "PENDING",
+    "origin": "ONLINE",
+    "createdAt": "2026-08-21T08:30:00",
+    "updatedAt": "2026-08-21T08:30:00",
+    "message": null
+  }
+]
+```
+
+### 7.4 Consultar por ID
+
+**Endpoint**
+
+```http
+GET /api/admin/facial-events/{id}
+```
+
+**Respuesta — 200 OK**
+
+```json
+{
+  "idFacialEvent": "UUID_DEL_EVENTO",
+  "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+  "idEnvironment": "650e8400-e29b-41d4-a716-446655440000",
+  "idChip": "750e8400-e29b-41d4-a716-446655440000",
+  "idDevice": "850e8400-e29b-41d4-a716-446655440000",
+  "eventDatetime": "2026-08-21T08:30:00",
+  "eventType": "ENTRY",
+  "recognitionResult": "RECOGNIZED",
+  "sendStatus": "PENDING",
+  "origin": "ONLINE",
+  "createdAt": "2026-08-21T08:30:00",
+  "updatedAt": "2026-08-21T08:30:00",
+  "message": null
+}
+```
+
+### 7.5 Consultar por Usuario
+
+**Endpoint**
+
+```http
+GET /api/admin/facial-events/user/{idUserApp}
+```
+
+**Respuesta — 200 OK**
+
+```json
+[
+  {
+    "idFacialEvent": "UUID_DEL_EVENTO",
+    "idUserApp": "550e8400-e29b-41d4-a716-446655440000",
+    "idEnvironment": "650e8400-e29b-41d4-a716-446655440000",
+    "idChip": "750e8400-e29b-41d4-a716-446655440000",
+    "idDevice": "850e8400-e29b-41d4-a716-446655440000",
+    "eventDatetime": "2026-08-21T08:30:00",
+    "eventType": "ENTRY",
+    "recognitionResult": "RECOGNIZED",
+    "sendStatus": "PENDING",
+    "origin": "ONLINE",
+    "createdAt": "2026-08-21T08:30:00",
+    "updatedAt": "2026-08-21T08:30:00",
+    "message": null
+  }
+]
+```
+
+### 7.6 Consultar por Ambiente
+
+**Endpoint**
+
+```http
+GET /api/admin/facial-events/environment/{idEnvironment}
+```
+
+### 7.7 Consultar por Dispositivo
+
+**Endpoint**
+
+```http
+GET /api/admin/facial-events/device/{idDevice}
+```
+
+### 7.8 Filtrar por Tipo
+
+**Endpoint**
+
+```http
+GET /api/admin/facial-events/type?eventType=ENTRY
+```
+
+**Tipos**
+
+```text
+ENTRY
+BREAK
+EXIT
+```
+
+### 7.9 Filtrar por Resultado
+
+**Endpoint**
+
+```http
+GET /api/admin/facial-events/recognition-result?recognitionResult=RECOGNIZED
+```
+
+**Resultados**
+
+```text
+RECOGNIZED
+UNRECOGNIZED
+```
+
+### 7.10 Filtrar por Estado de Envío
+
+**Endpoint**
 
-Los repositorios del módulo se ubican en `face.repository.facialrecognition`:
+```http
+GET /api/admin/facial-events/send-status?sendStatus=PENDING
+```
 
-- `DeviceRepository`
-- `UserFaceRepository`
-- `FacialEventRepository`
-- `BiometricLogRepository`
+**Estados**
 
-Su responsabilidad es abstraer la persistencia y permitir consultas por:
+```text
+PENDING
+SENT
+```
 
-- usuario
-- ambiente
-- dispositivo
-- evento
-- estado
-- tipo de reconocimiento
+### 7.11 Eliminar Evento Facial
 
----
+**Endpoint**
 
-## DTOs
+```http
+DELETE /api/admin/facial-events/{id}
+```
 
-### Request DTOs
+**Respuesta**
 
-Se usan para recibir datos desde el cliente y validarlos antes de persistir.
+```text
+204 NO CONTENT
+```
 
-- `DeviceRequestDTO`
-- `UserFaceRequestDTO`
-- `FacialEventRequestDTO`
-- `BiometricLogRequestDTO`
+No devuelve JSON.
 
-### Response DTOs
+> En este caso el evento se elimina físicamente de la base de datos.
 
-Se usan para devolver información estructurada al cliente sin exponer directamente entidades JPA.
+### 7.12 Validaciones
 
-- `DeviceResponseDTO`
-- `UserFaceResponseDTO`
-- `FacialEventResponseDTO`
-- `BiometricLogResponseDTO`
+**idEnvironment**
 
-### Validación
+```text
+El ambiente es obligatorio
+```
 
-Se implementaron validaciones específicas, por ejemplo:
+**idDevice**
 
-- `ValidBiometricVector`
+```text
+El dispositivo es obligatorio
+```
 
-Esto ayuda a asegurar que el vector biométrico no sea nulo ni vacío antes de guardar un registro facial.
+**eventDatetime**
 
----
+```text
+La fecha del evento es obligatoria
+```
 
-## Servicios
+**eventType**
 
-La capa de servicio está dividida entre interfaz y lógica de implementación.
+```text
+El tipo de evento es obligatorio
+```
 
-### Interfaces
+**recognitionResult**
 
-- `DeviceService`
-- `UserFaceService`
-- `FacialEventService`
-- `BiometricLogService`
+```text
+El resultado del reconocimiento es obligatorio
+```
 
-### Implementaciones
+**sendStatus**
 
-- `DeviceServiceImpl`
-- `UserFaceServiceImpl`
-- `FacialEventServiceImpl`
-- `BiometricLogServiceImpl`
+```text
+El estado de envío es obligatorio
+```
 
-### Responsabilidades
+**origin**
 
-- crear registros
-- actualizar información
-- consultar por ID o por relaciones
-- eliminar registros
-- aplicar reglas de negocio
-- mapear entidades a DTOs
+```text
+El origen del evento es obligatorio
+```
 
----
+### 7.13 Flujo de Prueba
 
-## Excepciones
+1. `POST /api/admin/facial-events`
+   → crear evento facial
 
-El módulo incluye excepciones personalizadas para manejar errores específicos:
+2. `GET /api/admin/facial-events`
+   → listar eventos
 
-- `DeviceNotFoundException`
-- `UserFaceNotFoundException`
-- `FacialEventNotFoundException`
-- `BiometricLogNotFoundException`
+3. `GET /api/admin/facial-events/{id}`
+   → consultar por ID
 
-Esto mantiene la API más clara y facilita el manejo de errores por dominio.
+4. `GET /api/admin/facial-events/user/{idUserApp}`
+   → consultar por usuario
 
----
+5. `GET /api/admin/facial-events/environment/{idEnvironment}`
+   → consultar por ambiente
 
-## Controladores REST
+6. `GET /api/admin/facial-events/device/{idDevice}`
+   → consultar por dispositivo
 
-El módulo expone endpoints bajo rutas administrativas del tipo `/api/admin/...`.
+7. `GET /api/admin/facial-events/type?eventType=ENTRY`
+   → consultar por tipo
 
-### DeviceController
+8. `GET /api/admin/facial-events/recognition-result?recognitionResult=RECOGNIZED`
+   → consultar por resultado
 
-Base: `/api/admin/devices`
+9. `GET /api/admin/facial-events/send-status?sendStatus=PENDING`
+   → consultar por estado de envío
 
-- `POST /api/admin/devices` → Crear dispositivo
-- `PUT /api/admin/devices/{id}` → Actualizar dispositivo
-- `GET /api/admin/devices` → Listar dispositivos
-- `GET /api/admin/devices/{id}` → Obtener dispositivo por ID
-- `GET /api/admin/devices/code?deviceCode=...` → Buscar por código
-- `GET /api/admin/devices/status?status=...` → Filtrar por estado
-- `DELETE /api/admin/devices/{id}` → Eliminar dispositivo
+10. `PUT /api/admin/facial-events/{id}`
+    → actualizar evento
 
-### UserFaceController
+11. `DELETE /api/admin/facial-events/{id}`
+    → eliminar evento
+    → `204 NO CONTENT`
+
+Claro, en el mismo formato simplificado:
+
+# Endpoints y JSON de prueba — FaceLit Backend — Biometric Logs
 
-Base: `/api/admin/user-faces`
+## 8. Módulo: Biometric Logs
 
-- `POST /api/admin/user-faces` → Crear registro facial
-- `PUT /api/admin/user-faces/{id}` → Actualizar registro facial
-- `GET /api/admin/user-faces` → Listar registros faciales
-- `GET /api/admin/user-faces/{id}` → Obtener por ID
-- `GET /api/admin/user-faces/user/{idUserApp}` → Obtener rostros por usuario
-- `GET /api/admin/user-faces/status?status=...` → Filtrar por estado
-- `DELETE /api/admin/user-faces/{id}` → Eliminar registro facial
+### BASE URL
 
-### FacialEventController
+```text
+http://localhost:8080
+```
 
-Base: `/api/admin/facial-events`
+### 8.1 Crear Log Biométrico
 
-- `POST /api/admin/facial-events` → Crear evento facial
-- `PUT /api/admin/facial-events/{id}` → Actualizar evento facial
-- `GET /api/admin/facial-events` → Listar eventos
-- `GET /api/admin/facial-events/{id}` → Obtener evento por ID
-- `GET /api/admin/facial-events/user/{idUserApp}` → Eventos por usuario
-- `GET /api/admin/facial-events/environment/{idEnvironment}` → Eventos por ambiente
-- `GET /api/admin/facial-events/device/{idDevice}` → Eventos por dispositivo
-- `GET /api/admin/facial-events/type?eventType=...` → Eventos por tipo
-- `GET /api/admin/facial-events/recognition-result?recognitionResult=...` → Eventos por resultado
-- `GET /api/admin/facial-events/send-status?sendStatus=...` → Eventos por estado de envío
-- `DELETE /api/admin/facial-events/{id}` → Eliminar evento
+**Endpoint**
 
-### BiometricLogController
+```http
+POST /api/admin/biometric-logs
+```
+
+**JSON**
+
+```json
+{
+  "idFacialEvent": "550e8400-e29b-41d4-a716-446655440000",
+  "description": "Reconocimiento facial realizado correctamente",
+  "logDate": "2026-08-21T08:30:00"
+}
+```
+
+**Respuesta — 201 CREATED**
 
-Base: `/api/admin/biometric-logs`
+```json
+{
+  "idBiometricLog": "UUID_DEL_LOG",
+  "idFacialEvent": "550e8400-e29b-41d4-a716-446655440000",
+  "description": "Reconocimiento facial realizado correctamente",
+  "logDate": "2026-08-21T08:30:00",
+  "createdAt": "2026-08-21T08:30:00",
+  "updatedAt": "2026-08-21T08:30:00",
+  "message": "Log biométrico registrado correctamente"
+}
+```
+
+### 8.2 Actualizar Log Biométrico
+
+**Endpoint**
+
+```http
+PUT /api/admin/biometric-logs/{id}
+```
+
+**JSON**
+
+```json
+{
+  "idFacialEvent": "550e8400-e29b-41d4-a716-446655440000",
+  "description": "Log biométrico actualizado",
+  "logDate": "2026-08-21T08:45:00"
+}
+```
+
+**Respuesta — 200 OK**
 
-- `POST /api/admin/biometric-logs` → Crear log biométrico
-- `PUT /api/admin/biometric-logs/{id}` → Actualizar log
-- `GET /api/admin/biometric-logs` → Listar logs
-- `GET /api/admin/biometric-logs/{id}` → Obtener log por ID
-- `GET /api/admin/biometric-logs/facial-event/{idFacialEvent}` → Logs por evento facial
-- `DELETE /api/admin/biometric-logs/{id}` → Eliminar log
+```json
+{
+  "idBiometricLog": "UUID_DEL_LOG",
+  "idFacialEvent": "550e8400-e29b-41d4-a716-446655440000",
+  "description": "Log biométrico actualizado",
+  "logDate": "2026-08-21T08:45:00",
+  "createdAt": "2026-08-21T08:30:00",
+  "updatedAt": "2026-08-21T08:45:00",
+  "message": "Log biométrico actualizado correctamente"
+}
+```
 
----
+### 8.3 Listar Logs Biométricos
 
-## Flujo típico del módulo
+**Endpoint**
 
-1. Un usuario se registra o ya existe en el sistema.
-2. Se registra su vector biométrico mediante `UserFace`.
-3. Un `Device` captura la lectura de reconocimiento.
-4. Se genera un `FacialEvent` con el resultado del reconocimiento.
-5. Se añaden `BiometricLog` para auditar el proceso.
-6. El sistema responde con DTOs limpios y bien estructurados.
+```http
+GET /api/admin/biometric-logs
+```
 
----
+**Respuesta — 200 OK**
 
-## Convención de nombres y arquitectura
+```json
+[
+  {
+    "idBiometricLog": "UUID_DEL_LOG",
+    "idFacialEvent": "550e8400-e29b-41d4-a716-446655440000",
+    "description": "Reconocimiento facial realizado correctamente",
+    "logDate": "2026-08-21T08:30:00",
+    "createdAt": "2026-08-21T08:30:00",
+    "updatedAt": "2026-08-21T08:30:00",
+    "message": null
+  }
+]
+```
 
-El módulo sigue el patrón del resto del backend:
+### 8.4 Consultar por ID
 
-- entidades bajo `model`
-- repositorios bajo `repository`
-- request/response bajo `dto`
-- lógica bajo `service` y `serviceImpl`
-- validaciones bajo `validation`
-- controladores bajo `controller`
-- errores bajo `exception`
+**Endpoint**
 
-Esto permite mantener una organización consistente con el resto de módulos del proyecto, como `auth`, `academic`, `environments` y `schedule`.
+```http
+GET /api/admin/biometric-logs/{id}
+```
 
----
+**Respuesta — 200 OK**
 
-## Observaciones de diseño
+```json
+{
+  "idBiometricLog": "UUID_DEL_LOG",
+  "idFacialEvent": "550e8400-e29b-41d4-a716-446655440000",
+  "description": "Reconocimiento facial realizado correctamente",
+  "logDate": "2026-08-21T08:30:00",
+  "createdAt": "2026-08-21T08:30:00",
+  "updatedAt": "2026-08-21T08:30:00",
+  "message": null
+}
+```
 
-- Las entidades heredan de `AuditBase`, lo cual permite registrar auditoría del sistema.
-- Se usa `@ManyToOne` y `@OneToMany` para modelar relaciones entre entidades.
-- Las enumeraciones se guardan como texto (`EnumType.STRING`) para facilitar lectura en base de datos.
-- Los DTOs evitan exponer entidades JPA directamente.
-- La capa de servicio centraliza la lógica de negocio y validaciones.
+### 8.5 Consultar por Evento Facial
 
----
+**Endpoint**
 
-## Resumen
+```http
+GET /api/admin/biometric-logs/facial-event/{idFacialEvent}
+```
 
-El módulo Face es el núcleo del sistema de reconocimiento biométrico de FaceLit. Su responsabilidad principal es gestionar:
+**Respuesta — 200 OK**
 
-- usuarios con huellas faciales
-- dispositivos de captura
-- eventos de reconocimiento
-- trazabilidad de cada interacción
-- validación y persistencia segura de datos biométricos
+```json
+[
+  {
+    "idBiometricLog": "UUID_DEL_LOG",
+    "idFacialEvent": "550e8400-e29b-41d4-a716-446655440000",
+    "description": "Reconocimiento facial realizado correctamente",
+    "logDate": "2026-08-21T08:30:00",
+    "createdAt": "2026-08-21T08:30:00",
+    "updatedAt": "2026-08-21T08:30:00",
+    "message": null
+  }
+]
+```
 
-Es un módulo crítico para la lógica de acceso, seguridad y monitoreo del sistema.
+### 8.6 Eliminar Log Biométrico
+
+**Endpoint**
+
+```http
+DELETE /api/admin/biometric-logs/{id}
+```
+
+**Respuesta**
+
+```text
+204 NO CONTENT
+```
+
+No devuelve JSON.
+
+> En este caso el log biométrico se elimina físicamente de la base de datos.
+
+### 8.7 Validaciones
+
+**idFacialEvent**
+
+```text
+El evento facial es obligatorio
+```
+
+**description**
+
+```text
+La descripción no puede superar los 2000 caracteres
+```
+
+**logDate**
+
+```text
+La fecha del log es obligatoria
+```
+
+**Ejemplo de error**
+
+```json
+{
+  "message": "El evento facial es obligatorio"
+}
+```
+
+### 8.8 Flujo de Prueba
+
+1. `POST /api/admin/biometric-logs`
+   → crear log biométrico
+
+2. `GET /api/admin/biometric-logs`
+   → listar logs
+
+3. `GET /api/admin/biometric-logs/{id}`
+   → consultar por ID
+
+4. `GET /api/admin/biometric-logs/facial-event/{idFacialEvent}`
+   → consultar logs de un evento facial
+
+5. `PUT /api/admin/biometric-logs/{id}`
+   → actualizar log
+
+6. `DELETE /api/admin/biometric-logs/{id}`
+   → eliminar log
+   → `204 NO CONTENT`

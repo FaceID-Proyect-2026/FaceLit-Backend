@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import com.FaceLit.backend.face.dto.request.facialrecognition.DeviceRequestDTO;
 import com.FaceLit.backend.face.dto.response.facialrecognition.DeviceResponseDTO;
+import com.FaceLit.backend.face.exception.DeviceException;
 import com.FaceLit.backend.face.model.enums.DeviceStatus;
 import com.FaceLit.backend.face.model.facialrecognition.Device;
 import com.FaceLit.backend.face.repository.facialrecognition.DeviceRepository;
@@ -54,7 +55,7 @@ public class DeviceServiceImpl implements DeviceService {
     @Transactional
     public DeviceResponseDTO updateDevice(UUID id, DeviceRequestDTO dto) {
         Device device = deviceRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Dispositivo no encontrado"));
+                .orElseThrow(() -> new DeviceException("Dispositivo no encontrado"));
 
         if (!device.getDeviceCode().equals(dto.getDeviceCode())
                 && deviceRepository.existsByDeviceCode(dto.getDeviceCode())) {
@@ -63,9 +64,11 @@ public class DeviceServiceImpl implements DeviceService {
 
         device.setDeviceCode(dto.getDeviceCode());
         device.setLocation(dto.getLocation());
+
         if (dto.getStatus() != null) {
             device.setStatus(dto.getStatus());
         }
+
         device.setOriginIp(dto.getOriginIp());
 
         Device updated = deviceRepository.save(device);
@@ -99,7 +102,7 @@ public class DeviceServiceImpl implements DeviceService {
     @Override
     public DeviceResponseDTO getDeviceById(UUID id) {
         Device device = deviceRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Dispositivo no encontrado"));
+                .orElseThrow(() -> new DeviceException("Dispositivo no encontrado"));
 
         return new DeviceResponseDTO(
                 device.getIdDevice(),
@@ -115,7 +118,7 @@ public class DeviceServiceImpl implements DeviceService {
     @Override
     public DeviceResponseDTO getDeviceByCode(String deviceCode) {
         Device device = deviceRepository.findByDeviceCode(deviceCode)
-                .orElseThrow(() -> new IllegalArgumentException("Dispositivo no encontrado"));
+                .orElseThrow(() -> new DeviceException("Dispositivo no encontrado"));
 
         return new DeviceResponseDTO(
                 device.getIdDevice(),
@@ -147,9 +150,8 @@ public class DeviceServiceImpl implements DeviceService {
     @Transactional
     public void deleteDevice(UUID id) {
         Device device = deviceRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Dispositivo no encontrado"));
+                .orElseThrow(() -> new DeviceException("Dispositivo no encontrado"));
 
-        device.setStatus(DeviceStatus.INACTIVE);
-        deviceRepository.save(device);
+        deviceRepository.delete(device);
     }
 }
