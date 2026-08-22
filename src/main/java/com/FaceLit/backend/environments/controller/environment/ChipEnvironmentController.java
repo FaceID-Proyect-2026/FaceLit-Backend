@@ -1,4 +1,5 @@
 package com.FaceLit.backend.environments.controller.environment;
+
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +22,7 @@ import java.util.UUID;
 @RequestMapping("/api/admin/chip-environments")
 public class ChipEnvironmentController {
 
-      private final ChipEnvironmentService chipEnvironmentService;
+    private final ChipEnvironmentService chipEnvironmentService;
 
     public ChipEnvironmentController(ChipEnvironmentService chipEnvironmentService) {
         this.chipEnvironmentService = chipEnvironmentService;
@@ -58,5 +59,13 @@ public class ChipEnvironmentController {
         return ResponseEntity.noContent().build();
     }
 
+    // DELETE /api/admin/chip-environments/{id}/permanent
+    // Elimina completamente — solo si ya está INACTIVE
+    @DeleteMapping("/{id}/permanent")
+    public ResponseEntity<Void> permanentDelete(@PathVariable UUID id) {
+        chipEnvironmentService.permanentDeleteAssignment(id);
+        return ResponseEntity.noContent().build();
+
+    }
 
 }

@@ -811,3 +811,719 @@ Respuesta:
 
 6. POST /api/auth/login con el email y password del usuario
 ```
+
+---
+
+## 5. Módulo: Asignación de Roles
+
+### BASE URL
+
+```text
+http://localhost:8080
+```
+
+> ⚠️ **Nota de consistencia:** el endpoint `GET /api/admin/users` de esta sección (5.2) devuelve el formato antiguo (`userId`, `firstName`, `lastName`, `email`, `documentNumber`, `currentRole`), correspondiente a `AdminRoleController`. El **Módulo 10** (sección 7 de este documento) tiene su propio `GET /api/admin/users` con un formato más completo (`UserDetailResponseDTO`), correspondiente a `UserManagementController`. Ambos controllers no pueden coexistir registrando la misma ruta a la vez — revisa cuál de los dos tienes activo en tu backend actual antes de probar, para no confundir las respuestas esperadas.
+
+### 5.1 Scripts SQL de Apoyo
+
+```sql
+-- 1. Ver los usuarios que tienes
+SELECT u.id_user_app, u.first_name, u.last_name, c.email, ur.id_role
+FROM security.user_app u
+JOIN security.credential c ON c.id_user_app = u.id_user_app
+LEFT JOIN roleandpermission.user_role ur ON ur.id_user_app = u.id_user_app;
+
+-- 2. Ver los roles disponibles
+SELECT id_role, name_role FROM roleandpermission.role;
+
+-- 3. Actualizar el rol del usuario que quieres hacer ADMINISTRATOR
+-- Reemplaza los UUIDs con los que obtuviste arriba
+UPDATE roleandpermission.user_role
+SET id_role = 'UUID_DEL_ROL_ADMINISTRATOR',
+    assignment_date = NOW(),
+    assigned_at = NOW(),
+    updated_at = NOW()
+WHERE id_user_app = 'UUID_DEL_USUARIO';
+```
+
+---
+
+### 5.2 Listar Todos los Usuarios
+
+**Endpoint**
+
+```http
+GET /api/admin/users
+```
+
+**Headers**
+
+```http
+Authorization: Bearer TOKEN_DEL_ADMIN
+```
+
+**Respuesta esperada (200 OK)**
+
+```json
+[
+  {
+    "userId": "uuid-del-usuario",
+    "firstName": "Maria",
+    "lastName": "Oyola",
+    "email": "maria@gmail.com",
+    "documentNumber": "1234567890",
+    "currentRole": "APPRENTICE"
+  },
+  {
+    "userId": "uuid-de-otro",
+    "firstName": "Juan",
+    "lastName": "Perez",
+    "email": "juan@gmail.com",
+    "documentNumber": "0987654321",
+    "currentRole": "APPRENTICE"
+  }
+]
+```
+
+---
+
+### 5.3 Cambiar Rol de un Usuario
+
+**Endpoint**
+
+```http
+PUT /api/admin/users/{UUID_DEL_USUARIO}/role
+```
+
+**Headers**
+
+```http
+Authorization: Bearer TOKEN_DEL_ADMIN
+Content-Type: application/json
+```
+
+**JSON de prueba**
+
+```json
+{
+  "role": "INSTRUCTOR"
+}
+```
+
+**Respuesta esperada (200 OK)**
+
+```json
+{
+  "userId": "uuid-del-usuario",
+  "role": "INSTRUCTOR",
+  "message": "Rol asignado correctamente"
+}
+```
+
+---
+
+### 5.4 Validaciones
+
+#### 5.4.1 Solicitud sin token
+
+**Endpoint**
+
+```http
+GET /api/admin/users
+```
+
+**Respuesta esperada**
+
+```http
+403 Forbidden
+```
+
+---
+
+#### 5.4.2 Token de APPRENTICE o INSTRUCTOR
+
+**Endpoint**
+
+```http
+GET /api/admin/users
+```
+
+**Headers**
+
+```http
+Authorization: Bearer TOKEN_DEL_APPRENTICE
+```
+
+o
+
+```http
+Authorization: Bearer TOKEN_DEL_INSTRUCTOR
+```
+
+**Respuesta esperada**
+
+```http
+403 Forbidden
+```
+
+---
+
+#### 5.4.3 Usuario inexistente
+
+**Endpoint**
+
+```http
+PUT /api/admin/users/UUID_INEXISTENTE/role
+```
+
+**Headers**
+
+```http
+Authorization: Bearer TOKEN_DEL_ADMIN
+Content-Type: application/json
+```
+
+**JSON**
+
+```json
+{
+  "role": "INSTRUCTOR"
+}
+```
+
+**Respuesta esperada**
+
+```json
+{
+  "message": "Usuario no encontrado"
+}
+```
+
+---
+
+#### 5.4.4 Rol inválido
+
+**Endpoint**
+
+```http
+PUT /api/admin/users/{UUID_DEL_USUARIO}/role
+```
+
+**Headers**
+
+```http
+Authorization: Bearer TOKEN_DEL_ADMIN
+Content-Type: application/json
+```
+
+**JSON**
+
+```json
+{
+  "role": "SUPERADMIN"
+}
+```
+
+**Respuesta esperada**
+
+```http
+400 Bad Request
+```
+
+---
+
+### 5.5 Resumen de Pruebas
+
+| Caso                            | Resultado esperado      |
+| ------------------------------- | ----------------------- |
+| Listar usuarios con token ADMIN | ✅ 200 OK                |
+| Cambiar rol correctamente       | ✅ 200 OK                |
+| Sin token                       | ❌ 403 Forbidden         |
+| Token APPRENTICE                | ❌ 403 Forbidden         |
+| Token INSTRUCTOR                | ❌ 403 Forbidden         |
+| Usuario inexistente             | ❌ Usuario no encontrado |
+| Rol no válido                   | ❌ 400 Bad Request       |
+
+---
+
+### 5.6 Endpoints Protegidos por Rol
+
+| Endpoint | ADMINISTRATOR | INSTRUCTOR | APPRENTICE |
+|---|---|---|---|
+| `/api/admin/**` | ✅ | ❌ | ❌ |
+| `/api/instructor/**` | ✅ | ✅ | ❌ |
+| `/api/apprentice/**` | ✅ | ✅ | ✅ |
+
+Si un rol intenta acceder a un endpoint que no le corresponde, el sistema devuelve:
+```
+HTTP 403 Forbidden
+```
+
+---
+
+### 5.7 Anexo — Script SQL (repetido en el documento original)
+
+> Nota: este bloque aparece nuevamente al final del documento original. Se conserva aquí tal cual, sin eliminarlo, para no perder contenido.
+
+```sql
+-- 1. Ver los usuarios que tienes
+SELECT u.id_user_app, u.first_name, u.last_name, c.email, ur.id_role
+FROM security.user_app u
+JOIN security.credential c ON c.id_user_app = u.id_user_app
+LEFT JOIN roleandpermission.user_role ur ON ur.id_user_app = u.id_user_app;
+
+-- 2. Ver los roles disponibles
+SELECT id_role, name_role FROM roleandpermission.role;
+
+-- 3. Actualizar el rol del usuario que quieres hacer ADMINISTRATOR
+-- Reemplaza los UUIDs con los que obtuviste arriba
+UPDATE roleandpermission.user_role
+SET id_role = 'UUID_DEL_ROL_ADMINISTRATOR',
+    assignment_date = NOW(),
+    assigned_at = NOW(),
+    updated_at = NOW()
+WHERE id_user_app = 'UUID_DEL_USUARIO';
+```
+
+---
+
+## 6. Módulo: Configuración
+
+### BASE URL
+
+```
+http://localhost:8080
+```
+
+### 6.1 Crear Configuración (primera vez)
+
+**Endpoint**
+
+```http
+POST /api/profile/configuration 
+```
+
+**Headers**
+
+```http
+Authorization: Bearer TOKEN_CUALQUIER_ROL
+Content-Type: application/json
+```
+
+**JSON de prueba**
+
+```json
+{
+  "configurationName": "Mi configuracion",
+  "description": "Configuracion principal",
+  "notificationsActive": true,
+  "darkMode": false,
+  "language": "ES"
+}
+```
+
+---
+
+### 6.2 Actualizar Configuración
+
+**Endpoint**
+
+```http
+PUT /api/profile/configuration 
+```
+
+**Headers**
+
+```http
+Authorization: Bearer TOKEN_CUALQUIER_ROL
+```
+
+**JSON de prueba**
+
+```json
+{
+  "configurationName": "Mi configuracion",
+  "description": "Cambie a modo oscuro e ingles",
+  "notificationsActive": true,
+  "darkMode": true,
+  "language": "EN"
+}
+```
+
+---
+
+### 6.3 Consultar Configuración
+
+**Endpoint**
+
+```http
+GET /api/profile/configuration 
+```
+
+**Headers**
+
+```http
+Authorization: Bearer TOKEN_CUALQUIER_ROL
+```
+
+---
+
+## 7. Módulo: Gestión de Usuarios (RF-10)
+
+### BASE URL
+
+```text
+http://localhost:8080
+```
+
+> Todos los endpoints de este módulo requieren `Authorization: Bearer {token}` de un usuario con rol `ADMINISTRATOR` o `COORDINATOR` (ambos tienen los mismos permisos sobre este módulo, incluida la eliminación).
+>
+> ⚠️ Ver la nota de consistencia en la sección 5 sobre el choque de ruta `GET /api/admin/users` entre `AdminRoleController` y `UserManagementController`.
+
+### 7.1 RF-10.1 — Panel de usuarios registrados
+
+#### 7.1.1 Listar todos los usuarios con sesión registrada
+
+**Endpoint**
+
+```http
+GET /api/admin/users
+```
+
+**Headers**
+
+```text
+Authorization: Bearer TOKEN_ADMIN_O_COORDINATOR
+```
+
+**Respuesta esperada**
+
+HTTP STATUS
+
+```text
+200 OK
+```
+
+Response
+
+```json
+[
+  {
+    "userId": "5f08e1c5-5362-4860-be05-6ebac5d7607f",
+    "firstName": "Juan",
+    "lastName": "Pérez",
+    "documentNumber": "1035678912",
+    "documentType": "CITIZENSHIP CARD",
+    "birthDate": "1998-04-12",
+    "email": "juan@gmail.com",
+    "role": "INSTRUCTOR",
+    "accountStatus": "ACTIVE",
+    "registrationDate": "2026-07-01T10:15:30",
+    "chipName": null,
+    "chipCode": null,
+    "programName": null,
+    "hasSession": true
+  },
+  {
+    "userId": "3f634480-63a4-427e-934b-5519f41a86b5",
+    "firstName": "María",
+    "lastName": "Gómez",
+    "documentNumber": "1098765432",
+    "documentType": "CITIZENSHIP CARD",
+    "birthDate": "2005-02-20",
+    "email": "maria@gmail.com",
+    "role": "APPRENTICE",
+    "accountStatus": "ACTIVE",
+    "registrationDate": "2026-07-03T09:00:00",
+    "chipName": "Ficha ADSO 2025",
+    "chipCode": "A3F9K2M7",
+    "programName": "ADSO",
+    "hasSession": true
+  }
+]
+```
+
+**Notas de este endpoint**
+- Solo aparecen usuarios que tienen al menos un registro en `user_session` (han iniciado sesión alguna vez).
+- Si el usuario no es `APPRENTICE`, o es `APPRENTICE` sin ficha activa, `chipName`/`chipCode`/`programName` llegan en `null` — el frontend decide cómo mostrarlo (por ejemplo, "Pendiente por ficha").
+- Si no hay ningún usuario con sesión registrada, la respuesta es `200 OK` con `[]` (lista vacía, no un mensaje de error).
+
+---
+
+### 7.2 RF-10.2 — Consultar, editar, eliminar usuario
+
+#### 7.2.1 Buscar por nombre o correo
+
+**Endpoint**
+
+```http
+GET /api/admin/users/search?query={texto}
+```
+
+**Headers**
+
+```text
+Authorization: Bearer TOKEN_ADMIN_O_COORDINATOR
+```
+
+**Ejemplo**
+
+```http
+GET /api/admin/users/search?query=maria
+```
+
+**Respuesta esperada**
+
+HTTP STATUS
+
+```text
+200 OK
+```
+
+Response
+
+```json
+[
+  {
+    "userId": "3f634480-63a4-427e-934b-5519f41a86b5",
+    "firstName": "María",
+    "lastName": "Gómez",
+    "documentNumber": "1098765432",
+    "documentType": "CITIZENSHIP CARD",
+    "birthDate": "2005-02-20",
+    "email": "maria@gmail.com",
+    "role": "APPRENTICE",
+    "accountStatus": "ACTIVE",
+    "registrationDate": "2026-07-03T09:00:00",
+    "chipName": "Ficha ADSO 2025",
+    "chipCode": "A3F9K2M7",
+    "programName": "ADSO",
+    "hasSession": true
+  }
+]
+```
+
+**Sin resultados**
+
+```http
+GET /api/admin/users/search?query=noexiste123
+```
+
+HTTP STATUS
+
+```text
+400 BAD REQUEST
+```
+
+Response
+
+```json
+{
+  "message": "No se encontraron usuarios con ese criterio"
+}
+```
+
+**Notas**
+- La búsqueda es parcial y no distingue mayúsculas/minúsculas — busca tanto en nombre completo (`firstName + lastName`) como en el correo.
+- Igual que en el listado general, solo trae usuarios con al menos una sesión registrada.
+
+---
+
+#### 7.2.2 Ver detalle completo de un usuario
+
+**Endpoint**
+
+```http
+GET /api/admin/users/{userId}
+```
+
+**Headers**
+
+```text
+Authorization: Bearer TOKEN_ADMIN_O_COORDINATOR
+```
+
+**Respuesta esperada**
+
+HTTP STATUS
+
+```text
+200 OK
+```
+
+Response
+
+```json
+{
+  "userId": "3f634480-63a4-427e-934b-5519f41a86b5",
+  "firstName": "María",
+  "lastName": "Gómez",
+  "documentNumber": "1098765432",
+  "documentType": "CITIZENSHIP CARD",
+  "birthDate": "2005-02-20",
+  "email": "maria@gmail.com",
+  "role": "APPRENTICE",
+  "accountStatus": "ACTIVE",
+  "registrationDate": "2026-07-03T09:00:00",
+  "chipName": "Ficha ADSO 2025",
+  "chipCode": "A3F9K2M7",
+  "programName": "ADSO",
+  "hasSession": true
+}
+```
+
+**Usuario inexistente**
+
+HTTP STATUS
+
+```text
+400 BAD REQUEST
+```
+
+Response
+
+```json
+{
+  "message": "Usuario no encontrado"
+}
+```
+
+---
+
+#### 7.2.3 Editar usuario (nombre, apellido, estado, rol)
+
+**Endpoint**
+
+```http
+PUT /api/admin/users/{userId}
+```
+
+**Headers**
+
+```text
+Authorization: Bearer TOKEN_ADMIN_O_COORDINATOR
+Content-Type: application/json
+```
+
+**JSON**
+
+```json
+{
+  "firstName": "María José",
+  "lastName": "Gómez Ruiz",
+  "accountStatus": "ACTIVE",
+  "role": "APPRENTICE"
+}
+```
+
+**Valores permitidos**
+
+| Campo | Valores |
+|---|---|
+| `accountStatus` | `ACTIVE`, `INACTIVE`, `PENDING_CONSENT`, `BLOCKED` |
+| `role` | `APPRENTICE`, `INSTRUCTOR`, `ADMINISTRATOR`, `COORDINATOR` |
+
+**Respuesta esperada**
+
+HTTP STATUS
+
+```text
+200 OK
+```
+
+Response
+
+```json
+{
+  "userId": "3f634480-63a4-427e-934b-5519f41a86b5",
+  "firstName": "María José",
+  "lastName": "Gómez Ruiz",
+  "documentNumber": "1098765432",
+  "documentType": "CITIZENSHIP CARD",
+  "birthDate": "2005-02-20",
+  "email": "maria@gmail.com",
+  "role": "APPRENTICE",
+  "accountStatus": "ACTIVE",
+  "registrationDate": "2026-07-03T09:00:00",
+  "chipName": "Ficha ADSO 2025",
+  "chipCode": "A3F9K2M7",
+  "programName": "ADSO",
+  "hasSession": true
+}
+```
+
+**Validaciones para probar**
+
+| Caso | Respuesta esperada |
+|---|---|
+| Usuario inexistente | `400` — `"Usuario no encontrado"` |
+| `firstName`/`lastName` vacíos | `400` — error de validación por campo (`MethodArgumentNotValidException`) |
+| `firstName`/`lastName` con números o símbolos | `400` — `"El nombre solo puede contener letras"` / `"El apellido solo puede contener letras"` |
+| `accountStatus` ausente | `400` — `"El estado de cuenta es obligatorio"` |
+| `role` ausente | `400` — `"El rol es obligatorio"` |
+| `role` con un valor que no existe en el enum | `400` — error de deserialización JSON |
+
+> **Nota:** el correo electrónico y el número de documento **no** se pueden editar desde este endpoint — no existen como campos en el body, son de solo lectura por diseño.
+
+---
+
+#### 7.2.4 Eliminar usuario permanentemente
+
+**Endpoint**
+
+```http
+DELETE /api/admin/users/{userId}
+```
+
+**Headers**
+
+```text
+Authorization: Bearer TOKEN_ADMIN_O_COORDINATOR
+```
+
+**Respuesta esperada**
+
+HTTP STATUS
+
+```text
+204 NO CONTENT
+```
+
+Sin body.
+
+> ⚠️ Esta operación borra en cascada: `user_app`, `credential`, `user_role`, `user_session`, `user_configuration`, `email_verification`, `password_recovery`, `consent`, `consent_verification`, `terms_acceptance`. Prueba primero con un usuario de prueba que no te importe perder.
+
+**Validaciones para probar**
+
+| Caso | Respuesta esperada |
+|---|---|
+| Usuario inexistente | `400` — `"Usuario no encontrado"` |
+| Usuario con ficha activa (`user_chip` en estado `ACTIVE`) | `400` — `"No se puede eliminar porque está vinculado a una ficha activa. Desvincula primero al aprendiz."` |
+| Usuario sin ficha activa y sin bloqueos | `204 NO CONTENT` |
+
+---
+
+### 7.3 Resumen de casos de prueba
+
+| Caso | Resultado esperado |
+|---|---|
+| Listar usuarios con sesión | `200 OK` |
+| Listar sin usuarios con sesión | `200 OK` con `[]` |
+| Buscar por nombre/correo con coincidencias | `200 OK` |
+| Buscar sin coincidencias | `400` — `"No se encontraron usuarios con ese criterio"` |
+| Ver detalle de usuario existente | `200 OK` |
+| Ver detalle de usuario inexistente | `400` — `"Usuario no encontrado"` |
+| Editar usuario válido | `200 OK` |
+| Editar usuario inexistente | `400` — `"Usuario no encontrado"` |
+| Eliminar usuario sin bloqueos | `204 NO CONTENT` |
+| Eliminar usuario con ficha activa | `400` — `"No se puede eliminar porque está vinculado a una ficha activa..."` |
+| Sin token | `403 Forbidden` |
+| Token de `INSTRUCTOR` o `APPRENTICE` | `403 Forbidden` |
+
+---
+
+### 7.4 Pendiente (no implementado todavía)
+
+- Validación de "no eliminar si tiene asistencias registradas" — el módulo de asistencia (RF-6, reconocimiento facial) no existe aún.
+- Registro en bitácora de consultas, ediciones y eliminaciones — módulo de auditoría pospuesto.
+- Restricción de `accountStatus` a solo `ACTIVE`/`INACTIVE`/`BLOCKED` en la edición — actualmente el DTO acepta cualquier valor del enum `AccountStatus`, incluyendo `PENDING_CONSENT`, que el criterio de aceptación de RF-10.2 no contempla como estado editable manualmente.

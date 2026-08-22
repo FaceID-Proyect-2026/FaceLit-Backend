@@ -13,19 +13,13 @@ import java.util.List;
 @Repository
 public interface RecordEnvironmentRepository extends JpaRepository<RecordEnvironment, UUID> {
 
-    // Ambiente activo de un horario
-    Optional<RecordEnvironment> findBySchedule_IdSchedule(UUID idSchedule);
+    List<RecordEnvironment> findAllBySchedule_IdSchedule(UUID idSchedule);
 
-    // Ahora — trae solo el activo
     Optional<RecordEnvironment> findBySchedule_IdScheduleAndActive(
             UUID idSchedule, RecordEnvironmentStatus active);
 
-    // Busca todos los registros de ambiente de un horario
-    List<RecordEnvironment> findAllBySchedule_IdSchedule(UUID idSchedule);
-
     List<RecordEnvironment> findAllByEnvironment_IdEnvironment(UUID idEnvironment);
 
-    // Cuenta horarios asignados a un ambiente — usado en permanentDeleteEnvironment
+    // Este es el que usa EnvironmentServiceImpl para validar dependencias
     long countAllByEnvironment_IdEnvironment(UUID idEnvironment);
-
 }

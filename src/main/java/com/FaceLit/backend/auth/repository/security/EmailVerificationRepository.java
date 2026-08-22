@@ -2,6 +2,7 @@ package com.FaceLit.backend.auth.repository.security;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -28,5 +29,9 @@ public interface EmailVerificationRepository extends JpaRepository<EmailVerifica
        // used = false y ordena por created_at descendente, toma el primero
        @Query("SELECT e FROM EmailVerification e WHERE e.user = :user AND e.used = false ORDER BY e.createdAt DESC LIMIT 1")
        Optional<EmailVerification> findByUser(@Param("user") User user);
+
+       // Trae TODOS los códigos de verificación del usuario (activos e inactivos),
+       // para poder eliminarlos por completo al borrar al usuario
+       List<EmailVerification> findAllByUser_IdUser(UUID idUser);
 
 }

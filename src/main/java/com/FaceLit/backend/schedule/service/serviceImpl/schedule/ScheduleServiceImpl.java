@@ -23,10 +23,14 @@ import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import static java.util.Objects.requireNonNull;
 
 @Service
 public class ScheduleServiceImpl implements ScheduleService {
@@ -79,15 +83,17 @@ public class ScheduleServiceImpl implements ScheduleService {
                                 .orElse("Sin ambiente");
         }
 
-        // Agrupa las 3 entidades relacionadas — evita repetir 3 findById+orElseThrow en cada método público
-        private record ScheduleContext(Chip chip, Environment environment, User instructor) {}
+        // Agrupa las 3 entidades relacionadas — evita repetir 3 findById+orElseThrow en
+        // cada método público
+        private record ScheduleContext(Chip chip, Environment environment, User instructor) {
+        }
 
         private ScheduleContext loadEntities(ScheduleRequestDTO dto) {
-                Chip chip = chipRepository.findById(dto.getIdChip())
+                Chip chip = chipRepository.findById(requireNonNull(dto.getIdChip(), "ID de ficha no puede ser nulo"))
                                 .orElseThrow(() -> new ScheduleException("Ficha no encontrada"));
-                Environment environment = environmentRepository.findById(dto.getIdEnvironment())
+                Environment environment = environmentRepository.findById(requireNonNull(dto.getIdEnvironment(), "ID de ambiente no puede ser nulo"))
                                 .orElseThrow(() -> new ScheduleException("Ambiente no encontrado"));
-                User instructor = userRepository.findById(dto.getIdInstructor())
+                User instructor = userRepository.findById(requireNonNull(dto.getIdInstructor(), "ID de instructor no puede ser nulo"))
                                 .orElseThrow(() -> new ScheduleException("Instructor no encontrado"));
                 return new ScheduleContext(chip, environment, instructor);
         }
@@ -194,7 +200,8 @@ public class ScheduleServiceImpl implements ScheduleService {
                                 .findBySchedule_IdScheduleAndStatus(id, ScheduleStatus.ACTIVE)
                                 .ifPresent(si -> {
                                         si.setStatus(ScheduleStatus.INACTIVE);
-                                        scheduleInstructorRepository.save(si);
+                                        si.setDeletedAt(LocalDateTime.now());
+                                        scheduleInstructorRepository.saveAndFlush(si); // ← fuerza el UPDATE ya mismo
                                 });
 
                 ScheduleInstructor newInstructor = new ScheduleInstructor();
@@ -205,7 +212,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
                 // 6. Eliminar relacion anterior con ambiente y crear nueva
                 recordEnvironmentRepository
-                                .findBySchedule_IdSchedule(id)
+                                .findBySchedule_IdScheduleAndActive(id, RecordEnvironmentStatus.ACTIVE)
                                 .ifPresent(re -> {
                                         re.setActive(RecordEnvironmentStatus.INACTIVE);
                                         recordEnvironmentRepository.save(re);
@@ -246,10 +253,11 @@ public class ScheduleServiceImpl implements ScheduleService {
                                 .findBySchedule_IdScheduleAndStatus(id, ScheduleStatus.ACTIVE)
                                 .ifPresent(si -> {
                                         si.setStatus(ScheduleStatus.INACTIVE);
-                                        scheduleInstructorRepository.save(si);
+                                        si.setDeletedAt(LocalDateTime.now());
+                                        scheduleInstructorRepository.saveAndFlush(si); // ← fuerza el UPDATE ya mismo
                                 });
 
-                recordEnvironmentRepository.findBySchedule_IdSchedule(id)
+                recordEnvironmentRepository.findBySchedule_IdScheduleAndActive(id, RecordEnvironmentStatus.ACTIVE)
                                 .ifPresent(re -> {
                                         re.setActive(RecordEnvironmentStatus.INACTIVE);
                                         recordEnvironmentRepository.save(re);
@@ -275,8 +283,8 @@ public class ScheduleServiceImpl implements ScheduleService {
                                 .ifPresent(si -> scheduleInstructorRepository.delete(si));
 
                 recordEnvironmentRepository
-                                .findBySchedule_IdScheduleAndActive(id, RecordEnvironmentStatus.INACTIVE)
-                                .ifPresent(re -> recordEnvironmentRepository.delete(re));
+                                .findAllBySchedule_IdSchedule(id)
+                                .forEach(re -> recordEnvironmentRepository.delete(re));
 
                 scheduleRepository.deleteById(id);
         }
@@ -306,6 +314,9 @@ public class ScheduleServiceImpl implements ScheduleService {
         @Override
         public List<ScheduleResponseDTO> getSchedulesByEnvironment(UUID idEnvironment) {
                 // Verifica que el ambiente existe
+                if (idEnvironment == null) {
+                        throw new ScheduleException("ID de ambiente no puede ser nulo");
+                }
                 environmentRepository.findById(idEnvironment)
                                 .orElseThrow(() -> new ScheduleException("Ambiente no encontrado"));
 
@@ -352,7 +363,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         @Override
         public List<ScheduleResponseDTO> getSchedulesByUser(UUID idUser) {
                 // Verifica que el usuario existe
-                userRepository.findById(idUser)
+                userRepository.findById(requireNonNull(idUser))
                                 .orElseThrow(() -> new ScheduleException("Usuario no encontrado"));
 
                 List<Schedule> schedules = scheduleRepository.findByApprenticeId(idUser);

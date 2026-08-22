@@ -3,7 +3,6 @@ package com.FaceLit.backend.auth.repository.security;
 import com.FaceLit.backend.auth.model.security.PasswordRecovery;
 import com.FaceLit.backend.auth.model.security.User;
 
-
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -11,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 
 @Repository
 public interface PasswordRecoveryRepository extends JpaRepository<PasswordRecovery, UUID> {
@@ -21,6 +21,10 @@ public interface PasswordRecoveryRepository extends JpaRepository<PasswordRecove
     // Busca el código activo más reciente de un usuario
     // Se usa para invalidar códigos anteriores al generar uno nuevo
     @Query("SELECT pr FROM PasswordRecovery pr WHERE pr.user = :user AND pr.used = false ORDER BY pr.createdAt DESC LIMIT 1")
-    Optional<PasswordRecovery> findActiveByUser(@Param("user") User user); 
+    Optional<PasswordRecovery> findActiveByUser(@Param("user") User user);
+
+    // Trae TODOS los códigos de recuperación del usuario (activos e históricos),
+    // para poder eliminarlos por completo al borrar al usuario
+    List<PasswordRecovery> findAllByUser_IdUser(UUID idUser);
 
 }

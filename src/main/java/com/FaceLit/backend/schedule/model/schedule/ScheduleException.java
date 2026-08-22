@@ -46,9 +46,11 @@ public class ScheduleException extends AuditBase {
     @Column(name = "exception_type", nullable = false, length = 30)
     private ScheduleExceptionType exceptionType;
 
-    // Relación N:1 — muchas excepciones pertenecen a un ambiente
+    // Cuando la excepción es de tipo INSTRUCTOR_CHANGE, el ambiente original del 
+    // horario se conserva y este campo se deja nulo; para ENVIRONMENT_CHANGE se
+    // guarda el ambiente alterno autorizado.
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id_environment", nullable = false)
+    @JoinColumn(name = "id_environment", nullable = true)
     private Environment environment;
 
     // Solo se usa si exceptionType = INSTRUCTOR_CHANGE

@@ -108,7 +108,7 @@ public class RegisterServiceImpl implements RegisterService {
             throw new RegisterException("El email ya esta registrado");
         }
         // ── NUEVO — 2.1 Validar que haya aceptado los términos ──
-        if (!dto.getAccepted()) {
+        if (!Boolean.TRUE.equals(dto.getAccepted())) {
             throw new RegisterException("No puede continuar sin confirmar lectura o aceptar responsabilidad");
         }
 
