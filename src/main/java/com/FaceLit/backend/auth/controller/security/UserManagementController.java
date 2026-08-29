@@ -18,6 +18,7 @@ import com.FaceLit.backend.auth.service.security.UserManagementService;
 
 import jakarta.validation.Valid;
 
+// Gestion de usuario
 @RestController
 @RequestMapping("/api/admin/users")
 public class UserManagementController {

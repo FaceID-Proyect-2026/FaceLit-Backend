@@ -29,6 +29,8 @@ public final class AppConstants {
     public static final String ACTIVE = "ACTIVE";
     public static final String INACTIVE = "INACTIVE";
 
+    public static final int JWT_EXPIRY_HOURS = 8;
+
     private AppConstants() {
         // Evita instanciación — es solo un contenedor de constantes
     }

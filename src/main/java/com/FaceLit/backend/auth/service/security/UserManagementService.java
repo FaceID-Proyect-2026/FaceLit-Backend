@@ -5,6 +5,7 @@ import java.util.UUID;
 import com.FaceLit.backend.auth.dto.request.security.UpdateUserRequestDTO;
 import com.FaceLit.backend.auth.dto.response.security.UserDetailResponseDTO;
 
+// Gestion de usuario
 public interface UserManagementService {
 
     // Lista todos los usuarios que han iniciado sesion al menos una vez

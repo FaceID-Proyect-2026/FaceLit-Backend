@@ -18,16 +18,13 @@ public class UserDetailResponseDTO {
     private LocalDate birthDate;
     private String email;
     private String role;
-    private String accountStatus;
-    private LocalDateTime registrationDate; // nuevo — pedido en el detalle
+    private String accountStatus;    // ← vuelve a ser el estado REAL de la BD (ACTIVE/INACTIVE/PENDING_CONSENT/BLOCKED)
+    private String sessionStatus;    // ← NUEVO — ACTIVE/INACTIVE calculado por JWT, solo informativo
+    private LocalDateTime registrationDate;
 
-    // Solo aplica si el rol es APPRENTICE
-    // null si no tiene ficha, "Pendiente por ficha" lo maneja el frontend
     private String chipName;
     private String chipCode;
     private String programName;
 
-    // true si ha iniciado sesion al menos una vez
     private boolean hasSession;
-
 }

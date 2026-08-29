@@ -13,6 +13,8 @@ import lombok.Setter;
 @Setter
 public class UpdateUserRequestDTO {
 
+    // Gestion de usuario
+
  @NotBlank(message = "El nombre es obligatorio")
     @Pattern(regexp = "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$", message = "El nombre solo puede contener letras")
     @Size(max = 50, message = "El nombre no puede superar los 50 caracteres")

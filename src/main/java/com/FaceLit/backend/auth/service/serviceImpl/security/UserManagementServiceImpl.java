@@ -25,14 +25,17 @@ import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.repository.security.UserSessionRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.AdminRoleService;
 import com.FaceLit.backend.auth.service.security.UserManagementService;
+import com.FaceLit.backend.shared.constants.AppConstants;
 import com.FaceLit.backend.academic.repository.academic.UserChipRepository;
 import com.FaceLit.backend.academic.model.academic.UserChip;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+// Gestion de usuario
 @Service
 public class UserManagementServiceImpl implements UserManagementService {
 
@@ -100,6 +103,14 @@ public class UserManagementServiceImpl implements UserManagementService {
                                 .map(uc -> uc.getChip().getProgram().getProgramName())
                                 .orElse(null);
 
+                // Calcula si el JWT del usuario sigue vigente — automático, sin tocar manual
+                OffsetDateTime cutoff = OffsetDateTime.now()
+                                .minusHours(AppConstants.JWT_EXPIRY_HOURS);
+                String sessionStatus = userSessionRepository
+                                .hasActiveSession(user.getIdUser(), cutoff)
+                                                ? "ACTIVE"
+                                                : "INACTIVE";
+
                 return new UserDetailResponseDTO(
                                 user.getIdUser(),
                                 user.getFirstName(),
@@ -109,7 +120,8 @@ public class UserManagementServiceImpl implements UserManagementService {
                                 user.getBirthDate(),
                                 email,
                                 roleName,
-                                user.getAccountStatus().name(),
+                                user.getAccountStatus().name(), // ← estado REAL de cuenta, tal como en la BD
+                                sessionStatus, // ← estado de sesión, calculado
                                 user.getCreatedAt(),
                                 chipName,
                                 chipCode,
