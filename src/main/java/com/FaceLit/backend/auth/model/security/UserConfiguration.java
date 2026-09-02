@@ -67,7 +67,7 @@ public class UserConfiguration extends AuditBase {
     private OffsetDateTime updateDate;
 
     // Idioma seleccionado por el usuario
-    // Solo acepta: ES, EN, DE, PT
+    // Acepta: ES, EN, DE, PA o FR
     @Enumerated(EnumType.STRING)
     @Column(name = "language", nullable = false, length = 20)
     private Language language;

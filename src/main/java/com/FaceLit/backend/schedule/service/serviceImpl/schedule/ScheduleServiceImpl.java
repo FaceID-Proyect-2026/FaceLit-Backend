@@ -1,6 +1,7 @@
 package com.FaceLit.backend.schedule.service.serviceImpl.schedule;
 
 import com.FaceLit.backend.academic.model.academic.Chip;
+import com.FaceLit.backend.environments.model.enums.RecordEnvironmentStatus;
 import com.FaceLit.backend.environments.model.environment.Environment;
 import com.FaceLit.backend.auth.model.security.User;
 
@@ -22,13 +23,21 @@ import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static java.util.Objects.requireNonNull;
+
 @Service
 public class ScheduleServiceImpl implements ScheduleService {
+
+        // UUID sentinela usado para representar "sin exclusión" en las validaciones
+        // de cruce de horario (creación, donde aún no existe un ID previo a excluir).
+        private static final UUID NO_EXCLUSION = new UUID(0L, 0L);
 
         private final ScheduleRepository scheduleRepository;
         private final ScheduleInstructorRepository scheduleInstructorRepository;
@@ -52,22 +61,66 @@ public class ScheduleServiceImpl implements ScheduleService {
                 this.environmentRepository = environmentRepository;
         }
 
-        // Convierte entidad a DTO reutilizable
-        private ScheduleResponseDTO toDTO(Schedule schedule, String message) {
-                // Obtener instructor activo
-                String instructorName = scheduleInstructorRepository
-                                .findBySchedule_IdScheduleAndStatus(
-                                                schedule.getIdSchedule(), ScheduleStatus.ACTIVE)
-                                .map(si -> si.getUser().getFirstName()
-                                                + " " + si.getUser().getLastName())
+        private String resolveInstructorName(Schedule schedule) {
+                return scheduleInstructorRepository.findAll().stream()
+                                .filter(si -> si.getSchedule() != null
+                                                && schedule.getIdSchedule() != null
+                                                && schedule.getIdSchedule().equals(si.getSchedule().getIdSchedule())
+                                                && si.getStatus() == ScheduleStatus.ACTIVE)
+                                .findFirst()
+                                .map(si -> si.getUser().getFirstName() + " " + si.getUser().getLastName())
                                 .orElse("Sin instructor");
+        }
 
-                // Obtener ambiente activo
-                String environmentName = recordEnvironmentRepository
-                                .findBySchedule_IdScheduleAndActive(
-                                                schedule.getIdSchedule(), "ACTIVE")
+        private String resolveEnvironmentName(Schedule schedule) {
+                return recordEnvironmentRepository.findAll().stream()
+                                .filter(re -> re.getSchedule() != null
+                                                && schedule.getIdSchedule() != null
+                                                && schedule.getIdSchedule().equals(re.getSchedule().getIdSchedule())
+                                                && re.getActive() == RecordEnvironmentStatus.ACTIVE)
+                                .findFirst()
                                 .map(re -> re.getEnvironment().getEnvironmentName())
                                 .orElse("Sin ambiente");
+        }
+
+        // Agrupa las 3 entidades relacionadas — evita repetir 3 findById+orElseThrow en
+        // cada método público
+        private record ScheduleContext(Chip chip, Environment environment, User instructor) {
+        }
+
+        private ScheduleContext loadEntities(ScheduleRequestDTO dto) {
+                Chip chip = chipRepository.findById(requireNonNull(dto.getIdChip(), "ID de ficha no puede ser nulo"))
+                                .orElseThrow(() -> new ScheduleException("Ficha no encontrada"));
+                Environment environment = environmentRepository.findById(requireNonNull(dto.getIdEnvironment(), "ID de ambiente no puede ser nulo"))
+                                .orElseThrow(() -> new ScheduleException("Ambiente no encontrado"));
+                User instructor = userRepository.findById(requireNonNull(dto.getIdInstructor(), "ID de instructor no puede ser nulo"))
+                                .orElseThrow(() -> new ScheduleException("Instructor no encontrado"));
+                return new ScheduleContext(chip, environment, instructor);
+        }
+
+        // Agrupa los 3 checks de conflicto — mismo excludeId para los tres
+        private void validateNoConflicts(ScheduleRequestDTO dto, UUID excludeId) {
+                if (scheduleRepository.existsEnvironmentConflict(
+                                dto.getIdEnvironment(), dto.getDayOfWeek(),
+                                dto.getStartTime(), dto.getEndTime(), excludeId)) {
+                        throw new ScheduleException("El ambiente ya está asignado para esta franja");
+                }
+                if (scheduleRepository.existsInstructorConflict(
+                                dto.getIdInstructor(), dto.getDayOfWeek(),
+                                dto.getStartTime(), dto.getEndTime(), excludeId)) {
+                        throw new ScheduleException("El instructor ya tiene clase en esta franja");
+                }
+                if (scheduleRepository.existsChipConflict(
+                                dto.getIdChip(), dto.getDayOfWeek(),
+                                dto.getStartTime(), dto.getEndTime(), excludeId)) {
+                        throw new ScheduleException("La ficha ya tiene un horario en esta franja");
+                }
+        }
+
+        // Convierte entidad a DTO reutilizable
+        private ScheduleResponseDTO toDTO(Schedule schedule, String message) {
+                String instructorName = resolveInstructorName(schedule);
+                String environmentName = resolveEnvironmentName(schedule);
 
                 return new ScheduleResponseDTO(
                                 schedule.getIdSchedule(),
@@ -85,49 +138,12 @@ public class ScheduleServiceImpl implements ScheduleService {
         @Transactional
         public ScheduleResponseDTO createSchedule(ScheduleRequestDTO dto) {
 
-                // 1. Verificar que la ficha existe y está activa
-                Chip chip = chipRepository.findById(dto.getIdChip())
-                                .orElseThrow(() -> new ScheduleException("Ficha no encontrada"));
-
-                // 2. Verificar que el ambiente existe
-                Environment environment = environmentRepository.findById(dto.getIdEnvironment())
-                                .orElseThrow(() -> new ScheduleException("Ambiente no encontrado"));
-
-                // 3. Verificar que el instructor existe
-                User instructor = userRepository.findById(dto.getIdInstructor())
-                                .orElseThrow(() -> new ScheduleException("Instructor no encontrado"));
-
-                // 4. UUID nulo para excluir — en creacion no hay ID previo que excluir
-                UUID excludeId = UUID.fromString("00000000-0000-0000-0000-000000000000");
-
-                // 5. Validar cruce de ambiente — no puede estar ocupado en esa franja
-                if (scheduleRepository.existsEnvironmentConflict(
-                                dto.getIdEnvironment(), dto.getDayOfWeek(),
-                                dto.getStartTime(), dto.getEndTime(), excludeId)) {
-                        throw new ScheduleException(
-                                        "El ambiente ya está asignado para esta franja");
-                }
-
-                // 6. Validar cruce de instructor — no puede tener otra clase en esa franja
-                if (scheduleRepository.existsInstructorConflict(
-                                dto.getIdInstructor(), dto.getDayOfWeek(),
-                                dto.getStartTime(), dto.getEndTime(), excludeId)) {
-                        throw new ScheduleException(
-                                        "El instructor ya tiene clase en esta franja");
-                }
-
-                // 7. Validar cruce de ficha — la ficha no puede tener otro horario en esa
-                // franja
-                if (scheduleRepository.existsChipConflict(
-                                dto.getIdChip(), dto.getDayOfWeek(),
-                                dto.getStartTime(), dto.getEndTime(), excludeId)) {
-                        throw new ScheduleException(
-                                        "La ficha ya tiene un horario en esta franja");
-                }
+                ScheduleContext ctx = loadEntities(dto);
+                validateNoConflicts(dto, NO_EXCLUSION);
 
                 // 8. Crear el horario
                 Schedule schedule = new Schedule();
-                schedule.setChip(chip);
+                schedule.setChip(ctx.chip());
                 schedule.setDayOfWeek(dto.getDayOfWeek());
                 schedule.setStartTime(dto.getStartTime());
                 schedule.setEndTime(dto.getEndTime());
@@ -138,23 +154,23 @@ public class ScheduleServiceImpl implements ScheduleService {
                 // 9. Crear relacion con instructor
                 ScheduleInstructor scheduleInstructor = new ScheduleInstructor();
                 scheduleInstructor.setSchedule(saved);
-                scheduleInstructor.setUser(instructor);
+                scheduleInstructor.setUser(ctx.instructor());
                 scheduleInstructor.setStatus(ScheduleStatus.ACTIVE);
                 scheduleInstructorRepository.save(scheduleInstructor);
 
                 // 10. Crear relacion con ambiente
                 RecordEnvironment recordEnvironment = new RecordEnvironment();
                 recordEnvironment.setSchedule(saved);
-                recordEnvironment.setEnvironment(environment);
+                recordEnvironment.setEnvironment(ctx.environment());
                 recordEnvironment.setAssignmentDate(OffsetDateTime.now());
-                recordEnvironment.setActive("ACTIVE");
+                recordEnvironment.setActive(RecordEnvironmentStatus.ACTIVE);
                 recordEnvironmentRepository.save(recordEnvironment);
 
                 return ScheduleResponseDTO.created(
                                 saved.getIdSchedule(),
                                 saved.getChip().getChipName(),
-                                environment.getEnvironmentName(),
-                                instructor.getFirstName() + " " + instructor.getLastName(),
+                                ctx.environment().getEnvironmentName(),
+                                ctx.instructor().getFirstName() + " " + ctx.instructor().getLastName(),
                                 saved.getDayOfWeek(),
                                 saved.getStartTime(),
                                 saved.getEndTime());
@@ -169,36 +185,11 @@ public class ScheduleServiceImpl implements ScheduleService {
                 Schedule schedule = scheduleRepository.findById(id)
                                 .orElseThrow(() -> new ScheduleException("Horario no encontrado"));
 
-                // 2. Verificar ficha, ambiente e instructor
-                Chip chip = chipRepository.findById(dto.getIdChip())
-                                .orElseThrow(() -> new ScheduleException("Ficha no encontrada"));
-                Environment environment = environmentRepository.findById(dto.getIdEnvironment())
-                                .orElseThrow(() -> new ScheduleException("Ambiente no encontrado"));
-                User instructor = userRepository.findById(dto.getIdInstructor())
-                                .orElseThrow(() -> new ScheduleException("Instructor no encontrado"));
-
-                // 3. Validar cruces excluyendo el horario actual
-                if (scheduleRepository.existsEnvironmentConflict(
-                                dto.getIdEnvironment(), dto.getDayOfWeek(),
-                                dto.getStartTime(), dto.getEndTime(), id)) {
-                        throw new ScheduleException(
-                                        "El ambiente ya está asignado para esta franja");
-                }
-                if (scheduleRepository.existsInstructorConflict(
-                                dto.getIdInstructor(), dto.getDayOfWeek(),
-                                dto.getStartTime(), dto.getEndTime(), id)) {
-                        throw new ScheduleException(
-                                        "El instructor ya tiene clase en esta franja");
-                }
-                if (scheduleRepository.existsChipConflict(
-                                dto.getIdChip(), dto.getDayOfWeek(),
-                                dto.getStartTime(), dto.getEndTime(), id)) {
-                        throw new ScheduleException(
-                                        "La ficha ya tiene un horario en esta franja");
-                }
+                ScheduleContext ctx = loadEntities(dto);
+                validateNoConflicts(dto, id);
 
                 // 4. Actualizar el horario
-                schedule.setChip(chip);
+                schedule.setChip(ctx.chip());
                 schedule.setDayOfWeek(dto.getDayOfWeek());
                 schedule.setStartTime(dto.getStartTime());
                 schedule.setEndTime(dto.getEndTime());
@@ -209,35 +200,36 @@ public class ScheduleServiceImpl implements ScheduleService {
                                 .findBySchedule_IdScheduleAndStatus(id, ScheduleStatus.ACTIVE)
                                 .ifPresent(si -> {
                                         si.setStatus(ScheduleStatus.INACTIVE);
-                                        scheduleInstructorRepository.save(si);
+                                        si.setDeletedAt(LocalDateTime.now());
+                                        scheduleInstructorRepository.saveAndFlush(si); // ← fuerza el UPDATE ya mismo
                                 });
 
                 ScheduleInstructor newInstructor = new ScheduleInstructor();
                 newInstructor.setSchedule(schedule);
-                newInstructor.setUser(instructor);
+                newInstructor.setUser(ctx.instructor());
                 newInstructor.setStatus(ScheduleStatus.ACTIVE);
                 scheduleInstructorRepository.save(newInstructor);
 
                 // 6. Eliminar relacion anterior con ambiente y crear nueva
                 recordEnvironmentRepository
-                                .findBySchedule_IdSchedule(id)
+                                .findBySchedule_IdScheduleAndActive(id, RecordEnvironmentStatus.ACTIVE)
                                 .ifPresent(re -> {
-                                        re.setActive("INACTIVE");
+                                        re.setActive(RecordEnvironmentStatus.INACTIVE);
                                         recordEnvironmentRepository.save(re);
                                 });
 
                 RecordEnvironment newEnvironment = new RecordEnvironment();
                 newEnvironment.setSchedule(schedule);
-                newEnvironment.setEnvironment(environment);
+                newEnvironment.setEnvironment(ctx.environment());
                 newEnvironment.setAssignmentDate(OffsetDateTime.now());
-                newEnvironment.setActive("ACTIVE");
+                newEnvironment.setActive(RecordEnvironmentStatus.ACTIVE);
                 recordEnvironmentRepository.save(newEnvironment);
 
                 return ScheduleResponseDTO.updated(
                                 schedule.getIdSchedule(),
-                                chip.getChipName(),
-                                environment.getEnvironmentName(),
-                                instructor.getFirstName() + " " + instructor.getLastName(),
+                                ctx.chip().getChipName(),
+                                ctx.environment().getEnvironmentName(),
+                                ctx.instructor().getFirstName() + " " + ctx.instructor().getLastName(),
                                 schedule.getDayOfWeek(),
                                 schedule.getStartTime(),
                                 schedule.getEndTime());
@@ -261,12 +253,13 @@ public class ScheduleServiceImpl implements ScheduleService {
                                 .findBySchedule_IdScheduleAndStatus(id, ScheduleStatus.ACTIVE)
                                 .ifPresent(si -> {
                                         si.setStatus(ScheduleStatus.INACTIVE);
-                                        scheduleInstructorRepository.save(si);
+                                        si.setDeletedAt(LocalDateTime.now());
+                                        scheduleInstructorRepository.saveAndFlush(si); // ← fuerza el UPDATE ya mismo
                                 });
 
-                recordEnvironmentRepository.findBySchedule_IdSchedule(id)
+                recordEnvironmentRepository.findBySchedule_IdScheduleAndActive(id, RecordEnvironmentStatus.ACTIVE)
                                 .ifPresent(re -> {
-                                        re.setActive("INACTIVE");
+                                        re.setActive(RecordEnvironmentStatus.INACTIVE);
                                         recordEnvironmentRepository.save(re);
                                 });
 
@@ -290,8 +283,8 @@ public class ScheduleServiceImpl implements ScheduleService {
                                 .ifPresent(si -> scheduleInstructorRepository.delete(si));
 
                 recordEnvironmentRepository
-                                .findBySchedule_IdScheduleAndActive(id, "INACTIVE")
-                                .ifPresent(re -> recordEnvironmentRepository.delete(re));
+                                .findAllBySchedule_IdSchedule(id)
+                                .forEach(re -> recordEnvironmentRepository.delete(re));
 
                 scheduleRepository.deleteById(id);
         }
@@ -321,6 +314,9 @@ public class ScheduleServiceImpl implements ScheduleService {
         @Override
         public List<ScheduleResponseDTO> getSchedulesByEnvironment(UUID idEnvironment) {
                 // Verifica que el ambiente existe
+                if (idEnvironment == null) {
+                        throw new ScheduleException("ID de ambiente no puede ser nulo");
+                }
                 environmentRepository.findById(idEnvironment)
                                 .orElseThrow(() -> new ScheduleException("Ambiente no encontrado"));
 
@@ -367,7 +363,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         @Override
         public List<ScheduleResponseDTO> getSchedulesByUser(UUID idUser) {
                 // Verifica que el usuario existe
-                userRepository.findById(idUser)
+                userRepository.findById(requireNonNull(idUser))
                                 .orElseThrow(() -> new ScheduleException("Usuario no encontrado"));
 
                 List<Schedule> schedules = scheduleRepository.findByApprenticeId(idUser);

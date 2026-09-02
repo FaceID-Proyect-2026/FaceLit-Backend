@@ -22,4 +22,7 @@ public interface UserChipRepository extends JpaRepository<UserChip, UUID> {
     // Lista todas las fichas de un usuario (historial)
     List<UserChip> findByUser_IdUser(UUID idUser);
 
+    // Cuenta aprendices vinculados a una ficha — usado en permanentDeleteChip
+    long countByChip_IdChip(UUID idChip);
+
 }

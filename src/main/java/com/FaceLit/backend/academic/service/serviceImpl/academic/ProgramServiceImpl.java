@@ -14,7 +14,7 @@ import com.FaceLit.backend.academic.model.enums.ProgramState;
 import com.FaceLit.backend.academic.repository.academic.ChipRepository;
 import com.FaceLit.backend.academic.repository.academic.ProgramRepository;
 import com.FaceLit.backend.academic.service.academic.ProgramService;
-
+import com.FaceLit.backend.shared.util.DeletionGuard;
 
 import jakarta.transaction.Transactional;
 
@@ -28,7 +28,7 @@ public class ProgramServiceImpl implements ProgramService {
                         ChipRepository chipRepository) {
                 this.programRepository = programRepository;
                 this.chipRepository = chipRepository;
-               
+
         }
 
         @Override
@@ -143,13 +143,11 @@ public class ProgramServiceImpl implements ProgramService {
                 }
 
                 // Verifica que no tenga fichas asociadas
-                List<Chip> chips = chipRepository.findByProgram_IdProgram(id);
-                if (!chips.isEmpty()) {
-                        throw new ProgramException(
-                                        "No se puede eliminar el programa porque tiene "
-                                                        + chips.size()
-                                                        + " ficha(s) asociada(s). Elimine primero las fichas.");
-                }
+                DeletionGuard.assertNoDependents(
+                                chipRepository.countByProgram_IdProgram(id),
+                                "ficha",
+                                "Elimine primero las fichas.",
+                                ProgramException::new);
 
                 programRepository.deleteById(id);
         }

@@ -33,9 +33,8 @@ public class UserConfigurationController {
     // El userId se extrae del JWT — todos los roles pueden configurar
     @PostMapping
     public ResponseEntity<UserConfigurationResponseDTO> create(
-            @AuthenticationPrincipal Object principal,
+            @AuthenticationPrincipal UUID userId,
             @Valid @RequestBody UserConfigurationRequestDTO dto) {
-        UUID userId = UUID.fromString(principal.toString());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(userConfigurationService.createConfiguration(userId, dto));
     }
@@ -44,9 +43,8 @@ public class UserConfigurationController {
     // Actualiza la configuracion existente
     @PutMapping
     public ResponseEntity<UserConfigurationResponseDTO> update(
-            @AuthenticationPrincipal Object principal,
+            @AuthenticationPrincipal UUID userId,
             @Valid @RequestBody UserConfigurationRequestDTO dto) {
-        UUID userId = UUID.fromString(principal.toString());
         return ResponseEntity.ok(
                 userConfigurationService.updateConfiguration(userId, dto));
     }
@@ -55,8 +53,7 @@ public class UserConfigurationController {
     // Consulta la configuracion del usuario autenticado
     @GetMapping
     public ResponseEntity<UserConfigurationResponseDTO> get(
-            @AuthenticationPrincipal Object principal) {
-        UUID userId = UUID.fromString(principal.toString());
+            @AuthenticationPrincipal UUID userId) {
         return ResponseEntity.ok(
                 userConfigurationService.getConfiguration(userId));
     }

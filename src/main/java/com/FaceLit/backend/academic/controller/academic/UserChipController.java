@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -31,11 +32,9 @@ public class UserChipController {
     // El userId viene del JWT, no del body — seguridad
     @PostMapping("/api/apprentice/join-chip")
     public ResponseEntity<UserChipResponseDTO> joinChip(
-            @org.springframework.security.core.annotation.AuthenticationPrincipal Object principal,
+            @AuthenticationPrincipal UUID userId,
             @Valid @RequestBody UserChipRequestDTO dto) {
 
-        // El userId se extrae del JWT que está en el SecurityContext
-        UUID userId = UUID.fromString(principal.toString());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(userChipService.joinChip(userId, dto));
     }
@@ -61,8 +60,7 @@ public class UserChipController {
     // El aprendiz ve su historial de fichas
     @GetMapping("/api/apprentice/my-chips")
     public ResponseEntity<List<UserChipResponseDTO>> myChips(
-            @org.springframework.security.core.annotation.AuthenticationPrincipal Object principal) {
-        UUID userId = UUID.fromString(principal.toString());
+            @AuthenticationPrincipal UUID userId) {
         return ResponseEntity.ok(userChipService.getChipsByUser(userId));
     }
 }

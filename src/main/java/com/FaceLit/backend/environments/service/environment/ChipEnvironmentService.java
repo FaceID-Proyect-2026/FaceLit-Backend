@@ -19,4 +19,7 @@ public interface ChipEnvironmentService {
     // Elimina la asignacion logicamente
     void removeAssignment(UUID idChipEnvironment);
 
+    // Elimina permanentemente — solo si ya está INACTIVE
+    void permanentDeleteAssignment(UUID idChipEnvironment);
+
 }

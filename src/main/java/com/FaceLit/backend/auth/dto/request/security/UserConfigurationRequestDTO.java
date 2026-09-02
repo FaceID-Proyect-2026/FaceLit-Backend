@@ -24,7 +24,7 @@ public class UserConfigurationRequestDTO {
     // true = modo oscuro, false = modo claro
     private boolean darkMode = false;
 
-    // Idioma — ES, EN, DE o PA
+    // Idioma: ES, EN, DE, PA o FR
     @NotNull(message = "El idioma es obligatorio")
     private Language language;
 

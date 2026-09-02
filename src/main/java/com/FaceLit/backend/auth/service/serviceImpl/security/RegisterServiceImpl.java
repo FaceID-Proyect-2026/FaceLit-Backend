@@ -3,7 +3,6 @@ package com.FaceLit.backend.auth.service.serviceImpl.security;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
-import java.time.Period;
 import java.util.Random;
 import java.util.UUID;
 import java.util.Optional;
@@ -37,7 +36,10 @@ import com.FaceLit.backend.auth.repository.security.DocumentTypeRepository;
 import com.FaceLit.backend.auth.repository.security.EmailVerificationRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.service.security.RegisterService;
+import com.FaceLit.backend.shared.constants.AppConstants;
 import com.FaceLit.backend.shared.service.EmailService;
+import com.FaceLit.backend.shared.util.AgeUtils;
+import com.FaceLit.backend.shared.util.VerificationCodeGenerator;
 
 import jakarta.transaction.Transactional;
 
@@ -57,6 +59,7 @@ public class RegisterServiceImpl implements RegisterService {
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
     private final AcceptanceTermsRepository acceptanceTermsRepository;
+    private final VerificationCodeGenerator verificationCodeGenerator;
 
     // Inyecion por contructor - es la mejor firma correcta. no por usar @Autowired
     // - (UserRepository9 - Guarda y consulta usuario en BD
@@ -75,6 +78,7 @@ public class RegisterServiceImpl implements RegisterService {
             EmailService emailService, RoleRepository roleRepository,
             UserRoleRepository userRoleRepository,
             AcceptanceTermsRepository acceptanceTermsRepository,
+            VerificationCodeGenerator verificationCodeGenerator,
             ConsentRepository consentRepository) {
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
@@ -85,6 +89,7 @@ public class RegisterServiceImpl implements RegisterService {
         this.roleRepository = roleRepository; // ← nuevo
         this.userRoleRepository = userRoleRepository;
         this.acceptanceTermsRepository = acceptanceTermsRepository;
+        this.verificationCodeGenerator = verificationCodeGenerator;
         this.consentRepository = consentRepository;
     }
 
@@ -103,7 +108,7 @@ public class RegisterServiceImpl implements RegisterService {
             throw new RegisterException("El email ya esta registrado");
         }
         // ── NUEVO — 2.1 Validar que haya aceptado los términos ──
-        if (!dto.getAccepted()) {
+        if (!Boolean.TRUE.equals(dto.getAccepted())) {
             throw new RegisterException("No puede continuar sin confirmar lectura o aceptar responsabilidad");
         }
 
@@ -114,22 +119,21 @@ public class RegisterServiceImpl implements RegisterService {
         // 4. Calcula edad
         // Period.between(fechaInicio, fechaFin) lo que hace es calcular la diferencia
         // entre dos fechas
-        int age = Period.between(dto.getBirthDate(), LocalDate.now()).getYears();
+        int age = AgeUtils.calculateAge(dto.getBirthDate());
         String abbreviation = documentType.getAbbreviation(); // mira el tipo de abreviacion seleccionad por el usuario
                                                               // (TI/CC/CE)
 
         // 5. esto valida que la edad sea coherente con la fecha de nacimiento
         // TI (Tarjeta de identidad) solo es para los menores
-        if ("TI".equals(abbreviation) && age >= 18) {
+        if ("TI".equals(abbreviation) && age >= AppConstants.LEGAL_AGE) {
             throw new RegisterException("La Tarjeta de Identidad es solo para menores de edad");
         }
-        if ("CC".equals(abbreviation) && age < 18) {
+        if ("CC".equals(abbreviation) && age < AppConstants.LEGAL_AGE) {
             throw new RegisterException("La Cedula de cuidadania solo es para mayores de edad");
-
         }
 
         // 6. si es menor de edad debe tener TI
-        boolean isMinor = age < 18 || "TI".equals(abbreviation);
+        boolean isMinor = AgeUtils.isMinor(dto.getBirthDate(), documentType.getAbbreviation());
 
         // 7. Construir y guardar el User
         // Estado inicial PENDING — cambia a ACTIVE cuando verifica el email
@@ -190,13 +194,13 @@ public class RegisterServiceImpl implements RegisterService {
         // 9.1 Genera el codigo de 6 dijitos aleatorios
         // String.format("%06d", ...) DICE QUE ES DE 6 DIJITOS]
         // EJEMPLO : Si el número es 483 → lo guarda como "000483"
-        String code = String.format("%06d", new Random().nextInt(999999));
+        String code = verificationCodeGenerator.generate();
 
         // 10. Guarda el codigo en BD con expiracion de 5 minutos
         EmailVerification verification = new EmailVerification();
         verification.setUser(savedUser);
         verification.setCode(code);
-        verification.setExpiresAt(LocalDateTime.now().plusMinutes(5));
+        verification.setExpiresAt(LocalDateTime.now().plusMinutes(AppConstants.VERIFICATION_EXPIRY_MINUTES));
         emailVerificationRepository.save(verification);
 
         // 11. Enviar el codigo al correo del usuario
@@ -236,8 +240,7 @@ public class RegisterServiceImpl implements RegisterService {
 
         // 6. Determinar si es menor o mayor
         String abbreviation = user.getDocumentType().getAbbreviation();
-        int age = Period.between(user.getBirthDate(), LocalDate.now()).getYears();
-        boolean isMinor = age < 18 || "TI".equals(abbreviation);
+        boolean isMinor = AgeUtils.isMinor(user.getBirthDate(), abbreviation);
 
         if (isMinor) {
             // EL MENOR VERIFICA SU email pero No se activa todavia
@@ -271,8 +274,8 @@ public class RegisterServiceImpl implements RegisterService {
         if (lastVerification.isPresent()) {
             LocalDateTime lastCreated = lastVerification.get().getCreatedAt();
             long secondsSinceLast = Duration.between(lastCreated, LocalDateTime.now()).getSeconds();
-            if (secondsSinceLast < 60) {
-                long remaining = 60 - secondsSinceLast;
+            if (secondsSinceLast < AppConstants.RESEND_COOLDOWN_SECONDS) {
+                long remaining = AppConstants.RESEND_COOLDOWN_SECONDS - secondsSinceLast;
                 throw new RegisterException("Debes esperar " + remaining + " segundos antes de solicitar otro código");
             }
         }
@@ -286,13 +289,13 @@ public class RegisterServiceImpl implements RegisterService {
 
         // 3. Generar nuevo código de 6 dígitos
 
-        String code = String.format("%06d", new Random().nextInt(999999));
+        String code = verificationCodeGenerator.generate();
 
         // 4. Guardar nuevo código con nueva expiración de 5 minutos
         EmailVerification newVerification = new EmailVerification();
         newVerification.setUser(user);
         newVerification.setCode(code);
-        newVerification.setExpiresAt(LocalDateTime.now().plusMinutes(5));
+        newVerification.setExpiresAt(LocalDateTime.now().plusMinutes(AppConstants.VERIFICATION_EXPIRY_MINUTES));
         emailVerificationRepository.save(newVerification);
 
         // 5. Obtener el email desde la credencial del usuario y enviar
@@ -303,54 +306,52 @@ public class RegisterServiceImpl implements RegisterService {
     }
 
     // Método nuevo
-@Override
-public RegistrationStatusResponseDTO checkStatus(String documentNumber, String email) {
-    User user = null;
+    @Override
+    public RegistrationStatusResponseDTO checkStatus(String documentNumber, String email) {
+        User user = null;
 
-    if (documentNumber != null && !documentNumber.isBlank()) {
-        user = userRepository.findByDocumentNumber(documentNumber).orElse(null);
-    }
-    if (user == null && email != null && !email.isBlank()) {
-        user = credentialRepository.findByEmail(email).map(Credential::getUser).orElse(null);
-    }
-    if (user == null) {
-        throw new RegisterException("No se encontró un registro con esos datos");
-    }
-
-    String abbreviation = user.getDocumentType().getAbbreviation();
-    int age = Period.between(user.getBirthDate(), LocalDate.now()).getYears();
-    boolean isMinor = age < 18 || "TI".equals(abbreviation);
-
-    // Si falta verificar el email, reenviamos el código automáticamente.
-    // Así, retomar el registro siempre exige demostrar acceso real al correo.
-    if (!user.isEmailVerified()) {
-        try {
-            resendCode(user.getIdUser());
-        } catch (RegisterException ignored) {
-            // Si está en cooldown, el código anterior sigue vigente — no pasa nada
+        if (documentNumber != null && !documentNumber.isBlank()) {
+            user = userRepository.findByDocumentNumber(documentNumber).orElse(null);
         }
-    }
+        if (user == null && email != null && !email.isBlank()) {
+            user = credentialRepository.findByEmail(email).map(Credential::getUser).orElse(null);
+        }
+        if (user == null) {
+            throw new RegisterException("No se encontró un registro con esos datos");
+        }
 
-    String consentStatus = null;
-    String guardianEmail = null;
+        String abbreviation = user.getDocumentType().getAbbreviation();
+        boolean isMinor = AgeUtils.isMinor(user.getBirthDate(), abbreviation);
 
-    if (isMinor) {
-        Optional<Consent> consentOpt = consentRepository.findByUser(user);
-        if (consentOpt.isPresent()) {
-            consentStatus = consentOpt.get().getConsentStatus().name();
-            if (consentOpt.get().getGuardian() != null) {
-                guardianEmail = consentOpt.get().getGuardian().getEmailGuardian();
+        // Si falta verificar el email, reenviamos el código automáticamente.
+        // Así, retomar el registro siempre exige demostrar acceso real al correo.
+        if (!user.isEmailVerified()) {
+            try {
+                resendCode(user.getIdUser());
+            } catch (RegisterException ignored) {
+                // Si está en cooldown, el código anterior sigue vigente — no pasa nada
             }
         }
-    }
 
-    return new RegistrationStatusResponseDTO(
-            user.getIdUser(),
-            user.isEmailVerified(),
-            user.getAccountStatus().name(),
-            isMinor,
-            consentStatus,
-            guardianEmail
-    );
-}
+        String consentStatus = null;
+        String guardianEmail = null;
+
+        if (isMinor) {
+            Optional<Consent> consentOpt = consentRepository.findByUser(user);
+            if (consentOpt.isPresent()) {
+                consentStatus = consentOpt.get().getConsentStatus().name();
+                if (consentOpt.get().getGuardian() != null) {
+                    guardianEmail = consentOpt.get().getGuardian().getEmailGuardian();
+                }
+            }
+        }
+
+        return new RegistrationStatusResponseDTO(
+                user.getIdUser(),
+                user.isEmailVerified(),
+                user.getAccountStatus().name(),
+                isMinor,
+                consentStatus,
+                guardianEmail);
+    }
 }

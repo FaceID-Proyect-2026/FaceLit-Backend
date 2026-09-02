@@ -85,7 +85,8 @@ public class ChipEnvironmentServiceImpl implements ChipEnvironmentService {
                 saved.getEnvironment().getEnvironmentName(),
                 saved.getAssignmentDate());
     }
-     @Override
+
+    @Override
     public List<ChipEnvironmentResponseDTO> getChipsByEnvironment(UUID idEnvironment) {
         return chipEnvironmentRepository
                 .findByEnvironment_IdEnvironment(idEnvironment).stream()
@@ -115,5 +116,23 @@ public class ChipEnvironmentServiceImpl implements ChipEnvironmentService {
         // Eliminacion logica
         assignment.setStatus(ChipEnvironmentStatus.INACTIVE);
         chipEnvironmentRepository.save(assignment);
+    }
+
+    // Agregar en ChipEnvironmentServiceImpl.java
+
+    @Override
+    @Transactional
+    public void permanentDeleteAssignment(UUID idChipEnvironment) {
+
+        ChipEnvironment assignment = chipEnvironmentRepository
+                .findById(idChipEnvironment)
+                .orElseThrow(() -> new ChipEnvironmentException("Asignacion no encontrada"));
+
+        if (assignment.getStatus() == ChipEnvironmentStatus.ACTIVE) {
+            throw new ChipEnvironmentException(
+                    "La asignación debe estar inactiva antes de eliminarse permanentemente");
+        }
+
+        chipEnvironmentRepository.deleteById(idChipEnvironment);
     }
 }

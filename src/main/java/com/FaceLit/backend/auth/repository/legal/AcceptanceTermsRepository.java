@@ -1,6 +1,7 @@
 package com.FaceLit.backend.auth.repository.legal;
 
 import java.util.UUID;
+import java.util.Optional; 
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -14,5 +15,8 @@ public interface AcceptanceTermsRepository extends JpaRepository<AcceptanceTerms
     // Verifica si el usuario yaa acepto los terminos
     // Se usa para no registrar duplicacion
     boolean existsByUser(User user);
+
+    // Busca la aceptación de términos del usuario, para poder eliminarla
+    Optional<AcceptanceTerms> findByUser(User user);
 
 }
