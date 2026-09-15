@@ -53,6 +53,12 @@ public class ChipController {
         return ResponseEntity.noContent().build();
     }
 
+    @PutMapping("/{id}/reactivate")
+    public ResponseEntity<Void> reactivate(@PathVariable UUID id) {
+        chipService.reactivateChip(id);
+        return ResponseEntity.noContent().build();
+    }
+
     // GET /api/admin/chips
     @GetMapping
     public ResponseEntity<List<ChipResponseDTO>> getAll() {

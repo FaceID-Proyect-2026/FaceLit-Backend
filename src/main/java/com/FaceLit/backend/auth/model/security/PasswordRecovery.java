@@ -3,7 +3,6 @@ package com.FaceLit.backend.auth.model.security;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-import com.FaceLit.backend.auth.model.enums.RecoveryState;
 import com.FaceLit.backend.shared.model.AuditBase;
 
 import jakarta.persistence.Column;
@@ -44,10 +43,6 @@ public class PasswordRecovery extends AuditBase {
     @Column(name = "token", nullable = false, length = 255)
     private String token;
 
-    // Fecha en que se solicitó la recuperación
-    @Column(name = "request_date", nullable = false)
-    private OffsetDateTime requestDate;
-
     // Fecha en que expira el token — 5 minutos después del request_date
     @Column(name = "expiration_date", nullable = false)
     private OffsetDateTime expirationDate;
@@ -57,14 +52,7 @@ public class PasswordRecovery extends AuditBase {
     @Column(name = "used", nullable = false)
     private boolean used = false;
 
-    // ACTIVE = token vigente
-    // INACTIVE = token usado o expirado
-    @Enumerated(EnumType.STRING)
-    @Column(name = "state", nullable = false, length = 20)
-    private RecoveryState state;
-
-    // Verifica si el token sigue siendo válido
-    // Igual que isCurrent() en EmailVerification
+    // Verifica si el token sigue siendo válido.
     public boolean isCurrent() {
         return !used && OffsetDateTime.now().isBefore(expirationDate);
         // Retorna true si:

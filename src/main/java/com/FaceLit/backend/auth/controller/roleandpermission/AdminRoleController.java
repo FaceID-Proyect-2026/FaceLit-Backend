@@ -30,7 +30,7 @@ public class AdminRoleController {
     }
 
     // PUT /api/admin/users/{userId}/role
-    // Solo ADMINISTRATOR — cambia el rol de un usuario específico
+    // Solo COORDINATOR — cambia el rol de un usuario específico
     @PutMapping("/users/{userId}/role")
     
     public ResponseEntity<AssignRoleResponseDTO> assignRole(

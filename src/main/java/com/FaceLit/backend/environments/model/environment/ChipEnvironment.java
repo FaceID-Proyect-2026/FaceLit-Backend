@@ -17,7 +17,7 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -44,11 +44,11 @@ public class ChipEnvironment extends AuditBase {
 
     // Fecha de asignacion
     @Column(name = "assignment_date", nullable = false)
-    private LocalDate assignmentDate;
+    private OffsetDateTime assignmentDate;
 
     // Estado de la asignacion — ACTIVE o INACTIVE
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", length = 20)
+    @Column(name = "state", nullable = false, length = 20)
     private ChipEnvironmentStatus status = ChipEnvironmentStatus.ACTIVE;
 
 }

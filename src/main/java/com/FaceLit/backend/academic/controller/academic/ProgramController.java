@@ -53,6 +53,12 @@ public class ProgramController {
         return ResponseEntity.noContent().build();
     }
 
+    @PutMapping("/{id}/reactivate")
+    public ResponseEntity<Void> reactivate(@PathVariable UUID id) {
+        programService.reactivateProgram(id);
+        return ResponseEntity.noContent().build();
+    }
+
     // GET /api/admin/programs
     @GetMapping
     public ResponseEntity<List<ProgramResponseDTO>> getAll() {

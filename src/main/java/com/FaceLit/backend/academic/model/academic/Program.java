@@ -36,11 +36,17 @@ public class Program extends AuditBase {
     @Column(name = "program_name", nullable = false, length = 100, unique = true)
     private String programName;
 
+    @Column(name = "program_code", nullable = false, length = 15, unique = true)
+    private String programCode;
+
     // Estado del programa — ACTIVE o INACTIVE
     // Por defecto ACTIVE al registrarse
     @Enumerated(EnumType.STRING)
     @Column(name = "state", nullable = false, length = 20)
     private ProgramState state = ProgramState.ACTIVE;
+
+    @Column(name = "deactivation_reason", length = 200)
+    private String deactivationReason;
 
     // Dentro de Program.java, agrega este atributo:
 

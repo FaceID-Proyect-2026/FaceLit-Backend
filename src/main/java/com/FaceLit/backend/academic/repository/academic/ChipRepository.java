@@ -21,7 +21,7 @@ public interface ChipRepository extends JpaRepository<Chip, UUID> {
     // Filtra por estado
     List<Chip> findByState(ChipState state);
 
-    // Busca por codigo de ficha — usado cuando el aprendiz ingresa el codigo
+    // Busca por codigo de ficha — usado por operaciones administrativas y carga CSV
     Optional<Chip> findByChipCode(String chipCode);
 
     // Cuenta fichas de un programa — usado en permanentDeleteProgram

@@ -1,19 +1,21 @@
 package com.FaceLit.backend.academic.service.serviceImpl.academic;
 
+import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
-import java.util.List;
-import java.util.UUID;
+
 import com.FaceLit.backend.academic.dto.request.academic.ProgramRequestDTO;
 import com.FaceLit.backend.academic.dto.response.academic.ProgramResponseDTO;
 import com.FaceLit.backend.academic.exception.ProgramException;
-import com.FaceLit.backend.academic.model.academic.Chip;
 import com.FaceLit.backend.academic.model.academic.Program;
+import com.FaceLit.backend.academic.model.enums.ChangeAction;
 import com.FaceLit.backend.academic.model.enums.ProgramState;
 import com.FaceLit.backend.academic.repository.academic.ChipRepository;
 import com.FaceLit.backend.academic.repository.academic.ProgramRepository;
 import com.FaceLit.backend.academic.service.academic.ProgramService;
+import com.FaceLit.backend.academic.service.audit.ChangeHistoryService;
 import com.FaceLit.backend.shared.util.DeletionGuard;
 
 import jakarta.transaction.Transactional;
@@ -23,11 +25,14 @@ public class ProgramServiceImpl implements ProgramService {
 
         private final ProgramRepository programRepository;
         private final ChipRepository chipRepository;
+        private final ChangeHistoryService changeHistoryService;
 
         public ProgramServiceImpl(ProgramRepository programRepository,
-                        ChipRepository chipRepository) {
+                        ChipRepository chipRepository,
+                        ChangeHistoryService changeHistoryService) {
                 this.programRepository = programRepository;
                 this.chipRepository = chipRepository;
+                this.changeHistoryService = changeHistoryService;
 
         }
 
@@ -43,15 +48,19 @@ public class ProgramServiceImpl implements ProgramService {
                 // 2. Construir el programa
                 Program program = new Program();
                 program.setProgramName(dto.getProgramName());
+                program.setProgramCode(dto.getProgramCode());
                 program.setState(dto.getState() != null ? dto.getState() : ProgramState.ACTIVE);
 
                 // 3. Guardar
                 Program saved = programRepository.save(program);
+                changeHistoryService.record("program", saved.getIdProgram(), ChangeAction.CREATE,
+                                "program", null, saved.getProgramName() + " (" + saved.getProgramCode() + ")", null);
 
                 return ProgramResponseDTO.created(
                                 saved.getIdProgram(),
                                 saved.getProgramName(),
-                                saved.getState());
+                                saved.getProgramCode(),
+                                saved.getState(), saved.getCreatedAt(), saved.getUpdatedAt());
         }
 
         @Override
@@ -68,18 +77,36 @@ public class ProgramServiceImpl implements ProgramService {
                         throw new ProgramException("Ya existe un programa con ese nombre");
                 }
 
+                if (!program.getProgramCode().equals(dto.getProgramCode())
+                                && programRepository.existsByProgramCode(dto.getProgramCode())) {
+                        throw new ProgramException("Ya existe un programa con ese código");
+                }
+
+                String oldName = program.getProgramName();
+                String oldCode = program.getProgramCode();
+
                 // 3. Actualizar
                 program.setProgramName(dto.getProgramName());
+                program.setProgramCode(dto.getProgramCode());
                 if (dto.getState() != null) {
                         program.setState(dto.getState());
                 }
 
                 Program updated = programRepository.save(program);
+                if (!oldName.equals(updated.getProgramName())) {
+                        changeHistoryService.record("program", id, ChangeAction.UPDATE, "program_name",
+                                        oldName, updated.getProgramName(), null);
+                }
+                if (!oldCode.equals(updated.getProgramCode())) {
+                        changeHistoryService.record("program", id, ChangeAction.UPDATE, "program_code",
+                                        oldCode, updated.getProgramCode(), null);
+                }
 
                 return ProgramResponseDTO.updated(
                                 updated.getIdProgram(),
                                 updated.getProgramName(),
-                                updated.getState());
+                                updated.getProgramCode(),
+                                updated.getState(), updated.getCreatedAt(), updated.getUpdatedAt());
         }
 
         @Override
@@ -96,13 +123,30 @@ public class ProgramServiceImpl implements ProgramService {
                 // Eliminacion logica
                 program.setState(ProgramState.INACTIVE);
                 programRepository.save(program);
+                changeHistoryService.record("program", id, ChangeAction.DEACTIVATE, "state",
+                                ProgramState.ACTIVE.name(), ProgramState.INACTIVE.name(), null);
+        }
+
+        @Override
+        @Transactional
+        public void reactivateProgram(UUID id) {
+                Program program = programRepository.findById(id)
+                                .orElseThrow(() -> new ProgramException("Programa no encontrado"));
+                if (program.getState() == ProgramState.ACTIVE) {
+                        throw new ProgramException("El programa ya está activo");
+                }
+                program.setState(ProgramState.ACTIVE);
+                programRepository.save(program);
+                changeHistoryService.record("program", id, ChangeAction.REACTIVATE, "state",
+                                ProgramState.INACTIVE.name(), ProgramState.ACTIVE.name(), null);
         }
 
         @Override
         public List<ProgramResponseDTO> getAllPrograms() {
                 return programRepository.findAll().stream()
                                 .map(p -> new ProgramResponseDTO(
-                                                p.getIdProgram(), p.getProgramName(), p.getState(), null))
+                                                p.getIdProgram(), p.getProgramName(), p.getProgramCode(), p.getState(), null,
+                                                p.getCreatedAt(), p.getUpdatedAt()))
                                 .collect(Collectors.toList());
         }
 
@@ -111,7 +155,8 @@ public class ProgramServiceImpl implements ProgramService {
                 Program program = programRepository.findById(id)
                                 .orElseThrow(() -> new ProgramException("Programa no encontrado"));
                 return new ProgramResponseDTO(
-                                program.getIdProgram(), program.getProgramName(), program.getState(), null);
+                                program.getIdProgram(), program.getProgramName(), program.getProgramCode(), program.getState(), null,
+                                program.getCreatedAt(), program.getUpdatedAt());
         }
 
         @Override
@@ -120,14 +165,16 @@ public class ProgramServiceImpl implements ProgramService {
                                 .orElseThrow(() -> new ProgramException(
                                                 "No se encontró un programa con el nombre: " + name));
                 return new ProgramResponseDTO(
-                                program.getIdProgram(), program.getProgramName(), program.getState(), null);
+                                program.getIdProgram(), program.getProgramName(), program.getProgramCode(), program.getState(), null,
+                                program.getCreatedAt(), program.getUpdatedAt());
         }
 
         @Override
         public List<ProgramResponseDTO> getProgramsByState(ProgramState state) {
                 return programRepository.findByState(state).stream()
                                 .map(p -> new ProgramResponseDTO(
-                                                p.getIdProgram(), p.getProgramName(), p.getState(), null))
+                                                p.getIdProgram(), p.getProgramName(), p.getProgramCode(), p.getState(), null,
+                                                p.getCreatedAt(), p.getUpdatedAt()))
                                 .collect(Collectors.toList());
         }
 
@@ -150,6 +197,8 @@ public class ProgramServiceImpl implements ProgramService {
                                 ProgramException::new);
 
                 programRepository.deleteById(id);
+                changeHistoryService.record("program", id, ChangeAction.DELETE, "program",
+                                program.getProgramName() + " (" + program.getProgramCode() + ")", null, null);
         }
 
 }

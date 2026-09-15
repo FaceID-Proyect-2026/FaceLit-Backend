@@ -1,7 +1,7 @@
 package com.FaceLit.backend.environments.model.environment;
 
-import com.FaceLit.backend.environments.model.enums.RecordEnvironmentStatus;
-import com.FaceLit.backend.schedule.model.schedule.Schedule;
+import com.FaceLit.backend.academic.model.academic.Chip;
+import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.shared.model.AuditBase;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -20,8 +20,7 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-// Tabla pivote entre horario y ambiente
-// Un horario ocupa un ambiente en una franja horaria
+// Sesion activa de reconocimiento facial para una ficha y un ambiente
 @Entity
 @Getter
 @Setter
@@ -39,18 +38,31 @@ public class RecordEnvironment extends AuditBase {
     @JoinColumn(name = "id_environment", nullable = false)
     private Environment environment;
 
-    // FK hacia schedule.schedule
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id_schedule", nullable = false)
-    private Schedule schedule;
+    @JoinColumn(name = "id_chip", nullable = false)
+    private Chip chip;
 
-    // Fecha y hora de la asignacion
-    @Column(name = "assignment_date", nullable = false)
-    private OffsetDateTime assignmentDate;
+    // Instructor responsable, referenciado por user_app
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_instructor_in_charge", nullable = false)
+    private User instructorInCharge;
 
-    // Estado de la asignacion
-    @Enumerated(EnumType.STRING)
-    @Column(name = "active", length = 10)
-    private RecordEnvironmentStatus active = RecordEnvironmentStatus.ACTIVE;
+    @Column(name = "session_start", nullable = false)
+    private OffsetDateTime sessionStart;
+
+    @Column(name = "registration_minutes", nullable = false)
+    private Integer registrationMinutes;
+
+    @Column(name = "exit_time")
+    private java.time.LocalTime exitTime;
+
+    @Column(name = "shutdown_time")
+    private java.time.LocalTime shutdownTime;
+
+    @Column(name = "exit_reminder_sent", nullable = false)
+    private boolean exitReminderSent = false;
+
+    @Column(name = "active", nullable = false)
+    private boolean active = true;
 
 }

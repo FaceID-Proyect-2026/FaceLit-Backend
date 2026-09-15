@@ -2,7 +2,7 @@ package com.FaceLit.backend.environments.dto.response.environment;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Getter
@@ -14,13 +14,13 @@ public class ChipEnvironmentResponseDTO {
     private String chipName;
     private UUID idEnvironment;
     private String environmentName;
-    private LocalDate assignmentDate;
+    private OffsetDateTime assignmentDate;
     private String status;
     private String message;
 
     public static ChipEnvironmentResponseDTO assigned(
             UUID idChipEnvironment, UUID idChip, String chipName,
-            UUID idEnvironment, String environmentName, LocalDate assignmentDate) {
+            UUID idEnvironment, String environmentName, OffsetDateTime assignmentDate) {
         return new ChipEnvironmentResponseDTO(
                 idChipEnvironment, idChip, chipName,
                 idEnvironment, environmentName, assignmentDate,

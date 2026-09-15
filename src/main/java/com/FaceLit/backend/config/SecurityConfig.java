@@ -37,16 +37,12 @@ public class SecurityConfig {
 
                         // ─── PÚBLICOS — no necesitan token ───────────────────────
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/consent/**").permitAll()
-                        .requestMatchers("/api/catalogos/**").permitAll()
+                        // ─── SOLO COORDINATOR ───────────────────────────────────────
+                        .requestMatchers("/api/admin/**", "/api/coordinator/**").hasRole("COORDINATOR")
 
-                        // ─── SOLO ADMINISTRATOR Y COORDINATOR ────────────────────────
-                        // Ver todos los usuarios, asignar roles, gestionar todo
-                        .requestMatchers("/api/admin/**").hasAnyRole("ADMINISTRATOR", "COORDINATOR")
-
-                        // ─── ADMINISTRATOR e INSTRUCTOR ──────────────────────────
-                        // Ver asistencia de fichas, gestionar horarios
-                        .requestMatchers("/api/instructor/**").hasAnyRole("ADMINISTRATOR", "COORDINATOR", "INSTRUCTOR")
+                        // ─── INSTRUCTOR Y COORDINATOR ─────────────────────────────
+                        // Acceso a los módulos propios de instrucción
+                        .requestMatchers("/api/instructor/**").hasAnyRole("COORDINATOR", "INSTRUCTOR")
 
                         // ─── PERFIL PERSONAL — cualquier usuario autenticado, sin importar rol ───
                         .requestMatchers("/api/profile/**").authenticated()
@@ -54,7 +50,7 @@ public class SecurityConfig {
                         // ─── TODOS LOS ROLES AUTENTICADOS ────────────────────────
                         // Ver perfil propio, ver propia asistencia
                         .requestMatchers("/api/apprentice/**")
-                        .hasAnyRole("ADMINISTRATOR", "COORDINATOR", "INSTRUCTOR", "APPRENTICE")
+                        .hasAnyRole("COORDINATOR", "INSTRUCTOR", "APPRENTICE")
 
                         // Cualquier otro endpoint requiere autenticación
                         .anyRequest().authenticated())

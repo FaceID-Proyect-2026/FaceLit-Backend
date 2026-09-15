@@ -9,8 +9,8 @@ import lombok.Setter;
 @Setter
 public class AssignRoleRequestDTO {
 
-    // El rol que el ADMINISTRATOR quiere asignar al usuario
-    // Solo acepta: ADMINISTRATOR, INSTRUCTOR, APPRENTICE
+    // El rol que el COORDINATOR asigna al usuario
+    // Solo acepta: COORDINATOR, INSTRUCTOR, APPRENTICE
 
     @NotNull(message = "El rol es obligatorio")
     private RoleName role; 

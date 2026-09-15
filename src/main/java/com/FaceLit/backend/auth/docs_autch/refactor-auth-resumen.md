@@ -109,7 +109,6 @@ Estos puntos de tu tabla de diagnóstico **no se tocaron en la Parte 1** porque 
 
 | Problema | Dónde aparecía |
 |---|---|
-| **Dependencias muertas** | `ChipServiceImpl` inyectaba `ScheduleExceptionRepository`, `ScheduleInstructorRepository` y `RecordEnvironmentRepository` en el constructor sin asignarlos ni usarlos nunca. |
 | **Magic Number** | `generateUniqueCode()` en `ChipServiceImpl` usaba `substring(0, 8)` hardcodeado, ignorando el `AppConstants.CHIP_CODE_LENGTH` que ya existía. |
 | **God Object** (tu tabla) | `ProgramServiceImpl` cargaba con lógica de validación de integridad referencial (verificar dependientes antes de borrar) que no es responsabilidad pura de CRUD de programas. |
 | **Copy & Paste** (tu tabla) | `permanentDeleteChip`, `permanentDeleteProgram` y `permanentDeleteEnvironment` repetían el mismo patrón: verificar estado inactivo → verificar listas de dependientes vacías → `deleteById`. Este era el mismo hallazgo visto desde dos ángulos distintos de la tabla. |
@@ -137,7 +136,6 @@ Antes se traía la lista completa de entidades solo para verificar `.isEmpty()` 
 - `ChipRepository.countByProgram_IdProgram(UUID)`
 - `UserChipRepository.countByChip_IdChip(UUID)`
 - `ChipEnvironmentRepository.countByChip_IdChip(UUID)` y `.countByEnvironment_IdEnvironment(UUID)`
-- `ScheduleRepository.countByChip_IdChip(UUID)`
 - `RecordEnvironmentRepository.countAllByEnvironment_IdEnvironment(UUID)`
 
 ## 4. Archivos modificados
@@ -146,11 +144,10 @@ Antes se traía la lista completa de entidades solo para verificar `.isEmpty()` 
 - `permanentDeleteProgram()`: el bloque manual de verificación de fichas asociadas se reemplazó por una llamada a `DeletionGuard.assertNoDependents(...)`.
 
 ### `EnvironmentServiceImpl`
-- `permanentDeleteEnvironment()`: los 2 bloques manuales (fichas asignadas, horarios) se reemplazaron por 2 llamadas a `DeletionGuard.assertNoDependents(...)`.
+- `permanentDeleteEnvironment()`: las dependencias se validan con `DeletionGuard.assertNoDependents(...)`.
 
 ### `ChipServiceImpl`
-- `permanentDeleteChip()`: los 3 bloques manuales (aprendices, ambientes, horarios) se reemplazaron por 3 llamadas a `DeletionGuard.assertNoDependents(...)`.
-- Constructor: se eliminaron los 3 parámetros muertos (`ScheduleExceptionRepository`, `ScheduleInstructorRepository`, `RecordEnvironmentRepository`) y sus imports correspondientes.
+- `permanentDeleteChip()`: las dependencias se validan con `DeletionGuard.assertNoDependents(...)`.
 - `generateUniqueCode()`: `substring(0, 8)` → `substring(0, AppConstants.CHIP_CODE_LENGTH)`.
 
 ### `UserChipController`
@@ -171,4 +168,3 @@ Antes se traía la lista completa de entidades solo para verificar `.isEmpty()` 
 | Observer (notificaciones RF-8) | Alta | notificaciones |
 | Command (bitácora) | Media | admin/auditoría |
 
-Cuando compartas el módulo de horarios/notificaciones seguimos con el mismo enfoque: identificar el problema puntual antes de tocar código, y aplicar el cambio mínimo necesario sin afectar lo que ya está conectado.

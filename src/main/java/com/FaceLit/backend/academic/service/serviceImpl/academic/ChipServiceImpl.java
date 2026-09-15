@@ -1,30 +1,28 @@
 package com.FaceLit.backend.academic.service.serviceImpl.academic;
 
-import com.FaceLit.backend.academic.repository.academic.ChipRepository;
-import com.FaceLit.backend.academic.repository.academic.ProgramRepository;
-import com.FaceLit.backend.academic.repository.academic.UserChipRepository;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+
 import com.FaceLit.backend.academic.dto.request.academic.ChipRequestDTO;
 import com.FaceLit.backend.academic.dto.response.academic.ChipResponseDTO;
 import com.FaceLit.backend.academic.exception.ChipException;
 import com.FaceLit.backend.academic.exception.ProgramException;
 import com.FaceLit.backend.academic.model.academic.Chip;
 import com.FaceLit.backend.academic.model.academic.Program;
-import com.FaceLit.backend.academic.model.academic.UserChip;
+import com.FaceLit.backend.academic.model.enums.ChangeAction;
 import com.FaceLit.backend.academic.model.enums.ChipState;
+import com.FaceLit.backend.academic.repository.academic.ChipRepository;
+import com.FaceLit.backend.academic.repository.academic.ProgramRepository;
+import com.FaceLit.backend.academic.repository.academic.UserChipRepository;
 import com.FaceLit.backend.academic.service.academic.ChipService;
-import com.FaceLit.backend.environments.model.environment.ChipEnvironment;
+import com.FaceLit.backend.academic.service.audit.ChangeHistoryService;
 import com.FaceLit.backend.environments.repository.environment.ChipEnvironmentRepository;
-import com.FaceLit.backend.schedule.repository.schedule.ScheduleRepository;
-import com.FaceLit.backend.shared.constants.AppConstants;
 import com.FaceLit.backend.shared.util.DeletionGuard;
-import com.FaceLit.backend.schedule.model.schedule.Schedule;
 
 import jakarta.transaction.Transactional;
-
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import org.springframework.stereotype.Service;
 
 @Service
 public class ChipServiceImpl implements ChipService {
@@ -33,47 +31,19 @@ public class ChipServiceImpl implements ChipService {
         private final ProgramRepository programRepository;
         private final UserChipRepository userChipRepository;
         private final ChipEnvironmentRepository chipEnvironmentRepository;
-        private final ScheduleRepository scheduleRepository;
+        private final ChangeHistoryService changeHistoryService;
 
         public ChipServiceImpl(
                         ChipRepository chipRepository,
                         ProgramRepository programRepository,
                         UserChipRepository userChipRepository,
                         ChipEnvironmentRepository chipEnvironmentRepository,
-                        ScheduleRepository scheduleRepository) {
+                        ChangeHistoryService changeHistoryService) {
                 this.chipRepository = chipRepository;
                 this.programRepository = programRepository;
                 this.userChipRepository = userChipRepository;
                 this.chipEnvironmentRepository = chipEnvironmentRepository;
-                this.scheduleRepository = scheduleRepository;
-        }
-
-        // Genera codigo alfanumerico de 8 caracteres en mayusculas
-        // Ejemplo: A3F9K2M7
-        // Se regenera si ya existe otro con el mismo codigo — garantiza unicidad
-        private String generateUniqueCode() {
-                String code;
-                do {
-                        code = UUID.randomUUID()
-                                        .toString()
-                                        .replace("-", "")
-                                        .substring(0, AppConstants.CHIP_CODE_LENGTH)
-                                        .toUpperCase();
-                } while (chipRepository.existsByChipCode(code));
-                return code;
-        }
-
-        // Convierte entidad a DTO — reutilizado en todos los metodos
-        private ChipResponseDTO toDTO(Chip chip, String message) {
-                return new ChipResponseDTO(
-                                chip.getIdChip(),
-                                chip.getChipCode(),
-                                chip.getChipName(),
-                                chip.getWorkingDay(),
-                                chip.getState(),
-                                chip.getProgram().getIdProgram(),
-                                chip.getProgram().getProgramName(),
-                                message);
+                this.changeHistoryService = changeHistoryService;
         }
 
         @Override
@@ -87,15 +57,17 @@ public class ChipServiceImpl implements ChipService {
                 // 2. Construir la ficha
                 Chip chip = new Chip();
                 chip.setProgram(program);
-                chip.setChipName(dto.getChipName());
-                chip.setWorkingDay(dto.getWorkingDay());
                 chip.setState(dto.getState() != null ? dto.getState() : ChipState.ACTIVE);
 
-                // 3. Generar codigo unico automaticamente — el admin no lo ingresa
-                chip.setChipCode(generateUniqueCode());
+                if (chipRepository.findByChipCode(dto.getChipCode()).isPresent()) {
+                        throw new ChipException("Ya existe una ficha con ese código");
+                }
+                chip.setChipCode(dto.getChipCode());
 
                 // 4. Guardar
                 Chip saved = chipRepository.save(chip);
+                changeHistoryService.record("chip", saved.getIdChip(), ChangeAction.CREATE,
+                                "chip", null, saved.getChipCode(), null);
 
                 return toDTO(saved, "Ficha registrada correctamente");
         }
@@ -112,23 +84,21 @@ public class ChipServiceImpl implements ChipService {
                 Program program = programRepository.findById(dto.getIdProgram())
                                 .orElseThrow(() -> new ProgramException("Programa no encontrado"));
 
-                // 2.1 Validar que no se cambie el programa — una ficha pertenece a UN solo
-                // programa
-                if (!chip.getProgram().getIdProgram().equals(dto.getIdProgram())) {
-                        throw new ChipException(
-                                        "No se puede cambiar el programa de una ficha ya registrada");
-                }
-
-                // 3. Actualizar campos — el chipCode NO se modifica, fue generado por el
-                // sistema
+                String oldCode = chip.getChipCode();
                 chip.setProgram(program);
-                chip.setChipName(dto.getChipName());
-                chip.setWorkingDay(dto.getWorkingDay());
+                if (!oldCode.equals(dto.getChipCode()) && chipRepository.findByChipCode(dto.getChipCode()).isPresent()) {
+                        throw new ChipException("Ya existe una ficha con ese código");
+                }
+                chip.setChipCode(dto.getChipCode());
                 if (dto.getState() != null) {
                         chip.setState(dto.getState());
                 }
 
                 Chip updated = chipRepository.save(chip);
+                if (!oldCode.equals(updated.getChipCode())) {
+                        changeHistoryService.record("chip", id, ChangeAction.UPDATE, "chip_code",
+                                        oldCode, updated.getChipCode(), null);
+                }
 
                 return toDTO(updated, "Ficha actualizada correctamente");
         }
@@ -147,6 +117,22 @@ public class ChipServiceImpl implements ChipService {
                 // Eliminacion logica
                 chip.setState(ChipState.INACTIVE);
                 chipRepository.save(chip);
+                changeHistoryService.record("chip", id, ChangeAction.DEACTIVATE, "state",
+                                ChipState.ACTIVE.name(), ChipState.INACTIVE.name(), null);
+        }
+
+        @Override
+        @Transactional
+        public void reactivateChip(UUID id) {
+                Chip chip = chipRepository.findById(id)
+                                .orElseThrow(() -> new ChipException("Ficha no encontrada"));
+                if (chip.getState() == ChipState.ACTIVE) {
+                        throw new ChipException("La ficha ya está activa");
+                }
+                chip.setState(ChipState.ACTIVE);
+                chipRepository.save(chip);
+                changeHistoryService.record("chip", id, ChangeAction.REACTIVATE, "state",
+                                ChipState.INACTIVE.name(), ChipState.ACTIVE.name(), null);
         }
 
         @Override
@@ -206,13 +192,20 @@ public class ChipServiceImpl implements ChipService {
                                 "Elimina primero las asignaciones.",
                                 ChipException::new);
 
-                DeletionGuard.assertNoDependents(
-                                scheduleRepository.countByChip_IdChip(id),
-                                "horario",
-                                "Elimina primero los horarios.",
-                                ChipException::new);
-
                 chipRepository.deleteById(id);
+                changeHistoryService.record("chip", id, ChangeAction.DELETE, "chip",
+                                chip.getChipCode(), null, null);
+        }
+
+        // Convierte entidad a DTO — reutilizado en todos los metodos
+        private ChipResponseDTO toDTO(Chip chip, String message) {
+                return new ChipResponseDTO(
+                                chip.getIdChip(),
+                                chip.getChipCode(),
+                                chip.getState(),
+                                chip.getProgram().getIdProgram(),
+                                chip.getProgram().getProgramName(),
+                                message, chip.getCreatedAt(), chip.getUpdatedAt());
         }
 
 }

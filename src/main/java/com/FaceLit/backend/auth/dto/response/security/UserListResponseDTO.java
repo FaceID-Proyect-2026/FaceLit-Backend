@@ -14,7 +14,7 @@ public class UserListResponseDTO {
     private String lastName;
     private String email;
     private String documentNumber;
-    // Rol actual del usuario — puede ser APPRENTICE, INSTRUCTOR o ADMINISTRATOR
+    // Rol actual del usuario — puede ser COORDINATOR, INSTRUCTOR o APPRENTICE
     private String currentRole;
 
 }

@@ -13,7 +13,7 @@ public class LoginResponseDTO {
     private String token;
 
     // Rol del usuario — el frontend lo usa para redirigir al dashboard correcto
-    // Ejemplo: "ADMINISTRATOR" → dashboard admin
+    // Ejemplo: "COORDINATOR" → dashboard de Gestión Académica
     private String role;
 
     // Lista de permisos que tiene ese rol

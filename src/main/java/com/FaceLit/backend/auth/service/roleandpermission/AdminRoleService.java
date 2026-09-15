@@ -8,7 +8,7 @@ import com.FaceLit.backend.auth.dto.response.roleandpermission.AssignRoleRespons
 import com.FaceLit.backend.auth.dto.response.security.UserListResponseDTO;
 public interface AdminRoleService {
 
-     // Lista todos los usuarios registrados — solo ADMINISTRATOR puede verlos
+    // Lista todos los usuarios registrados — solo COORDINATOR puede verlos
 
       List<UserListResponseDTO> getAllUsers();
 

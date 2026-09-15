@@ -9,16 +9,12 @@ import com.FaceLit.backend.auth.dto.response.security.UserDetailResponseDTO;
 import com.FaceLit.backend.auth.exception.UserManagementException;
 import com.FaceLit.backend.academic.model.enums.UserChipStatus;
 import com.FaceLit.backend.auth.model.security.Credential;
-import com.FaceLit.backend.auth.model.security.EmailVerification;
 import com.FaceLit.backend.auth.model.security.PasswordRecovery;
 import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.auth.model.security.UserSession;
 import com.FaceLit.backend.auth.repository.legal.AcceptanceTermsRepository;
-import com.FaceLit.backend.auth.repository.legal.ConsentRepository;
-import com.FaceLit.backend.auth.repository.legal.ConsentVerificationRepository;
 import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
-import com.FaceLit.backend.auth.repository.security.EmailVerificationRepository;
 import com.FaceLit.backend.auth.repository.security.PasswordRecoveryRepository;
 import com.FaceLit.backend.auth.repository.security.UserConfigurationRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
@@ -44,11 +40,8 @@ public class UserManagementServiceImpl implements UserManagementService {
         private final UserRoleRepository userRoleRepository;
         private final UserSessionRepository userSessionRepository;
         private final UserConfigurationRepository userConfigurationRepository;
-        private final EmailVerificationRepository emailVerificationRepository;
         private final UserChipRepository userChipRepository;
         private final AdminRoleService adminRoleService;
-        private final ConsentRepository consentRepository;
-        private final ConsentVerificationRepository consentVerificationRepository;
         private final AcceptanceTermsRepository acceptanceTermsRepository;
         private final PasswordRecoveryRepository passwordRecoveryRepository;
 
@@ -58,11 +51,8 @@ public class UserManagementServiceImpl implements UserManagementService {
                         UserRoleRepository userRoleRepository,
                         UserSessionRepository userSessionRepository,
                         UserConfigurationRepository userConfigurationRepository,
-                        EmailVerificationRepository emailVerificationRepository,
                         UserChipRepository userChipRepository,
                         AdminRoleService adminRoleService,
-                        ConsentRepository consentRepository,
-                        ConsentVerificationRepository consentVerificationRepository,
                         AcceptanceTermsRepository acceptanceTermsRepository,
                         PasswordRecoveryRepository passwordRecoveryRepository) {
                 this.userRepository = userRepository;
@@ -70,16 +60,13 @@ public class UserManagementServiceImpl implements UserManagementService {
                 this.userRoleRepository = userRoleRepository;
                 this.userSessionRepository = userSessionRepository;
                 this.userConfigurationRepository = userConfigurationRepository;
-                this.emailVerificationRepository = emailVerificationRepository;
                 this.userChipRepository = userChipRepository;
                 this.adminRoleService = adminRoleService;
-                this.consentRepository = consentRepository;
-                this.consentVerificationRepository = consentVerificationRepository;
                 this.acceptanceTermsRepository = acceptanceTermsRepository;
                 this.passwordRecoveryRepository = passwordRecoveryRepository;
         }
 
-        // Convierte un User a UserDetailResponseDTO — reutilizado en los 3 métodos de
+        // Convierte un User a UserDetailResponseDTO â€” reutilizado en los 3 mÃ©todos de
         // lectura
         private UserDetailResponseDTO toDTO(User user) {
 
@@ -93,17 +80,17 @@ public class UserManagementServiceImpl implements UserManagementService {
 
                 boolean hasSession = userSessionRepository.existsByUser_IdUser(user.getIdUser());
 
-                // Ficha activa, si aplica — null si no tiene (el frontend decide el texto)
+                // Ficha activa, si aplica â€” null si no tiene (el frontend decide el texto)
                 Optional<UserChip> activeChip = userChipRepository
                                 .findByUser_IdUserAndState(user.getIdUser(), UserChipStatus.ACTIVE);
 
-                String chipName = activeChip.map(uc -> uc.getChip().getChipName()).orElse(null);
+                String chipName = activeChip.map(uc -> uc.getChip().getChipCode()).orElse(null);
                 String chipCode = activeChip.map(uc -> uc.getChip().getChipCode()).orElse(null);
                 String programName = activeChip
                                 .map(uc -> uc.getChip().getProgram().getProgramName())
                                 .orElse(null);
 
-                // Calcula si el JWT del usuario sigue vigente — automático, sin tocar manual
+                // Calcula si el JWT del usuario sigue vigente â€” automÃ¡tico, sin tocar manual
                 OffsetDateTime cutoff = OffsetDateTime.now()
                                 .minusHours(AppConstants.JWT_EXPIRY_HOURS);
                 String sessionStatus = userSessionRepository
@@ -116,12 +103,10 @@ public class UserManagementServiceImpl implements UserManagementService {
                                 user.getFirstName(),
                                 user.getLastName(),
                                 user.getDocumentNumber(),
-                                user.getDocumentType().getName(),
-                                user.getBirthDate(),
                                 email,
                                 roleName,
-                                user.getAccountStatus().name(), // ← estado REAL de cuenta, tal como en la BD
-                                sessionStatus, // ← estado de sesión, calculado
+                                user.getAccountStatus().name(), // â† estado REAL de cuenta, tal como en la BD
+                                sessionStatus, // â† estado de sesiÃ³n, calculado
                                 user.getCreatedAt(),
                                 chipName,
                                 chipCode,
@@ -131,7 +116,7 @@ public class UserManagementServiceImpl implements UserManagementService {
 
         @Override
         public List<UserDetailResponseDTO> getAllUsers() {
-                // RF-10.1: solo usuarios que han iniciado sesión al menos una vez
+                // RF-10.1: solo usuarios que han iniciado sesiÃ³n al menos una vez
                 return userRepository.findAll().stream()
                                 .filter(u -> userSessionRepository.existsByUser_IdUser(u.getIdUser()))
                                 .map(this::toDTO)
@@ -175,7 +160,7 @@ public class UserManagementServiceImpl implements UserManagementService {
                 user.setAccountStatus(dto.getAccountStatus());
                 userRepository.save(user);
 
-                // Reutiliza la lógica ya existente de asignación de rol — no la duplica
+                // Reutiliza la lÃ³gica ya existente de asignaciÃ³n de rol â€” no la duplica
                 AssignRoleRequestDTO roleDto = new AssignRoleRequestDTO();
                 roleDto.setRole(dto.getRole());
                 adminRoleService.assignRole(userId, roleDto);
@@ -194,50 +179,37 @@ public class UserManagementServiceImpl implements UserManagementService {
                                 .existsByUser_IdUserAndState(userId, UserChipStatus.ACTIVE);
                 if (hasActiveChip) {
                         throw new UserManagementException(
-                                        "No se puede eliminar porque está vinculado a una ficha activa. Desvincula primero al aprendiz.");
+                                        "No se puede eliminar porque estÃ¡ vinculado a una ficha activa. Desvincula primero al aprendiz.");
                 }
 
-                // NOTA: pendiente validar "asistencias registradas" — el módulo de
-                // asistencia (RF-6, reconocimiento facial) aún no existe.
+                // NOTA: pendiente validar "asistencias registradas" â€” el mÃ³dulo de
+                // asistencia (RF-6, reconocimiento facial) aÃºn no existe.
 
-                // 1. consent_verification depende de consent — se borra primero
-                consentRepository.findByUser(user).ifPresent(consent -> {
-                        consentVerificationRepository.findByConsent(consent)
-                                        .ifPresent(consentVerificationRepository::delete);
-                        consentRepository.delete(consent);
-                        // Guardian NO se borra aquí — puede estar cubriendo a otro hermano.
-                        // Ver nota de diseño en el resumen del módulo.
-                });
-
-                // 2. terms_acceptance — todo usuario registrado tiene uno
+                // terms_acceptance â€” todo usuario registrado tiene uno
                 acceptanceTermsRepository.findByUser(user)
                                 .ifPresent(acceptanceTermsRepository::delete);
 
-                // 3. password_recovery — historial completo, no solo el activo
+                // password_recovery â€” historial completo, no solo el activo
                 List<PasswordRecovery> recoveries = passwordRecoveryRepository.findAllByUser_IdUser(userId);
                 passwordRecoveryRepository.deleteAll(recoveries);
 
-                // 4. user_session
+                // user_session
                 List<UserSession> sessions = userSessionRepository.findByUser_IdUser(userId);
                 userSessionRepository.deleteAll(sessions);
 
-                // 5. email_verification — historial completo
-                List<EmailVerification> verifications = emailVerificationRepository.findAllByUser_IdUser(userId);
-                emailVerificationRepository.deleteAll(verifications);
-
-                // 6. user_configuration
+                // user_configuration
                 userConfigurationRepository.findByUser_IdUser(userId)
                                 .ifPresent(userConfigurationRepository::delete);
 
-                // 7. user_role
+                // user_role
                 userRoleRepository.findByUserId(userId)
                                 .ifPresent(userRoleRepository::delete);
 
-                // 8. credential
+                // credential
                 credentialRepository.findByUser(user)
                                 .ifPresent(credentialRepository::delete);
 
-                // 9. user_app — al final, cuando ya no queda nada apuntándole
+                // 9. user_app â€” al final, cuando ya no queda nada apuntÃ¡ndole
                 userRepository.delete(user);
         }
 

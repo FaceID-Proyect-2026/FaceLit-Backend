@@ -21,7 +21,6 @@ import java.util.UUID;
 
 
 import com.FaceLit.backend.academic.model.enums.ChipState;
-import com.FaceLit.backend.academic.model.enums.WorkingDay;
 import com.FaceLit.backend.environments.model.environment.ChipEnvironment;
 import com.FaceLit.backend.shared.model.AuditBase;
 
@@ -45,22 +44,16 @@ public class Chip extends AuditBase {
     private Program program;
 
     // Codigo de la ficha — ejemplo: 2977225
-    @Column(name = "chip_code", length = 50)
+    @Column(name = "chip_code", nullable = false, length = 20, unique = true)
     private String chipCode;
-
-    // Nombre de la ficha
-    @Column(name = "chip_name", length = 100)
-    private String chipName;
 
     // Estado — ACTIVE o INACTIVE
     @Enumerated(EnumType.STRING)
-    @Column(name = "state", length = 20)
+    @Column(name = "state", nullable = false, length = 20)
     private ChipState state = ChipState.ACTIVE;
 
-    // Jornada — MANANA, TARDE o NOCHE
-    @Enumerated(EnumType.STRING)
-    @Column(name = "workingday", length = 50)
-    private WorkingDay workingDay;
+    @Column(name = "deactivation_reason", length = 200)
+    private String deactivationReason;
 
     // Una ficha puede estar asignada a muchos ambientes
     @OneToMany(mappedBy = "chip", fetch = FetchType.LAZY)

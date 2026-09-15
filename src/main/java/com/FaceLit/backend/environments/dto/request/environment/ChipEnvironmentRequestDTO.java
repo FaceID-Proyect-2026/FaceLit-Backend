@@ -3,7 +3,7 @@ package com.FaceLit.backend.environments.dto.request.environment;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
-import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Getter
@@ -18,6 +18,6 @@ public class ChipEnvironmentRequestDTO {
     private UUID idEnvironment;
 
     @NotNull(message = "La fecha de asignacion es obligatoria")
-    private LocalDate assignmentDate;
+    private OffsetDateTime assignmentDate;
 
 }

@@ -22,32 +22,17 @@ public class RegisterResponseDTO { // Responde la respuesta solo trasnporta repu
     private String status; // "REGISTERED" → redirigir al login
                            // "PENDING_CONSENT" → mostrar pantalla "revisa el correo del acudiente"
 
-    // Si Requiere Consentimiento
-    private boolean requiresConsent; // false ( el usuario es Mayor de edad)-- se registra en el login
-                                     // True ( El usuario es menor de edad) - se espera la configuracion del
-                                     // acudiente.
+    // ID del usuario creado durante el registro.
+    private UUID id_user;
 
-    // ID del usuario solo si es mayor de edad)
-    private UUID id_user; // El ID que se genera en el Usuario,
-                          // recordar que solo tiene valor si es Mayor de edad, si es menor (NULL) por que
-                          // su registro no esa completo.
+    private String temporaryPassword;
 
-    // Crea la respuesta automatica para un mayor de edad
-    public static RegisterResponseDTO majorAge(UUID id_user) { // recibe el UUID del usuario
-        return new RegisterResponseDTO(null, "REGISTERED", false, id_user);
-        // crea un nuevo objeto, contruye una nueva respuesta DTO // Crea la respuesta
-        // automatica para un mayor de edad
+    public static RegisterResponseDTO registered(UUID idUser) {
+        return new RegisterResponseDTO("Registro exitoso", "REGISTERED", idUser, null);
     }
 
-    // Usuario menor de edad
-    public static RegisterResponseDTO minorAge() {
-        return new RegisterResponseDTO(null, "PENDING_CONSENT", true, null);
-    }
-
-    //El menor y mayor de edad deben verificar el email antes de continuar con el registro
-                                         // recibimos el id del  usuario para
-    public static RegisterResponseDTO pendingEmailVerification(UUID id_user) {
-        return new RegisterResponseDTO("Se envió un código de verificación a tu correo electrónico", "PENDING_EMAIL_VERIFICATION", false, id_user); 
+    public static RegisterResponseDTO registered(UUID idUser, String temporaryPassword) {
+        return new RegisterResponseDTO("Registro exitoso", "REGISTERED", idUser, temporaryPassword);
     }
 
 }

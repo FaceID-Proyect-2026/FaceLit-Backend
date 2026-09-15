@@ -6,7 +6,6 @@ import org.springframework.stereotype.Service;
 import com.FaceLit.backend.environments.dto.request.environment.EnvironmentRequestDTO;
 import com.FaceLit.backend.environments.dto.response.environment.EnvironmentResponseDTO;
 import com.FaceLit.backend.environments.exception.EnvironmentException;
-import com.FaceLit.backend.environments.model.enums.EnvironmentStatus;
 import com.FaceLit.backend.environments.model.environment.ChipEnvironment;
 import com.FaceLit.backend.environments.model.environment.Environment;
 import com.FaceLit.backend.environments.model.environment.RecordEnvironment;
@@ -52,11 +51,6 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                 // 2. Construir el ambiente
                 Environment environment = new Environment();
                 environment.setEnvironmentName(dto.getEnvironmentName());
-                environment.setCapacity(dto.getCapacity());
-
-                // 3. Si no manda status, queda ACTIVE por defecto
-                environment.setStatus(
-                                dto.getStatus() != null ? dto.getStatus() : EnvironmentStatus.ACTIVE);
 
                 // 4. Guardar en BD
                 Environment saved = environmentRepository.save(environment);
@@ -64,9 +58,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                 // 5. Devolver la respuesta
                 return EnvironmentResponseDTO.created(
                                 saved.getIdEnvironment(),
-                                saved.getEnvironmentName(),
-                                saved.getCapacity(),
-                                saved.getStatus());
+                                saved.getEnvironmentName());
 
         }
 
@@ -87,20 +79,13 @@ public class EnvironmentServiceImpl implements EnvironmentService {
 
                 // 3. Actualizar campos
                 environment.setEnvironmentName(dto.getEnvironmentName());
-                environment.setCapacity(dto.getCapacity());
-                if (dto.getStatus() != null) {
-                        environment.setStatus(dto.getStatus());
-                }
-
                 // 4. Guardar cambios
                 Environment updated = environmentRepository.save(environment);
 
                 // 5. Retornar respuesta
                 return EnvironmentResponseDTO.updated(
                                 updated.getIdEnvironment(),
-                                updated.getEnvironmentName(),
-                                updated.getCapacity(),
-                                updated.getStatus());
+                                updated.getEnvironmentName());
         }
 
         @Override
@@ -109,8 +94,6 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                                 .map(env -> new EnvironmentResponseDTO(
                                                 env.getIdEnvironment(),
                                                 env.getEnvironmentName(),
-                                                env.getCapacity(),
-                                                env.getStatus(),
                                                 null))
                                 .collect(Collectors.toList());
         }
@@ -123,8 +106,6 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                 return new EnvironmentResponseDTO(
                                 environment.getIdEnvironment(),
                                 environment.getEnvironmentName(),
-                                environment.getCapacity(),
-                                environment.getStatus(),
                                 null);
         }
 
@@ -141,23 +122,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                 return new EnvironmentResponseDTO(
                                 environment.getIdEnvironment(),
                                 environment.getEnvironmentName(),
-                                environment.getCapacity(),
-                                environment.getStatus(),
                                 null);
-        }
-
-        @Override
-        public List<EnvironmentResponseDTO> getEnvironmentsByStatus(EnvironmentStatus status) {
-
-                // Trae todos los ambientes con ese estado
-                return environmentRepository.findByStatus(status).stream()
-                                .map(env -> new EnvironmentResponseDTO(
-                                                env.getIdEnvironment(),
-                                                env.getEnvironmentName(),
-                                                env.getCapacity(),
-                                                env.getStatus(),
-                                                null))
-                                .collect(Collectors.toList());
         }
 
         @Override
@@ -168,15 +133,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                 Environment environment = environmentRepository.findById(id)
                                 .orElseThrow(() -> new EnvironmentException("Ambiente no encontrado"));
 
-                // 2. Verificar que ya no esté inactivo
-                if (environment.getStatus() == EnvironmentStatus.INACTIVE) {
-                        throw new EnvironmentException("El ambiente ya está inactivo");
-                }
-
-                // 3. Eliminacion logica — cambia status a INACTIVE
-                // No se borra de BD — se conserva el historial
-                environment.setStatus(EnvironmentStatus.INACTIVE);
-                environmentRepository.save(environment);
+                environmentRepository.delete(environment);
 
         }
 
@@ -190,8 +147,6 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                                 .map(env -> new EnvironmentResponseDTO(
                                                 env.getIdEnvironment(),
                                                 env.getEnvironmentName(),
-                                                env.getCapacity(),
-                                                env.getStatus(),
 
                                                 null));
         }
@@ -202,11 +157,6 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                 Environment environment = environmentRepository.findById(id)
                                 .orElseThrow(() -> new EnvironmentException("Ambiente no encontrado"));
 
-                if (environment.getStatus() == EnvironmentStatus.ACTIVE) {
-                        throw new EnvironmentException(
-                                        "El ambiente debe estar inactivo antes de eliminarse permanentemente");
-                }
-
                 // Verifica fichas asignadas a este ambiente
                 DeletionGuard.assertNoDependents(
                                 chipEnvironmentRepository.countByEnvironment_IdEnvironment(id),
@@ -216,8 +166,8 @@ public class EnvironmentServiceImpl implements EnvironmentService {
 
                 DeletionGuard.assertNoDependents(
                                 recordEnvironmentRepository.countAllByEnvironment_IdEnvironment(id),
-                                "horario",
-                                "Elimina primero los horarios.",
+                                "sesion de reconocimiento",
+                                "Elimina primero las sesiones de reconocimiento.",
                                 EnvironmentException::new);
 
                 environmentRepository.deleteById(id);

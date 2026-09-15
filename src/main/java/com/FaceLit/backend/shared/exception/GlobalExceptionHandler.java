@@ -9,10 +9,8 @@ import com.FaceLit.backend.academic.exception.ProgramException;
 import com.FaceLit.backend.academic.exception.UserChipException;
 import com.FaceLit.backend.environments.exception.EnvironmentException;
 import com.FaceLit.backend.environments.exception.ChipEnvironmentException;
-import com.FaceLit.backend.schedule.exception.ScheduleException;
 import com.FaceLit.backend.auth.exception.LoginException;
 import org.springframework.http.HttpStatus;
-import com.FaceLit.backend.schedule.exception.ScheduleExceptionException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -62,11 +60,6 @@ public class GlobalExceptionHandler { // esta clase es para que capture errores 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", ex.getMessage()));
     }
 
-    @ExceptionHandler(ScheduleExceptionException.class)
-    public ResponseEntity<Map<String, String>> handleScheduleException(ScheduleExceptionException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", ex.getMessage()));
-    }
-
     @ExceptionHandler(EnvironmentException.class)
     public ResponseEntity<Map<String, String>> handleEnvironment(EnvironmentException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", ex.getMessage()));
@@ -89,11 +82,6 @@ public class GlobalExceptionHandler { // esta clase es para que capture errores 
 
     @ExceptionHandler(UserChipException.class)
     public ResponseEntity<Map<String, String>> handleUserChip(UserChipException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", ex.getMessage()));
-    }
-
-    @ExceptionHandler(ScheduleException.class)
-    public ResponseEntity<Map<String, String>> handleSchedule(ScheduleException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", ex.getMessage()));
     }
 

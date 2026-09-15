@@ -1,9 +1,7 @@
 package com.FaceLit.backend.auth.model.security;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.UUID;
-import java.util.ArrayList;
 import java.util.List;
 
 import com.FaceLit.backend.academic.model.academic.UserChip;
@@ -21,7 +19,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
@@ -60,47 +57,31 @@ public class User extends AuditBase {
     // NÚMERO DE DOCUMENTO
     // No puede repetirse
     // =========================================================
-    @Column(name = "number_document", nullable = false, length = 50)
+        @Column(name = "number_document", nullable = false, length = 10)
     private String documentNumber;
 
     // =========================================================
     // NOMBRE DEL USUARIO
     // =========================================================
-    @Column(name = "first_name", nullable = false, length = 50)
+        @Column(name = "first_name", nullable = false, length = 60)
     private String firstName;
 
     // =========================================================
     // APELLIDO DEL USUARIO
     // =========================================================
-    @Column(name = "last_name", nullable = false, length = 50)
+        @Column(name = "last_name", nullable = false, length = 60)
     private String lastName;
-
-    // =========================================================
-    // FECHA DE NACIMIENTO
-    // =========================================================
-    @Column(name = "birth_date", nullable = false)
-    private LocalDate birthDate;
 
     // =========================================================
     // ESTADO DE LA CUENTA
     //
     // ACTIVE
     // INACTIVE
-    // PENDING_CONSENT
     // BLOCKED
     // =========================================================
     @Enumerated(EnumType.STRING)
     @Column(name = "account_status", nullable = false, length = 20)
     private AccountStatus accountStatus;
-
-    // =========================================================
-    // VERIFICACIÓN DE CORREO ELECTRÓNICO
-    //
-    // false = pendiente
-    // true = verificado
-    // =========================================================
-    @Column(name = "email_verification", nullable = false)
-    private boolean emailVerified = false;
 
     // =========================================================
     // RELACIÓN 1:1 CON CREDENTIAL
@@ -114,16 +95,6 @@ public class User extends AuditBase {
     // =========================================================
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Credential credential;
-
-    // =========================================================
-    // RELACIÓN N:1 CON DOCUMENT TYPE
-    //
-    // Muchos usuarios pueden compartir el mismo tipo
-    // de documento (CC, TI, CE, etc.)
-    // =========================================================
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id_type_document", nullable = false)
-    private DocumentType documentType;
 
     // Un usuario puede estar asignado a muchas fichas
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)

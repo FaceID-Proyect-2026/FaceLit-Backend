@@ -40,7 +40,7 @@ public class ChipEnvironmentServiceImpl implements ChipEnvironmentService {
         return new ChipEnvironmentResponseDTO(
                 ce.getIdChipEnvironment(),
                 ce.getChip().getIdChip(),
-                ce.getChip().getChipName(),
+                ce.getChip().getChipCode(),
                 ce.getEnvironment().getIdEnvironment(),
                 ce.getEnvironment().getEnvironmentName(),
                 ce.getAssignmentDate(),
@@ -64,7 +64,7 @@ public class ChipEnvironmentServiceImpl implements ChipEnvironmentService {
         if (chipEnvironmentRepository.existsByChip_IdChipAndEnvironment_IdEnvironment(
                 dto.getIdChip(), dto.getIdEnvironment())) {
             throw new ChipEnvironmentException(
-                    "Esta ficha ya está asignada a ese ambiente");
+                    "Esta ficha ya estÃ¡ asignada a ese ambiente");
 
         }
 
@@ -80,7 +80,7 @@ public class ChipEnvironmentServiceImpl implements ChipEnvironmentService {
         return ChipEnvironmentResponseDTO.assigned(
                 saved.getIdChipEnvironment(),
                 saved.getChip().getIdChip(),
-                saved.getChip().getChipName(),
+                saved.getChip().getChipCode(),
                 saved.getEnvironment().getIdEnvironment(),
                 saved.getEnvironment().getEnvironmentName(),
                 saved.getAssignmentDate());
@@ -110,7 +110,7 @@ public class ChipEnvironmentServiceImpl implements ChipEnvironmentService {
                 .orElseThrow(() -> new ChipEnvironmentException("Asignacion no encontrada"));
 
         if (assignment.getStatus() == ChipEnvironmentStatus.INACTIVE) {
-            throw new ChipEnvironmentException("La asignacion ya está inactiva");
+            throw new ChipEnvironmentException("La asignacion ya estÃ¡ inactiva");
         }
 
         // Eliminacion logica
@@ -130,7 +130,7 @@ public class ChipEnvironmentServiceImpl implements ChipEnvironmentService {
 
         if (assignment.getStatus() == ChipEnvironmentStatus.ACTIVE) {
             throw new ChipEnvironmentException(
-                    "La asignación debe estar inactiva antes de eliminarse permanentemente");
+                    "La asignaciÃ³n debe estar inactiva antes de eliminarse permanentemente");
         }
 
         chipEnvironmentRepository.deleteById(idChipEnvironment);

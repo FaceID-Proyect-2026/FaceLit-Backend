@@ -18,6 +18,8 @@ public interface ChipService {
     // Eliminacion logica
     void deleteChip(UUID id);
 
+    void reactivateChip(UUID id);
+
     // Lista todas las fichas
     List<ChipResponseDTO> getAllChips();
 

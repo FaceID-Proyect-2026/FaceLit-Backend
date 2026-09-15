@@ -2,7 +2,6 @@ package com.FaceLit.backend.environments.controller.environment;
 
 import com.FaceLit.backend.environments.dto.request.environment.EnvironmentRequestDTO;
 import com.FaceLit.backend.environments.dto.response.environment.EnvironmentResponseDTO;
-import com.FaceLit.backend.environments.model.enums.EnvironmentStatus;
 import com.FaceLit.backend.environments.service.environment.EnvironmentService;
 
 import org.springframework.data.domain.Page;
@@ -32,7 +31,7 @@ public class EnvironmentController {
     }
 
     // POST /api/admin/environments
-    // Solo ADMINISTRATOR y COORDINATOR — protegido por SecurityConfig /api/admin/**
+    // Solo COORDINATOR — protegido por SecurityConfig /api/admin/**
     @PostMapping
     public ResponseEntity<EnvironmentResponseDTO> createEnvironment(
             @Valid @RequestBody EnvironmentRequestDTO dto) {
@@ -41,7 +40,7 @@ public class EnvironmentController {
     }
 
     // PUT /api/admin/environments/{id}
-    // Solo ADMINISTRATOR y COORDINATOR
+    // Solo COORDINATOR
     @PutMapping("/{id}")
     public ResponseEntity<EnvironmentResponseDTO> updateEnvironment(
             @PathVariable UUID id,
@@ -50,14 +49,14 @@ public class EnvironmentController {
     }
 
     // GET /api/admin/environments
-    // Solo ADMINISTRATOR y COORDINATOR
+    // Solo COORDINATOR
     @GetMapping
     public ResponseEntity<List<EnvironmentResponseDTO>> getAllEnvironments() {
         return ResponseEntity.ok(environmentService.getAllEnvironments());
     }
 
     // GET /api/admin/environments/{id}
-    // Solo ADMINISTRATOR y COORDINATOR
+    // Solo COORDINATOR
     @GetMapping("/{id}")
     public ResponseEntity<EnvironmentResponseDTO> getEnvironmentById(
             @PathVariable UUID id) {
@@ -71,16 +70,8 @@ public class EnvironmentController {
         return ResponseEntity.ok(environmentService.getEnvironmentByName(name));
     }
 
-    // GET /api/admin/environments/status?status=ACTIVE
-    @GetMapping("/status")
-    public ResponseEntity<List<EnvironmentResponseDTO>> getByStatus(
-            @RequestParam EnvironmentStatus status) {
-        return ResponseEntity.ok(environmentService.getEnvironmentsByStatus(status));
-    }
-
     // DELETE /api/admin/environments/{id}
-    // Eliminacion logica — cambia status a INACTIVE
-    // Solo ADMINISTRATOR y COORDINATOR
+    // Solo COORDINATOR
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteEnvironment(@PathVariable UUID id) {
         environmentService.deleteEnvironment(id);
@@ -97,7 +88,7 @@ public class EnvironmentController {
     }
 
     // DELETE /api/admin/environments/{id}/permanent
-    // Elimina completamente — solo si ya está INACTIVE
+    // Elimina completamente
     @DeleteMapping("/{id}/permanent")
     public ResponseEntity<Void> permanentDelete(@PathVariable UUID id) {
         environmentService.permanentDeleteEnvironment(id);

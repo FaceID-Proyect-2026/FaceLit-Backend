@@ -1,6 +1,5 @@
 package com.FaceLit.backend.config;
 
-import java.util.stream.Collectors;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,11 +16,14 @@ el usuario y qué permisos tiene.
 */
 
 import org.springframework.stereotype.Component;
+import org.springframework.lang.NonNull;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.FaceLit.backend.auth.service.roleandpermission.JwtService;
+import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 @Component
 public class JwtFilter extends OncePerRequestFilter {
@@ -30,15 +32,17 @@ public class JwtFilter extends OncePerRequestFilter {
     // exactamente UNA vez por request — nunca dos veces
 
     private final JwtService jwtService;
+    private final UserRoleRepository userRoleRepository;
 
-    public JwtFilter(JwtService jwtService) {
+    public JwtFilter(JwtService jwtService, UserRoleRepository userRoleRepository) {
         this.jwtService = jwtService;
+        this.userRoleRepository = userRoleRepository;
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain)
+        protected void doFilterInternal(@NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain)
             throws ServletException, IOException {
 
         // 1. Leer el header Authorization del request
@@ -61,9 +65,20 @@ public class JwtFilter extends OncePerRequestFilter {
             return;
         }
 
-        // 5. Extraer rol y permisos del token
-        String role = jwtService.extractRole(token);
-        List<String> permissions = jwtService.extractPermissions(token);
+        // 5. Resolver el rol y los permisos actuales desde la BD.
+        // El JWT identifica al usuario, pero no congela su autorizacion.
+        java.util.UUID userId = jwtService.extractUserId(token);
+        List<Object[]> currentAuthorities = userRoleRepository.findCurrentAuthorities(userId);
+        if (currentAuthorities.isEmpty()) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        String role = currentAuthorities.get(0)[0].toString();
+        List<String> permissions = currentAuthorities.stream()
+            .map(authority -> authority[1].toString())
+            .distinct()
+            .toList();
 
         // 6. Construir las autoridades que Spring Security entiende
         // El rol lleva prefijo ROLE_ — así funciona hasRole() en Spring
@@ -71,12 +86,9 @@ public class JwtFilter extends OncePerRequestFilter {
         //
         // Ejemplo resultado:
         // [ROLE_INSTRUCTOR, VIEW_OWN_PROFILE, VIEW_ATTENDANCE]
-        List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
+        List<SimpleGrantedAuthority> authorities = new ArrayList<>();
         authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
-        authorities.addAll(
-                permissions.stream()
-                        .map(SimpleGrantedAuthority::new)
-                        .collect(Collectors.toList()));
+        authorities.addAll(permissions.stream().map(SimpleGrantedAuthority::new).toList());
 
         // 7. Crear el objeto de autenticación para Spring Security
         // null en las credenciales — ya no las necesitamos, el token es suficiente

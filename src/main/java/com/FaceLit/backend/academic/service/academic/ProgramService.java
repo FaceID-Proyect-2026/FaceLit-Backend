@@ -18,6 +18,8 @@ public interface ProgramService {
     // Eliminacion logica — cambia state a INACTIVE
     void deleteProgram(UUID id);
 
+    void reactivateProgram(UUID id);
+
     // Lista todos los programas
     List<ProgramResponseDTO> getAllPrograms();
 

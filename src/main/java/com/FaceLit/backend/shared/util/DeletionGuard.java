@@ -9,7 +9,7 @@ public final class DeletionGuard {
     }
 
     // dependentCount -> cuántos registros dependientes existen
-    // dependentLabel -> "ficha", "aprendiz", "ambiente", "horario"... (singular)
+    // dependentLabel -> "ficha", "aprendiz", "ambiente"... (singular)
     // actionHint -> qué debe hacer el usuario antes de poder eliminar
     // exceptionFactory -> el constructor de la excepción propia de cada módulo
     public static void assertNoDependents(

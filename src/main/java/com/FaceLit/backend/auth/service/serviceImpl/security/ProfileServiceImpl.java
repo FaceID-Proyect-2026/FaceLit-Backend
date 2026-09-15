@@ -27,7 +27,6 @@ public class ProfileServiceImpl implements  ProfileService {
                 user.getIdUser(),
                 user.getFirstName(),
                 user.getLastName(),
-                user.getDocumentType().getAbbreviation(),
                 user.getDocumentNumber(),
                 user.getCredential().getEmail()
         );

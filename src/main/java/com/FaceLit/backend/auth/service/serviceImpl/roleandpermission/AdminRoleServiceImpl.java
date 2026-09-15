@@ -16,7 +16,6 @@ import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.AdminRoleService;
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -83,15 +82,14 @@ public class AdminRoleServiceImpl implements AdminRoleService {
         Role newRole = roleRepository.findByNameRole(dto.getRole())
                 .orElseThrow(() -> new LoginException("Rol no encontrado"));
 
-        // 3. Buscar si ya tiene un rol asignado
-        // Si ya tiene uno → actualizarlo
-        // Si no tiene → crear uno nuevo
-        UserRole userRole = userRoleRepository.findByUserId(userId)
-                .orElse(new UserRole());
+        // Un usuario solo puede conservar el rol que acaba de asignarse.
+        // Esto evita que una asignacion anterior mantenga permisos activos.
+        userRoleRepository.deleteByUser_IdUser(userId);
+
+        UserRole userRole = new UserRole();
 
         userRole.setUser(user);
         userRole.setRole(newRole);
-        userRole.setAssignmentDate(LocalDate.now());
         userRole.setAssignedAt(OffsetDateTime.now());
         userRoleRepository.save(userRole);
 
