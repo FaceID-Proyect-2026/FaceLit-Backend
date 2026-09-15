@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="001-create-pending-transfer-table" author="FaceLit">
+        <sql dbms="postgresql">
+            CREATE SCHEMA IF NOT EXISTS academic;
+
+            CREATE TABLE IF NOT EXISTS academic.pending_transfer (
+                id_pending_transfer UUID PRIMARY KEY,
+                id_user_app UUID NOT NULL,
+                current_chip_id UUID NOT NULL,
+                proposed_chip_id UUID NOT NULL,
+                source_row INTEGER NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+                created_at TIMESTAMP,
+                updated_at TIMESTAMP,
+                created_by VARCHAR(100),
+                updated_by VARCHAR(100),
+                deleted_at TIMESTAMP,
+                deleted_by VARCHAR(100),
+                CONSTRAINT fk_pending_transfer_user
+                    FOREIGN KEY (id_user_app)
+                    REFERENCES security.user_app (id_user_app),
+                CONSTRAINT fk_pending_transfer_current_chip
+                    FOREIGN KEY (current_chip_id)
+                    REFERENCES academic.chip (id_chip),
+                CONSTRAINT fk_pending_transfer_proposed_chip
+                    FOREIGN KEY (proposed_chip_id)
+                    REFERENCES academic.chip (id_chip)
+            );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
