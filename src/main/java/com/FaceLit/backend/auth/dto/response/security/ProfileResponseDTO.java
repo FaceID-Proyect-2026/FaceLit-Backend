@@ -12,7 +12,6 @@ public class ProfileResponseDTO {
     private UUID idUser;
     private String firstName;
     private String lastName;
-    private String documentType;   // ej: "CC", "TI"
     private String documentNumber;
     private String email;
 

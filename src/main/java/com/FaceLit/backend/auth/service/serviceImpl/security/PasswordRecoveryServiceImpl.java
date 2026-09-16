@@ -12,7 +12,6 @@ import com.FaceLit.backend.auth.dto.request.security.ResetPasswordDTO;
 import com.FaceLit.backend.auth.dto.response.security.PasswordRecoveryResponseDTO;
 import com.FaceLit.backend.auth.exception.PasswordRecoveryException;
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
-import com.FaceLit.backend.auth.model.enums.RecoveryState;
 import com.FaceLit.backend.auth.model.security.Credential;
 import com.FaceLit.backend.auth.model.security.PasswordRecovery;
 import com.FaceLit.backend.auth.model.security.User;
@@ -68,17 +67,15 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
             passwordRecoveryRepository.save(previous);
         });
 
-        // 3. Generar el código de 6 dígitos — mismo patrón que EmailVerification
+        // 3. Generar el código numérico de seis dígitos.
         String code = verificationCodeGenerator.generate();
 
         // 4. Guardar el nuevo registro de recuperación con expiración de 5 minutos
         PasswordRecovery recovery = new PasswordRecovery();
         recovery.setUser(user);
         recovery.setToken(code);
-        recovery.setRequestDate(OffsetDateTime.now());
         recovery.setExpirationDate(OffsetDateTime.now().plusMinutes(5));
         recovery.setUsed(false);
-        recovery.setState(RecoveryState.ACTIVE);
         passwordRecoveryRepository.save(recovery);
 
         // 5. Enviar el código al correo del usuario

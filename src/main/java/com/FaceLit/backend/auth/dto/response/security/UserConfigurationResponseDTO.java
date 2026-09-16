@@ -13,37 +13,30 @@ public class UserConfigurationResponseDTO {
 
     private UUID idUserConfiguration;
     private UUID idUser;
-    private String configurationName;
-    private String description;
     private boolean notificationsActive;
     private boolean darkMode;
     private Language language;
-    private OffsetDateTime updateDate;
     private String message;
 
     public static UserConfigurationResponseDTO created(
             UUID idUserConfiguration, UUID idUser,
-            String configurationName, String description,
             boolean notificationsActive, boolean darkMode,
-            Language language, OffsetDateTime updateDate) {
+            Language language) {
         return new UserConfigurationResponseDTO(
                 idUserConfiguration, idUser,
-                configurationName, description,
                 notificationsActive, darkMode,
-                language, updateDate,
+                language,
                 "Configuracion creada correctamente");
     }
 
     public static UserConfigurationResponseDTO updated(
             UUID idUserConfiguration, UUID idUser,
-            String configurationName, String description,
             boolean notificationsActive, boolean darkMode,
-            Language language, OffsetDateTime updateDate) {
+            Language language) {
         return new UserConfigurationResponseDTO(
                 idUserConfiguration, idUser,
-                configurationName, description,
                 notificationsActive, darkMode,
-                language, updateDate,
+                language,
                 "Configuracion actualizada correctamente");
     }
 

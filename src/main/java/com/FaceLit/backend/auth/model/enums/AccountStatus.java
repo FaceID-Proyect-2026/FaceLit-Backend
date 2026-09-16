@@ -4,7 +4,6 @@ public enum AccountStatus { // EstadoCuenta
 
     ACTIVE, // Cuenta activa, puede iniciar sesión
     INACTIVE, // Cuenta inactiva
-    PENDING_CONSENT, // Pendiente de completar el proceso de registro
     BLOCKED // Cuenta bloqueada por seguridad o administración
 
 }

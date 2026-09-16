@@ -1,6 +1,7 @@
 package com.FaceLit.backend.auth.model.security;
 
 import java.util.UUID;
+import java.time.OffsetDateTime;
 
 import com.FaceLit.backend.auth.model.enums.CredentialStatus;
 import com.FaceLit.backend.shared.model.AuditBase;
@@ -53,6 +54,9 @@ public class Credential extends AuditBase {
     // Se reinicia a 0 cuando el usuario inicia sesión correctamente.
     @Column(name = "failed_attempts", nullable = false)
     private Integer failedAttempts = 0; // numero de intentos fallidos, se inicialisa en cero.
+
+    @Column(name = "locked_until")
+    private OffsetDateTime lockedUntil;
 
     @OneToOne
     @JoinColumn(name = "id_user_app", nullable = false, unique = true)

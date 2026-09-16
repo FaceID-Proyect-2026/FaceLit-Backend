@@ -12,7 +12,6 @@ import com.FaceLit.backend.auth.repository.security.UserConfigurationRepository;
 import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.auth.service.security.UserConfigurationService;
 
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Service
@@ -33,12 +32,9 @@ public class UserConfigurationServiceImpl implements UserConfigurationService {
         return new UserConfigurationResponseDTO(
                 config.getIdUserConfiguration(),
                 config.getUser().getIdUser(),
-                config.getConfigurationName(),
-                config.getDescription(),
                 config.isNotificationsActive(),
                 config.isDarkMode(),
                 config.getLanguage(),
-                config.getUpdateDate(),
                 message);
     }
 
@@ -62,24 +58,18 @@ public class UserConfigurationServiceImpl implements UserConfigurationService {
         // 3. Crear la configuracion
         UserConfiguration config = new UserConfiguration();
         config.setUser(user);
-        config.setConfigurationName(dto.getConfigurationName());
-        config.setDescription(dto.getDescription());
         config.setNotificationsActive(dto.isNotificationsActive());
         config.setDarkMode(dto.isDarkMode());
         config.setLanguage(dto.getLanguage());
-        config.setUpdateDate(OffsetDateTime.now());
 
         UserConfiguration saved = userConfigurationRepository.save(config);
 
         return UserConfigurationResponseDTO.created(
                 saved.getIdUserConfiguration(),
                 saved.getUser().getIdUser(),
-                saved.getConfigurationName(),
-                saved.getDescription(),
                 saved.isNotificationsActive(),
                 saved.isDarkMode(),
-                saved.getLanguage(),
-                saved.getUpdateDate());
+                saved.getLanguage());
 
     }
 
@@ -95,25 +85,18 @@ public class UserConfigurationServiceImpl implements UserConfigurationService {
                         "No tienes una configuracion creada. Crea una primero"));
 
         // 2. Actualizar los campos
-        config.setConfigurationName(dto.getConfigurationName());
-        config.setDescription(dto.getDescription());
         config.setNotificationsActive(dto.isNotificationsActive());
         config.setDarkMode(dto.isDarkMode());
         config.setLanguage(dto.getLanguage());
-        // Actualiza la fecha de modificacion
-        config.setUpdateDate(OffsetDateTime.now());
 
         UserConfiguration updated = userConfigurationRepository.save(config);
 
         return UserConfigurationResponseDTO.updated(
                 updated.getIdUserConfiguration(),
                 updated.getUser().getIdUser(),
-                updated.getConfigurationName(),
-                updated.getDescription(),
                 updated.isNotificationsActive(),
                 updated.isDarkMode(),
-                updated.getLanguage(),
-                updated.getUpdateDate());
+                updated.getLanguage());
     }
 
     @Override

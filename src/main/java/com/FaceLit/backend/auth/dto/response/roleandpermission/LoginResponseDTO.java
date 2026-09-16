@@ -27,7 +27,7 @@ public class LoginResponseDTO {
     // Ejemplo: "Inicio de sesión exitoso"
     private String message;
 
-    // Método de fábrica — igual que usas en RegisterResponseDTO
+    // Método de fábrica para la respuesta de autenticación.
     public static LoginResponseDTO success(String token, String role, List<String> permissions, UUID userId) {
         return new LoginResponseDTO(token, role, permissions, userId, "Inicio de sesión exitoso");
     }

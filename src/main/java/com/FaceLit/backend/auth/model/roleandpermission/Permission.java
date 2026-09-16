@@ -29,6 +29,6 @@ public class Permission extends AuditBase {
     @Column(name = "name_permission", nullable = false, length = 100)
     private String namePermission;
 
-    @Column(name = "description", length = 255)
+    @Column(name = "descripcion", columnDefinition = "TEXT")
     private String description;
 }

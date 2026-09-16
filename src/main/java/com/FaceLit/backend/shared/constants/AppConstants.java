@@ -7,6 +7,9 @@ public final class AppConstants {
     public static final int VERIFICATION_CODE_MAX = 999999;
     public static final int VERIFICATION_EXPIRY_MINUTES = 5;
 
+    public static final int MAX_LOGIN_ATTEMPTS = 3;
+    public static final int LOGIN_LOCK_MINUTES = 15;
+
     // ── NUEVO — Reenvío de códigos (cooldown) ────────────────
     public static final int RESEND_COOLDOWN_SECONDS = 60;
 
@@ -14,9 +17,6 @@ public final class AppConstants {
     public static final int MIN_AGE = 8;
     public static final int MAX_AGE = 100;
     public static final int LEGAL_AGE = 18;
-
-    // ── Códigos de ficha ─────────────────────────────────────
-    public static final int CHIP_CODE_LENGTH = 8;
 
     // ── JWT ──────────────────────────────────────────────────
     public static final String ROLE_PREFIX = "ROLE_";

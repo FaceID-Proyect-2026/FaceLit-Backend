@@ -14,7 +14,7 @@ public class ResetPasswordDTO {
     @Pattern(regexp = "^[0-9]{6}$", message = "El código debe tener exactamente 6 dígitos numéricos")
     private String token;
 
-    // Misma validación de complejidad que en RegisterRequestDTO
+    // Política de contraseña compartida por recuperación y cambio voluntario.
     @NotBlank(message = "La nueva contraseña es obligatoria")
     @Pattern(
         regexp = "^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*]).{8,15}$",

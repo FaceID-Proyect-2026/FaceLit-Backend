@@ -7,7 +7,7 @@ import jakarta.persistence.EntityListeners;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import jakarta.persistence.Column;
@@ -25,11 +25,11 @@ public abstract class AuditBase {  // Auditoria Base
 
     @CreationTimestamp   // Fecha y hora en que el registro fue creado, Se asigna automáticamente al momento de persistir el registro.
     @Column(name = "created_at")
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 
     @UpdateTimestamp  // Fecha y hora de la última modificación del registro,   Se actualiza automáticamente cada vez que el registro cambia. 
     @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+    private OffsetDateTime updatedAt;
 
     // Pendiente hasta que haya login con JWT — por ahora siempre null
     @Column(name = "created_by",  length = 100)
@@ -43,7 +43,7 @@ public abstract class AuditBase {  // Auditoria Base
 
     // Soft delete — null mientras el registro esté activo
     @Column(name = "deleted_at", length = 100)  // Fecha y hora en que el registro fue eliminado lógicamente (soft delete).
-    private LocalDateTime deletedAt;
+    private OffsetDateTime deletedAt;
 
     // Soft delete — null mientras el registro esté activo
     @Column(name = "deleted_by", length = 100)   // ID del usuario que realizó la eliminación lógica.

@@ -16,6 +16,8 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
     // Busacr credenciales por email
     Optional<Credential> findByEmail(String email); // Opcional es una clase que puede contener un valor o vacio.
 
+    Optional<Credential> findByUser_DocumentNumber(String documentNumber);
+
     // En auth/repository/security/CredentialRepository.java
     Optional<Credential> findByUser(User user);
 
