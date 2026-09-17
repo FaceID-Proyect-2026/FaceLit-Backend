@@ -1,7 +1,6 @@
 package com.FaceLit.backend.auth.service.serviceImpl.security;
 
 import java.time.OffsetDateTime;
-import java.util.Random;
 
 
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -9,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import com.FaceLit.backend.auth.dto.request.security.RequestPasswordRecoveryDTO;
 import com.FaceLit.backend.auth.dto.request.security.ResetPasswordDTO;
+import com.FaceLit.backend.auth.dto.request.security.VerifyTokenDTO;
 import com.FaceLit.backend.auth.dto.response.security.PasswordRecoveryResponseDTO;
 import com.FaceLit.backend.auth.exception.PasswordRecoveryException;
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
@@ -83,6 +83,22 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
 
         // 6. Responder confirmando el envío
         return PasswordRecoveryResponseDTO.codeSent();
+    }
+
+    @Override
+    @Transactional
+    public PasswordRecoveryResponseDTO verifyToken(VerifyTokenDTO dto) {
+        PasswordRecovery recovery = passwordRecoveryRepository.findByToken(dto.getToken())
+                .orElseThrow(() -> new PasswordRecoveryException("Código incorrecto"));
+
+        if (!recovery.isCurrent()) {
+            if (recovery.isUsed()) {
+                throw new PasswordRecoveryException("Código incorrecto");
+            }
+            throw new PasswordRecoveryException("Código vencido");
+        }
+
+        return PasswordRecoveryResponseDTO.tokenVerified();
     }
 
     @Override

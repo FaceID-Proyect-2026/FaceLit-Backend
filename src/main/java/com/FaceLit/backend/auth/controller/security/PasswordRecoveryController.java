@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.FaceLit.backend.auth.dto.request.security.RequestPasswordRecoveryDTO;
 import com.FaceLit.backend.auth.dto.request.security.ResetPasswordDTO;
+import com.FaceLit.backend.auth.dto.request.security.VerifyTokenDTO;
 import com.FaceLit.backend.auth.dto.request.security.ChangePasswordRequestDTO;
 import com.FaceLit.backend.auth.dto.response.security.PasswordRecoveryResponseDTO;
 import com.FaceLit.backend.auth.service.security.ChangePasswordService;
@@ -40,6 +41,12 @@ public class PasswordRecoveryController {
             @Valid @RequestBody RequestPasswordRecoveryDTO dto) {
         PasswordRecoveryResponseDTO response = passwordRecoveryService.requestRecovery(dto);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/verify-token")
+    public ResponseEntity<PasswordRecoveryResponseDTO> verifyToken(
+            @Valid @RequestBody VerifyTokenDTO dto) {
+        return ResponseEntity.ok(passwordRecoveryService.verifyToken(dto));
     }
 
     // PASO 2 — Restablecer contraseña: el usuario manda el código + nueva

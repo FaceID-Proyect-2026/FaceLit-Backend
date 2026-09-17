@@ -40,7 +40,7 @@ public class SecurityConfig {
 
                         // ─── SOLO COORDINADOR ────────────────────────
                         // Ver todos los usuarios, asignar roles, gestionar todo
-                        .requestMatchers("/api/admin/**").hasRole("COORDINADOR")
+                        .requestMatchers("/api/admin/**").hasRole("COORDINATOR")
 
                         // ─── PERFIL PERSONAL — cualquier usuario autenticado, sin importar rol ───
                         .requestMatchers("/api/profile/**").authenticated()

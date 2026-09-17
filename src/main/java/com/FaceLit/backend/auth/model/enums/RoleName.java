@@ -1,7 +1,7 @@
 package com.FaceLit.backend.auth.model.enums;
 
 public enum RoleName {
-    APRENDIZ,
+    APPRENTICE,
     INSTRUCTOR,
-    COORDINADOR
+    COORDINATOR
 }
