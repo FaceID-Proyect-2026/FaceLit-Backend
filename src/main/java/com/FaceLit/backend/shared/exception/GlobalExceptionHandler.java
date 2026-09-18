@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.FaceLit.backend.auth.exception.PasswordRecoveryException;
 import com.FaceLit.backend.auth.exception.UserManagementException;
 import com.FaceLit.backend.auth.exception.ChangePasswordException;
+import com.FaceLit.backend.academic.exception.AcademicException;
 
 @RestControllerAdvice // esta anotacion funciona para que se escuchen TODOS los errores que ocurre en
 // los controller
@@ -36,6 +37,11 @@ public class GlobalExceptionHandler { // esta clase es para que capture errores 
 
     @ExceptionHandler(ChangePasswordException.class)
     public ResponseEntity<Map<String, String>> handleChangePassword(ChangePasswordException ex) {
+        return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+    }
+
+    @ExceptionHandler(AcademicException.class)
+    public ResponseEntity<Map<String, String>> handleAcademic(AcademicException ex) {
         return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
     }
 
