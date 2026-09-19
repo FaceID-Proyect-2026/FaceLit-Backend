@@ -1,0 +1,245 @@
+package com.FaceLit.backend.academic.service.serviceImpl.academic;
+
+import java.time.OffsetDateTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.FaceLit.backend.academic.dto.request.academic.TransferChipRequestDTO;
+import com.FaceLit.backend.academic.dto.request.academic.UserChipRequestDTO;
+import com.FaceLit.backend.academic.dto.response.academic.UserChipResponseDTO;
+import com.FaceLit.backend.academic.exception.AcademicException;
+import com.FaceLit.backend.academic.model.academic.ChangeHistory;
+import com.FaceLit.backend.academic.model.academic.Chip;
+import com.FaceLit.backend.academic.model.academic.UserChip;
+import com.FaceLit.backend.academic.model.enums.AcademicState;
+import com.FaceLit.backend.academic.model.enums.ChangeAction;
+import com.FaceLit.backend.academic.repository.ChangeHistoryRepository;
+import com.FaceLit.backend.academic.repository.ChipRepository;
+import com.FaceLit.backend.academic.repository.UserChipRepository;
+import com.FaceLit.backend.auth.model.enums.AccountStatus;
+import com.FaceLit.backend.auth.model.enums.CredentialStatus;
+import com.FaceLit.backend.auth.model.security.Credential;
+import com.FaceLit.backend.auth.model.security.User;
+import com.FaceLit.backend.auth.repository.security.CredentialRepository;
+import com.FaceLit.backend.auth.repository.security.UserRepository;
+import com.FaceLit.backend.academic.service.academic.UserChipService;
+
+@Service
+public class UserChipServiceImpl implements UserChipService {
+
+    private final UserChipRepository userChipRepository;
+    private final UserRepository userRepository;
+    private final CredentialRepository credentialRepository;
+    private final ChipRepository chipRepository;
+    private final ChangeHistoryRepository changeHistoryRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    public UserChipServiceImpl(
+            UserChipRepository userChipRepository,
+            UserRepository userRepository,
+            CredentialRepository credentialRepository,
+            ChipRepository chipRepository,
+            ChangeHistoryRepository changeHistoryRepository,
+            PasswordEncoder passwordEncoder) {
+        this.userChipRepository = userChipRepository;
+        this.userRepository = userRepository;
+        this.credentialRepository = credentialRepository;
+        this.chipRepository = chipRepository;
+        this.changeHistoryRepository = changeHistoryRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
+
+    @Override
+    @Transactional
+    public UserChipResponseDTO assignInitialChip(UUID idChip, UserChipRequestDTO dto) {
+        Chip chip = chipRepository.findById(idChip)
+                .orElseThrow(() -> new AcademicException("Ficha no encontrada.", HttpStatus.NOT_FOUND));
+
+        if (chip.getState() != AcademicState.ACTIVE) {
+            throw new AcademicException("La ficha no está activa.", HttpStatus.BAD_REQUEST);
+        }
+
+        final String[] generatedPasswordHolder = {null};
+        User user;
+        if (dto.getIdUser() != null) {
+            user = userRepository.findById(dto.getIdUser())
+                    .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
+        } else {
+            user = userRepository.findByDocumentNumber(dto.getDocumento()).orElseGet(() -> {
+                User newUser = new User();
+                newUser.setDocumentNumber(dto.getDocumento());
+                newUser.setFirstName(dto.getNombre());
+                newUser.setLastName(dto.getApellido());
+                newUser.setAccountStatus(AccountStatus.ACTIVE);
+                newUser = userRepository.saveAndFlush(newUser);
+
+                String generatedPassword = generatePassword();
+                generatedPasswordHolder[0] = generatedPassword;
+                Credential credential = new Credential();
+                credential.setUser(newUser);
+                credential.setEmail(dto.getCorreo().toLowerCase(Locale.ROOT));
+                credential.setPassword(passwordEncoder.encode(generatedPassword));
+                credential.setCredentialStatus(CredentialStatus.ACTIVE);
+                credential.setFailedAttempts(0);
+                credentialRepository.saveAndFlush(credential);
+                return newUser;
+            });
+        }
+
+        if (userChipRepository.existsByUser_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE)) {
+            throw new AcademicException("Este aprendiz ya tiene una ficha activa. Usa el traslado para cambiarlo de ficha.", HttpStatus.CONFLICT);
+        }
+
+        UserChip userChip = new UserChip();
+        userChip.setUser(user);
+        userChip.setChip(chip);
+        userChip.setState(AcademicState.ACTIVE);
+        userChip.setAssignmentDate(OffsetDateTime.now());
+        userChip = userChipRepository.saveAndFlush(userChip);
+
+        recordChange(userChip, "user_chip", null, chip.getChipCode(), ChangeAction.CREATE, "chip");
+        return new UserChipResponseDTO(userChip, generatedPasswordHolder[0]);
+    }
+
+    private String generatePassword() {
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@$!%*?";
+        StringBuilder password = new StringBuilder();
+        password.append((char) ('A' + (int) (Math.random() * 26)));
+        password.append((int) (Math.random() * 10));
+        password.append("@$!%*?".charAt((int) (Math.random() * 6)));
+        while (password.length() < 10) {
+            password.append(chars.charAt((int) (Math.random() * chars.length())));
+        }
+        return password.toString();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserChipResponseDTO> findApprenticesByChip(UUID idChip) {
+        Chip chip = chipRepository.findById(idChip)
+                .orElseThrow(() -> new AcademicException("Ficha no encontrada.", HttpStatus.NOT_FOUND));
+        return userChipRepository.findAll().stream()
+                .filter(uc -> uc.getChip().getIdChip().equals(chip.getIdChip()) && uc.getState() == AcademicState.ACTIVE)
+                .map(UserChipResponseDTO::new)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserChipResponseDTO getActiveChipByUser(UUID idUser) {
+        User user = userRepository.findById(idUser)
+                .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
+
+        UserChip chip = userChipRepository.findAll().stream()
+                .filter(uc -> uc.getUser().getIdUser().equals(user.getIdUser()) && uc.getState() == AcademicState.ACTIVE)
+                .findFirst()
+                .orElseThrow(() -> new AcademicException("El aprendiz no tiene una ficha activa para trasladar.", HttpStatus.BAD_REQUEST));
+
+        return new UserChipResponseDTO(chip);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserChipResponseDTO> getChipHistoryByUser(UUID idUser) {
+        User user = userRepository.findById(idUser)
+                .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
+
+        return userChipRepository.findAll().stream()
+                .filter(uc -> uc.getUser().getIdUser().equals(user.getIdUser()))
+                .sorted(Comparator.comparing(UserChip::getAssignmentDate).reversed())
+                .map(UserChipResponseDTO::new)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserChipResponseDTO> getTransferTargets(UUID idUser) {
+        User user = userRepository.findById(idUser)
+                .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
+
+        Optional<UserChip> current = userChipRepository.findAll().stream()
+                .filter(uc -> uc.getUser().getIdUser().equals(user.getIdUser()) && uc.getState() == AcademicState.ACTIVE)
+                .findFirst();
+
+        if (current.isEmpty()) {
+            throw new AcademicException("El aprendiz no tiene una ficha activa para trasladar.", HttpStatus.BAD_REQUEST);
+        }
+
+        UUID currentChipId = current.get().getChip().getIdChip();
+        return chipRepository.findByState(AcademicState.ACTIVE).stream()
+                .filter(chip -> !chip.getIdChip().equals(currentChipId))
+                .map(chip -> new UserChipResponseDTO(userChipRepository.findAll().stream()
+                        .filter(uc -> uc.getUser().getIdUser().equals(user.getIdUser()) && uc.getChip().getIdChip().equals(chip.getIdChip()) && uc.getState() == AcademicState.ACTIVE)
+                        .findFirst()
+                        .orElseGet(() -> {
+                            UserChip temp = new UserChip();
+                            temp.setIdUserChip(UUID.randomUUID());
+                            temp.setUser(user);
+                            temp.setChip(chip);
+                            temp.setState(AcademicState.ACTIVE);
+                            temp.setAssignmentDate(OffsetDateTime.now());
+                            return temp;
+                        })))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public UserChipResponseDTO transferChip(UUID idUser, TransferChipRequestDTO dto) {
+        if (dto == null || dto.getIdNewChip() == null) {
+            throw new AcademicException("Debes seleccionar una ficha destino.", HttpStatus.BAD_REQUEST);
+        }
+
+        User user = userRepository.findById(idUser)
+                .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
+
+        UserChip current = userChipRepository.findAll().stream()
+                .filter(uc -> uc.getUser().getIdUser().equals(user.getIdUser()) && uc.getState() == AcademicState.ACTIVE)
+                .findFirst()
+                .orElseThrow(() -> new AcademicException("El aprendiz no tiene una ficha activa para trasladar.", HttpStatus.BAD_REQUEST));
+
+        Chip destination = chipRepository.findById(dto.getIdNewChip())
+                .orElseThrow(() -> new AcademicException("La ficha destino no existe.", HttpStatus.NOT_FOUND));
+
+        if (destination.getState() != AcademicState.ACTIVE) {
+            throw new AcademicException("La ficha destino no está activa.", HttpStatus.BAD_REQUEST);
+        }
+
+        if (destination.getIdChip().equals(current.getChip().getIdChip())) {
+            throw new AcademicException("La ficha destino debe ser diferente a la actual.", HttpStatus.BAD_REQUEST);
+        }
+
+        String previousCode = current.getChip().getChipCode();
+        current.setState(AcademicState.INACTIVE);
+        userChipRepository.save(current);
+
+        UserChip newAssignment = new UserChip();
+        newAssignment.setUser(user);
+        newAssignment.setChip(destination);
+        newAssignment.setState(AcademicState.ACTIVE);
+        newAssignment.setAssignmentDate(OffsetDateTime.now());
+        newAssignment = userChipRepository.save(newAssignment);
+
+        recordChange(newAssignment, "user_chip", previousCode, destination.getChipCode(), ChangeAction.UPDATE, "chip");
+        return new UserChipResponseDTO(newAssignment);
+    }
+
+    private void recordChange(UserChip userChip, String entityName, String oldValue, String newValue, ChangeAction action, String fieldName) {
+        ChangeHistory history = new ChangeHistory();
+        history.setEntityName(entityName);
+        history.setEntityId(userChip.getIdUserChip());
+        history.setFieldName(fieldName);
+        history.setOldValue(oldValue);
+        history.setNewValue(newValue);
+        history.setAction(action);
+        changeHistoryRepository.save(history);
+    }
+}

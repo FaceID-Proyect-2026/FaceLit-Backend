@@ -50,9 +50,9 @@ public class User extends AuditBase {
 
     // =========================================================
     // NÚMERO DE DOCUMENTO
-    // No puede repetirse
+    // No puede repetirse. En Colombia puede variar según tipo de documento.
     // =========================================================
-        @Column(name = "number_document", nullable = false, length = 10)
+        @Column(name = "number_document", nullable = false, length = 30)
     private String documentNumber;
 
     // =========================================================

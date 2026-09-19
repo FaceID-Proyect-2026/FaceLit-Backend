@@ -23,6 +23,7 @@ import com.FaceLit.backend.academic.repository.UserChipRepository;
 import com.FaceLit.backend.academic.service.academic.ChipService;
 
 @Service
+// Facade de fichas: concentra validaciones, persistencia y bitácora detrás del contrato del servicio.
 public class ChipServiceImpl implements ChipService {
 
     private final ChipRepository chipRepository;
@@ -57,7 +58,7 @@ public class ChipServiceImpl implements ChipService {
         chip.setProgram(program);
         chip.setChipCode(code);
         chip.setState(AcademicState.ACTIVE);
-        chip = chipRepository.save(chip);
+        chip = chipRepository.saveAndFlush(chip);
         record(chip, null, chip.getChipCode(), ChangeAction.CREATE);
         return new ChipResponseDTO(chip);
     }
@@ -76,6 +77,14 @@ public class ChipServiceImpl implements ChipService {
     @Transactional(readOnly = true)
     public ChipResponseDTO findById(UUID idChip) {
         return new ChipResponseDTO(getChip(idChip));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ChipResponseDTO> searchByCode(String code) {
+        if (code == null || code.isBlank()) return List.of();
+        return chipRepository.findByChipCodeContainingIgnoreCase(code.trim()).stream()
+                .map(ChipResponseDTO::new).toList();
     }
 
     @Override

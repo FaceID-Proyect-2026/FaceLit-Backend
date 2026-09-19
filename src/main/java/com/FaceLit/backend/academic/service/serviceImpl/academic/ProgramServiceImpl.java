@@ -22,6 +22,7 @@ import com.FaceLit.backend.academic.repository.ProgramRepository;
 import com.FaceLit.backend.academic.service.academic.ProgramService;
 
 @Service
+// Facade de programas: el controller usa este servicio y no conoce repositorios ni reglas de persistencia.
 public class ProgramServiceImpl implements ProgramService {
 
     private final ProgramRepository programRepository;
@@ -59,19 +60,39 @@ public class ProgramServiceImpl implements ProgramService {
         program.setState(AcademicState.ACTIVE);
         program = programRepository.save(program);
         record(program, "program", null, program.getProgramName(), ChangeAction.CREATE);
-        return new ProgramResponseDTO(program);
+        return new ProgramResponseDTO(program, chipRepository.findByProgram_IdProgram(program.getIdProgram()));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ProgramResponseDTO> findAll() {
-        return programRepository.findAll().stream().map(ProgramResponseDTO::new).toList();
+        return programRepository.findAll().stream()
+                .map(program -> new ProgramResponseDTO(program, chipRepository.findByProgram_IdProgram(program.getIdProgram())))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProgramResponseDTO> searchByName(String name) {
+        if (name == null || name.isBlank()) return List.of();
+        return programRepository.findByProgramNameContainingIgnoreCase(name.trim()).stream()
+                .map(program -> new ProgramResponseDTO(program, chipRepository.findByProgram_IdProgram(program.getIdProgram())))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProgramResponseDTO findByCode(String code) {
+        return programRepository.findByProgramCodeIgnoreCase(code.trim())
+                .map(program -> new ProgramResponseDTO(program, chipRepository.findByProgram_IdProgram(program.getIdProgram())))
+                .orElseThrow(() -> new AcademicException("Programa no encontrado", org.springframework.http.HttpStatus.NOT_FOUND));
     }
 
     @Override
     @Transactional(readOnly = true)
     public ProgramResponseDTO findById(UUID idProgram) {
-        return new ProgramResponseDTO(getProgram(idProgram));
+        Program program = getProgram(idProgram);
+        return new ProgramResponseDTO(program, chipRepository.findByProgram_IdProgram(program.getIdProgram()));
     }
 
     @Override
@@ -93,7 +114,7 @@ public class ProgramServiceImpl implements ProgramService {
         program.setProgramCode(code);
         program = programRepository.save(program);
         record(program, "program", oldValue, name + " / " + code, ChangeAction.UPDATE);
-        return new ProgramResponseDTO(program);
+        return new ProgramResponseDTO(program, chipRepository.findByProgram_IdProgram(program.getIdProgram()));
     }
 
     @Override
@@ -107,7 +128,7 @@ public class ProgramServiceImpl implements ProgramService {
         program.setDeactivationReason(null);
         program = programRepository.save(program);
         record(program, "program", AcademicState.INACTIVE.name(), AcademicState.ACTIVE.name(), ChangeAction.REACTIVATE);
-        return new ProgramResponseDTO(program);
+        return new ProgramResponseDTO(program, chipRepository.findByProgram_IdProgram(program.getIdProgram()));
     }
 
     @Override
@@ -130,7 +151,7 @@ public class ProgramServiceImpl implements ProgramService {
 
         record(program, "program", AcademicState.INACTIVE.name(), null, ChangeAction.DELETE);
         programRepository.delete(program);
-        return new ProgramResponseDTO(program);
+        return new ProgramResponseDTO(program, List.of());
     }
 
     private Program getProgram(@NonNull UUID idProgram) {

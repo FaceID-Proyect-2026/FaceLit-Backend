@@ -43,6 +43,16 @@ public class ProgramController {
         return ResponseEntity.ok(programService.findAll());
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<List<ProgramResponseDTO>> search(@RequestParam String name) {
+        return ResponseEntity.ok(programService.searchByName(name));
+    }
+
+    @GetMapping("/code/{code}")
+    public ResponseEntity<ProgramResponseDTO> findByCode(@PathVariable String code) {
+        return ResponseEntity.ok(programService.findByCode(code));
+    }
+
     @GetMapping("/{idProgram}")
     public ResponseEntity<ProgramResponseDTO> findById(@PathVariable UUID idProgram) {
         return ResponseEntity.ok(programService.findById(idProgram));

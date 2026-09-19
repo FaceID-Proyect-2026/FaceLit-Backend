@@ -50,6 +50,11 @@ public class ChipController {
         return ResponseEntity.ok(chipService.findById(idChip));
     }
 
+    @GetMapping("/chips/search")
+    public ResponseEntity<List<ChipResponseDTO>> search(@RequestParam String code) {
+        return ResponseEntity.ok(chipService.searchByCode(code));
+    }
+
     @PutMapping("/chips/{idChip}")
     public ResponseEntity<ChipResponseDTO> update(
             @PathVariable UUID idChip,

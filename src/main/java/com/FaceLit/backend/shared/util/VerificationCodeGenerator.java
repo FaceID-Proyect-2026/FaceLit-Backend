@@ -4,7 +4,7 @@ import java.util.Random;
 import org.springframework.stereotype.Component;
 import com.FaceLit.backend.shared.constants.AppConstants;
 
-//Reemplaza las 3 implementaciones duplicadas de generación de código.
+// Singleton gestionado por Spring y servicio compartido que elimina duplicación de generación de códigos.
 @Component
 public class VerificationCodeGenerator {
 

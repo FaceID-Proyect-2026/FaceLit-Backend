@@ -12,6 +12,10 @@ public interface ProgramService {
 
     List<ProgramResponseDTO> findAll();
 
+    List<ProgramResponseDTO> searchByName(String name);
+
+    ProgramResponseDTO findByCode(String code);
+
     ProgramResponseDTO findById(UUID idProgram);
 
     ProgramResponseDTO update(UUID idProgram, ProgramRequestDTO dto);

@@ -20,10 +20,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.FaceLit.backend.auth.service.roleandpermission.JwtService;
+import com.FaceLit.backend.shared.constants.AppConstants;
 
 import java.io.IOException;
 import java.util.List;
 @Component
+// Proxy/interceptor de seguridad: valida el JWT antes de que el request llegue al controller.
 public class JwtFilter extends OncePerRequestFilter {
 
     // OncePerRequestFilter garantiza que el filtro se ejecuta
@@ -43,17 +45,17 @@ public class JwtFilter extends OncePerRequestFilter {
 
         // 1. Leer el header Authorization del request
         // El frontend manda: Authorization: Bearer eyJhbGci...
-        String authHeader = request.getHeader("Authorization");
+        String authHeader = request.getHeader(AppConstants.AUTHORIZATION_HEADER);
 
         // 2. Si no viene el header o no empieza con "Bearer ", dejar pasar
         // Los endpoints públicos (login, register) no mandan token
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (authHeader == null || !authHeader.startsWith(AppConstants.BEARER_PREFIX)) {
             filterChain.doFilter(request, response);
             return;
         }
 
         // 3. Extraer el token — quitar el prefijo "Bearer "
-        String token = authHeader.substring(7);
+        String token = authHeader.substring(AppConstants.BEARER_PREFIX.length());
 
         // 4. Validar el token — firma correcta y no expirado
         if (!jwtService.validateToken(token)) {
@@ -72,7 +74,7 @@ public class JwtFilter extends OncePerRequestFilter {
         // Ejemplo resultado:
         // [ROLE_INSTRUCTOR, VIEW_OWN_PROFILE, VIEW_ATTENDANCE]
         List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
-        authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+        authorities.add(new SimpleGrantedAuthority(AppConstants.ROLE_PREFIX + role));
         authorities.addAll(
                 permissions.stream()
                         .map(SimpleGrantedAuthority::new)

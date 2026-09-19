@@ -51,7 +51,13 @@ public class LoginServiceImpl implements LoginService {
     @Override
     public LoginResponseDTO login(LoginRequestDTO dto) {
 
-        Credential credential = credentialRepository.findByUser_DocumentNumber(dto.getNumberDocument())
+        String identifier = dto.resolveIdentifier();
+        if (identifier == null || identifier.isBlank()) {
+            throw new LoginException("Debes indicar un documento o correo válido.");
+        }
+
+        Credential credential = credentialRepository.findByUser_DocumentNumber(identifier)
+            .or(() -> credentialRepository.findByEmailIgnoreCase(identifier))
             .orElseThrow(() -> new LoginException("Usuario o contraseña incorrectos"));
 
         // 3. Obtener el usuario asociado a esa credencial

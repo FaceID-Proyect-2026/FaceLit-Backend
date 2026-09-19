@@ -14,6 +14,8 @@ public interface ChipService {
 
     ChipResponseDTO findById(UUID idChip);
 
+    List<ChipResponseDTO> searchByCode(String code);
+
     ChipResponseDTO update(UUID idChip, ChipRequestDTO dto);
 
     ChipResponseDTO reactivate(UUID idChip);

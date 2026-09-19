@@ -13,6 +13,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 import jakarta.persistence.Column;
 
 
+// Template de datos de auditoría: las entidades heredan estos campos comunes.
+// No es un Template Method GoF porque no define un algoritmo con hooks sobrescribibles.
 @MappedSuperclass  //  Anotacion que indica que voy a usar los atributos de esta clase,  pero no se va a crear en la base de datos. 
 @EntityListeners(AuditingEntityListener.class) //  // Anotacion que indica que esta clase va a ser escuchada por el AuditingEntityListener, que es el encargado de llenar los campos de auditoria. 
 @NoArgsConstructor  // Generar automaticamente los  contructores sin parametros

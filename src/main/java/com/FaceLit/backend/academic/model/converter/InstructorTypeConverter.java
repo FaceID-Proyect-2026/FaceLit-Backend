@@ -13,7 +13,10 @@ public class InstructorTypeConverter implements AttributeConverter<InstructorTyp
         if (attribute == null) {
             return null;
         }
-        return attribute == InstructorType.CROSS_CUTTING ? "CROSS-CUTTING" : "SPECIFIC";
+        return switch (attribute) {
+            case ESPECIFICO -> "SPECIFIC";
+            case TRANSVERSAL -> "CROSS-CUTTING";
+        };
     }
 
     @Override
@@ -21,9 +24,9 @@ public class InstructorTypeConverter implements AttributeConverter<InstructorTyp
         if (value == null) {
             return null;
         }
-        return switch (value) {
-            case "SPECIFIC" -> InstructorType.SPECIFIC;
-            case "CROSS-CUTTING" -> InstructorType.CROSS_CUTTING;
+        return switch (value.trim().toUpperCase()) {
+            case "ESPECIFICO", "SPECIFIC" -> InstructorType.ESPECIFICO;
+            case "TRANSVERSAL", "CROSS-CUTTING", "CROSS_CUTTING" -> InstructorType.TRANSVERSAL;
             default -> throw new IllegalArgumentException("Tipo de instructor no soportado: " + value);
         };
     }

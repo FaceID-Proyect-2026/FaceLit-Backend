@@ -2,7 +2,6 @@ package com.FaceLit.backend.auth.service.serviceImpl.security;
 
 import java.time.OffsetDateTime;
 
-
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -18,6 +17,7 @@ import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.PasswordRecoveryRepository;
 import com.FaceLit.backend.auth.service.security.PasswordRecoveryService;
+import com.FaceLit.backend.shared.constants.AppConstants;
 import com.FaceLit.backend.shared.service.EmailService;
 import com.FaceLit.backend.shared.util.VerificationCodeGenerator;
 
@@ -74,7 +74,8 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
         PasswordRecovery recovery = new PasswordRecovery();
         recovery.setUser(user);
         recovery.setToken(code);
-        recovery.setExpirationDate(OffsetDateTime.now().plusMinutes(5));
+        recovery.setExpirationDate(OffsetDateTime.now()
+            .plusMinutes(AppConstants.PASSWORD_RECOVERY_EXPIRY_MINUTES));
         recovery.setUsed(false);
         passwordRecoveryRepository.save(recovery);
 
