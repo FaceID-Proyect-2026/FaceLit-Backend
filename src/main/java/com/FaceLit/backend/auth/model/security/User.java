@@ -3,6 +3,7 @@ package com.FaceLit.backend.auth.model.security;
 import java.util.UUID;
 
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
+import com.FaceLit.backend.shared.constants.AppConstants;
 import com.FaceLit.backend.shared.model.AuditBase;
 
 import jakarta.persistence.CascadeType;
@@ -52,19 +53,19 @@ public class User extends AuditBase {
     // NÚMERO DE DOCUMENTO
     // No puede repetirse. En Colombia puede variar según tipo de documento.
     // =========================================================
-        @Column(name = "number_document", nullable = false, length = 30)
+    @Column(name = "number_document", nullable = false, length = AppConstants.DOCUMENT_NUMBER_MAX_LENGTH)
     private String documentNumber;
 
     // =========================================================
     // NOMBRE DEL USUARIO
     // =========================================================
-        @Column(name = "first_name", nullable = false, length = 60)
+    @Column(name = "first_name", nullable = false, length = 60)
     private String firstName;
 
     // =========================================================
     // APELLIDO DEL USUARIO
     // =========================================================
-        @Column(name = "last_name", nullable = false, length = 60)
+    @Column(name = "last_name", nullable = false, length = 60)
     private String lastName;
 
     // =========================================================

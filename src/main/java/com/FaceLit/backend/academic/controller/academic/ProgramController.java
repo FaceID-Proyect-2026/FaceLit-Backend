@@ -3,6 +3,7 @@ package com.FaceLit.backend.academic.controller.academic;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -40,17 +41,23 @@ public class ProgramController {
 
     @GetMapping
     public ResponseEntity<List<ProgramResponseDTO>> findAll() {
-        return ResponseEntity.ok(programService.findAll());
+        return noStore(programService.findAll());
     }
 
     @GetMapping("/search")
     public ResponseEntity<List<ProgramResponseDTO>> search(@RequestParam String name) {
-        return ResponseEntity.ok(programService.searchByName(name));
+        return noStore(programService.searchByName(name));
     }
 
     @GetMapping("/code/{code}")
     public ResponseEntity<ProgramResponseDTO> findByCode(@PathVariable String code) {
         return ResponseEntity.ok(programService.findByCode(code));
+    }
+
+    private <T> ResponseEntity<T> noStore(T body) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(body);
     }
 
     @GetMapping("/{idProgram}")

@@ -24,13 +24,16 @@ import com.FaceLit.backend.academic.repository.ChangeHistoryRepository;
 import com.FaceLit.backend.academic.repository.InstructorProgramRepository;
 import com.FaceLit.backend.academic.repository.InstructorRepository;
 import com.FaceLit.backend.academic.repository.ProgramRepository;
+import com.FaceLit.backend.academic.service.academic.InstructorService;
+import com.FaceLit.backend.auth.dto.request.roleandpermission.AssignRoleRequestDTO;
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
 import com.FaceLit.backend.auth.model.enums.CredentialStatus;
+import com.FaceLit.backend.auth.model.enums.RoleName;
 import com.FaceLit.backend.auth.model.security.Credential;
 import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
-import com.FaceLit.backend.academic.service.academic.InstructorService;
+import com.FaceLit.backend.auth.service.roleandpermission.AdminRoleService;
 
 @Service
 public class InstructorServiceImpl implements InstructorService {
@@ -42,6 +45,7 @@ public class InstructorServiceImpl implements InstructorService {
     private final CredentialRepository credentialRepository;
     private final ChangeHistoryRepository changeHistoryRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AdminRoleService adminRoleService;
 
     public InstructorServiceImpl(
             InstructorRepository instructorRepository,
@@ -50,7 +54,8 @@ public class InstructorServiceImpl implements InstructorService {
             UserRepository userRepository,
             CredentialRepository credentialRepository,
             ChangeHistoryRepository changeHistoryRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            AdminRoleService adminRoleService) {
         this.instructorRepository = instructorRepository;
         this.instructorProgramRepository = instructorProgramRepository;
         this.programRepository = programRepository;
@@ -58,6 +63,7 @@ public class InstructorServiceImpl implements InstructorService {
         this.credentialRepository = credentialRepository;
         this.changeHistoryRepository = changeHistoryRepository;
         this.passwordEncoder = passwordEncoder;
+        this.adminRoleService = adminRoleService;
     }
 
     @Override
@@ -77,7 +83,7 @@ public class InstructorServiceImpl implements InstructorService {
         if (email.isBlank()) {
             throw new AcademicException("El correo es obligatorio.", HttpStatus.BAD_REQUEST);
         }
-        if (!document.matches("[A-Za-z0-9]{6,30}")) {
+        if (!document.matches("\\d{6,15}")) {
             throw new AcademicException("El documento solo puede contener letras y números, y debe tener entre 6 y 30 caracteres.", HttpStatus.BAD_REQUEST);
         }
         if (userRepository.existsByDocumentNumber(document)) {
@@ -104,78 +110,6 @@ public class InstructorServiceImpl implements InstructorService {
         credentialRepository.saveAndFlush(credential);
 
         return createInstructorForUser(newUser, dto.getInstructorType(), dto.getProgramIds(), password);
-    }
-
-    private InstructorResponseDTO createInstructorForUser(User user, InstructorType type, List<UUID> requestedProgramIds, String generatedPassword) {
-        if (instructorRepository.existsByUser_IdUser(user.getIdUser())) {
-            throw new AcademicException("Este usuario ya está registrado como instructor.", HttpStatus.CONFLICT);
-        }
-        if (type == InstructorType.ESPECIFICO) {
-            List<UUID> effectiveProgramIds = requestedProgramIds == null ? List.of() : requestedProgramIds;
-            if (effectiveProgramIds.isEmpty()) {
-                throw new AcademicException("Un instructor específico debe indicar el programa al que pertenece.", HttpStatus.BAD_REQUEST);
-            }
-            List<UUID> validated = new ArrayList<>();
-            for (UUID idProgram : effectiveProgramIds) {
-                Program program = programRepository.findById(idProgram)
-                        .orElseThrow(() -> new AcademicException("El programa indicado no existe.", HttpStatus.NOT_FOUND));
-                if (program != null) {
-                    validated.add(idProgram);
-                }
-            }
-            if (validated.stream().distinct().count() != validated.size()) {
-                validated = validated.stream().distinct().collect(Collectors.toList());
-            }
-
-            Instructor newInstructor = new Instructor();
-            newInstructor.setUser(user);
-            newInstructor.setInstructorType(type);
-            Instructor instructor = instructorRepository.saveAndFlush(newInstructor);
-
-            for (UUID idProgram : validated) {
-                Program program = programRepository.getReferenceById(idProgram);
-                if (!instructorProgramRepository.existsByInstructor_IdInstructorAndProgram_IdProgram(instructor.getIdInstructor(), idProgram)) {
-                    InstructorProgram ip = new InstructorProgram();
-                    ip.setInstructor(instructor);
-                    ip.setProgram(program);
-                    instructorProgramRepository.saveAndFlush(ip);
-                }
-            }
-
-            recordChange(instructor, "instructor", null, "instructor_type", ChangeAction.CREATE, null, type.name());
-            String programIdsString = validated.stream().map(UUID::toString).collect(Collectors.joining(","));
-            recordChange(instructor, "instructor", null, "instructor_program", ChangeAction.CREATE, null, programIdsString);
-            return new InstructorResponseDTO(instructor, instructorProgramRepository.findAll().stream()
-                    .filter(ip -> ip.getInstructor().getIdInstructor().equals(instructor.getIdInstructor()))
-                    .toList(), generatedPassword);
-        }
-
-        Instructor instructor = new Instructor();
-        instructor.setUser(user);
-        instructor.setInstructorType(type);
-        instructor = instructorRepository.saveAndFlush(instructor);
-        recordChange(instructor, "instructor", null, "instructor_type", ChangeAction.CREATE, null, type.name());
-        return new InstructorResponseDTO(instructor, List.of(), generatedPassword);
-    }
-
-    private String normalizeDocument(String document) {
-        return document == null ? "" : document.trim().replace(" ", "").replace("-", "");
-    }
-
-    private String normalizeEmail(String email) {
-        return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private String generatePassword() {
-        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@$!%*?";
-        StringBuilder password = new StringBuilder();
-        password.append((char) ('A' + (int) (Math.random() * 26)));
-        password.append((int) (Math.random() * 10));
-        password.append("@$!%*?".charAt((int) (Math.random() * 6)));
-        while (password.length() < 10) {
-            password.append(chars.charAt((int) (Math.random() * chars.length())));
-        }
-        return password.toString();
     }
 
     @Override
@@ -338,6 +272,82 @@ public class InstructorServiceImpl implements InstructorService {
                         .filter(ip -> ip.getInstructor().getIdInstructor().equals(inst.getIdInstructor()))
                         .toList()))
                 .toList();
+    }
+
+    private InstructorResponseDTO createInstructorForUser(User user, InstructorType type, List<UUID> requestedProgramIds, String generatedPassword) {
+        AssignRoleRequestDTO roleRequest = new AssignRoleRequestDTO();
+        roleRequest.setRole(RoleName.INSTRUCTOR);
+        adminRoleService.assignRole(user.getIdUser(), roleRequest);
+
+        if (instructorRepository.existsByUser_IdUser(user.getIdUser())) {
+            throw new AcademicException("Este usuario ya está registrado como instructor.", HttpStatus.CONFLICT);
+        }
+        if (type == InstructorType.ESPECIFICO) {
+            List<UUID> effectiveProgramIds = requestedProgramIds == null ? List.of() : requestedProgramIds;
+            if (effectiveProgramIds.isEmpty()) {
+                throw new AcademicException("Un instructor específico debe indicar el programa al que pertenece.", HttpStatus.BAD_REQUEST);
+            }
+            List<UUID> validated = new ArrayList<>();
+            for (UUID idProgram : effectiveProgramIds) {
+                Program program = programRepository.findById(idProgram)
+                        .orElseThrow(() -> new AcademicException("El programa indicado no existe.", HttpStatus.NOT_FOUND));
+                if (program != null) {
+                    validated.add(idProgram);
+                }
+            }
+            if (validated.stream().distinct().count() != validated.size()) {
+                validated = validated.stream().distinct().collect(Collectors.toList());
+            }
+
+            Instructor newInstructor = new Instructor();
+            newInstructor.setUser(user);
+            newInstructor.setInstructorType(type);
+            Instructor instructor = instructorRepository.saveAndFlush(newInstructor);
+
+            for (UUID idProgram : validated) {
+                Program program = programRepository.getReferenceById(idProgram);
+                if (!instructorProgramRepository.existsByInstructor_IdInstructorAndProgram_IdProgram(instructor.getIdInstructor(), idProgram)) {
+                    InstructorProgram ip = new InstructorProgram();
+                    ip.setInstructor(instructor);
+                    ip.setProgram(program);
+                    instructorProgramRepository.saveAndFlush(ip);
+                }
+            }
+
+            recordChange(instructor, "instructor", null, "instructor_type", ChangeAction.CREATE, null, type.name());
+            String programIdsString = validated.stream().map(UUID::toString).collect(Collectors.joining(","));
+            recordChange(instructor, "instructor", null, "instructor_program", ChangeAction.CREATE, null, programIdsString);
+            return new InstructorResponseDTO(instructor, instructorProgramRepository.findAll().stream()
+                    .filter(ip -> ip.getInstructor().getIdInstructor().equals(instructor.getIdInstructor()))
+                    .toList(), generatedPassword);
+        }
+
+        Instructor instructor = new Instructor();
+        instructor.setUser(user);
+        instructor.setInstructorType(type);
+        instructor = instructorRepository.saveAndFlush(instructor);
+        recordChange(instructor, "instructor", null, "instructor_type", ChangeAction.CREATE, null, type.name());
+        return new InstructorResponseDTO(instructor, List.of(), generatedPassword);
+    }
+
+    private String normalizeDocument(String document) {
+        return document == null ? "" : document.trim().replace(" ", "").replace("-", "");
+    }
+
+    private String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String generatePassword() {
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@$!%*?";
+        StringBuilder password = new StringBuilder();
+        password.append((char) ('A' + (int) (Math.random() * 26)));
+        password.append((int) (Math.random() * 10));
+        password.append("@$!%*?".charAt((int) (Math.random() * 6)));
+        while (password.length() < 10) {
+            password.append(chars.charAt((int) (Math.random() * chars.length())));
+        }
+        return password.toString();
     }
 
     private void recordChange(Instructor instructor, String entityName, String oldValue, String newValue, ChangeAction action, String fieldName, String fieldValue) {

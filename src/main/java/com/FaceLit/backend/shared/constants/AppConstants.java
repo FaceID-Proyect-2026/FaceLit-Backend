@@ -2,7 +2,7 @@ package com.FaceLit.backend.shared.constants;
 
 public final class AppConstants {
 
- // ── Códigos de verificación ──────────────────────────────
+    // ── Códigos de verificación ──────────────────────────────
     public static final int VERIFICATION_CODE_LENGTH = 6;
     public static final int VERIFICATION_CODE_MAX = 999999;
     public static final int VERIFICATION_EXPIRY_MINUTES = 5;
@@ -12,11 +12,6 @@ public final class AppConstants {
 
     // ── NUEVO — Reenvío de códigos (cooldown) ────────────────
     public static final int RESEND_COOLDOWN_SECONDS = 60;
-
-    // ── NUEVO — Reglas de edad ────────────────────────────────
-    public static final int MIN_AGE = 8;
-    public static final int MAX_AGE = 100;
-    public static final int LEGAL_AGE = 18;
 
     // ── JWT ──────────────────────────────────────────────────
     public static final String ROLE_PREFIX = "ROLE_";
@@ -42,7 +37,8 @@ public final class AppConstants {
     // Se usa tanto para la validación del backend como para la UI.
     public static final long CSV_MAX_FILE_BYTES = 20L * 1024 * 1024;
     public static final int CSV_MAX_DATA_ROWS = 5000;
-    public static final int DOCUMENT_NUMBER_LENGTH = 30;
+    public static final int DOCUMENT_NUMBER_MIN_LENGTH = 6;
+    public static final int DOCUMENT_NUMBER_MAX_LENGTH = 15;
     public static final int CHIP_CODE_LENGTH = 7;
     public static final int PROGRAM_CODE_MIN_LENGTH = 2;
     public static final int PROGRAM_CODE_MAX_LENGTH = 15;

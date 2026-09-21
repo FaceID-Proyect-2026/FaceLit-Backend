@@ -24,13 +24,16 @@ import com.FaceLit.backend.academic.model.enums.ChangeAction;
 import com.FaceLit.backend.academic.repository.ChangeHistoryRepository;
 import com.FaceLit.backend.academic.repository.ChipRepository;
 import com.FaceLit.backend.academic.repository.UserChipRepository;
+import com.FaceLit.backend.academic.service.academic.UserChipService;
+import com.FaceLit.backend.auth.dto.request.roleandpermission.AssignRoleRequestDTO;
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
 import com.FaceLit.backend.auth.model.enums.CredentialStatus;
+import com.FaceLit.backend.auth.model.enums.RoleName;
 import com.FaceLit.backend.auth.model.security.Credential;
 import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
-import com.FaceLit.backend.academic.service.academic.UserChipService;
+import com.FaceLit.backend.auth.service.roleandpermission.AdminRoleService;
 
 @Service
 public class UserChipServiceImpl implements UserChipService {
@@ -41,6 +44,7 @@ public class UserChipServiceImpl implements UserChipService {
     private final ChipRepository chipRepository;
     private final ChangeHistoryRepository changeHistoryRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AdminRoleService adminRoleService;
 
     public UserChipServiceImpl(
             UserChipRepository userChipRepository,
@@ -48,13 +52,15 @@ public class UserChipServiceImpl implements UserChipService {
             CredentialRepository credentialRepository,
             ChipRepository chipRepository,
             ChangeHistoryRepository changeHistoryRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            AdminRoleService adminRoleService) {
         this.userChipRepository = userChipRepository;
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
         this.chipRepository = chipRepository;
         this.changeHistoryRepository = changeHistoryRepository;
         this.passwordEncoder = passwordEncoder;
+        this.adminRoleService = adminRoleService;
     }
 
     @Override
@@ -73,9 +79,13 @@ public class UserChipServiceImpl implements UserChipService {
             user = userRepository.findById(dto.getIdUser())
                     .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
         } else {
-            user = userRepository.findByDocumentNumber(dto.getDocumento()).orElseGet(() -> {
+            String document = dto.getDocumento() == null ? "" : dto.getDocumento().trim();
+            if (!document.matches("\\d{6,15}")) {
+                throw new AcademicException("El documento debe contener solo dígitos y tener entre 6 y 15 caracteres.", HttpStatus.BAD_REQUEST);
+            }
+            user = userRepository.findByDocumentNumber(document).orElseGet(() -> {
                 User newUser = new User();
-                newUser.setDocumentNumber(dto.getDocumento());
+                newUser.setDocumentNumber(document);
                 newUser.setFirstName(dto.getNombre());
                 newUser.setLastName(dto.getApellido());
                 newUser.setAccountStatus(AccountStatus.ACTIVE);
@@ -98,6 +108,10 @@ public class UserChipServiceImpl implements UserChipService {
             throw new AcademicException("Este aprendiz ya tiene una ficha activa. Usa el traslado para cambiarlo de ficha.", HttpStatus.CONFLICT);
         }
 
+        AssignRoleRequestDTO roleRequest = new AssignRoleRequestDTO();
+        roleRequest.setRole(RoleName.APPRENTICE);
+        adminRoleService.assignRole(user.getIdUser(), roleRequest);
+
         UserChip userChip = new UserChip();
         userChip.setUser(user);
         userChip.setChip(chip);
@@ -107,18 +121,6 @@ public class UserChipServiceImpl implements UserChipService {
 
         recordChange(userChip, "user_chip", null, chip.getChipCode(), ChangeAction.CREATE, "chip");
         return new UserChipResponseDTO(userChip, generatedPasswordHolder[0]);
-    }
-
-    private String generatePassword() {
-        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@$!%*?";
-        StringBuilder password = new StringBuilder();
-        password.append((char) ('A' + (int) (Math.random() * 26)));
-        password.append((int) (Math.random() * 10));
-        password.append("@$!%*?".charAt((int) (Math.random() * 6)));
-        while (password.length() < 10) {
-            password.append(chars.charAt((int) (Math.random() * chars.length())));
-        }
-        return password.toString();
     }
 
     @Override
@@ -230,6 +232,18 @@ public class UserChipServiceImpl implements UserChipService {
 
         recordChange(newAssignment, "user_chip", previousCode, destination.getChipCode(), ChangeAction.UPDATE, "chip");
         return new UserChipResponseDTO(newAssignment);
+    }
+
+    private String generatePassword() {
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@$!%*?";
+        StringBuilder password = new StringBuilder();
+        password.append((char) ('A' + (int) (Math.random() * 26)));
+        password.append((int) (Math.random() * 10));
+        password.append("@$!%*?".charAt((int) (Math.random() * 6)));
+        while (password.length() < 10) {
+            password.append(chars.charAt((int) (Math.random() * chars.length())));
+        }
+        return password.toString();
     }
 
     private void recordChange(UserChip userChip, String entityName, String oldValue, String newValue, ChangeAction action, String fieldName) {

@@ -3,6 +3,7 @@ package com.FaceLit.backend.academic.controller.academic;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -52,7 +53,7 @@ public class InstructorController {
 
     @GetMapping("/instructors")
     public ResponseEntity<List<InstructorResponseDTO>> findAll() {
-        return ResponseEntity.ok(instructorService.findAll());
+        return noStore(instructorService.findAll());
     }
 
     @GetMapping("/instructors/{idInstructor}")
@@ -70,7 +71,13 @@ public class InstructorController {
             @RequestParam(required = false) String document,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String type) {
-        return ResponseEntity.ok(instructorService.search(document, name, type));
+        return noStore(instructorService.search(document, name, type));
+    }
+
+    private <T> ResponseEntity<T> noStore(T body) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(body);
     }
 
     @GetMapping("/instructors/eligible")

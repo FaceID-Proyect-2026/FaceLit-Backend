@@ -3,6 +3,7 @@ package com.FaceLit.backend.academic.controller.academic;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -42,7 +43,7 @@ public class ChipController {
 
     @GetMapping("/programs/{idProgram}/chips")
     public ResponseEntity<List<ChipResponseDTO>> findByProgram(@PathVariable UUID idProgram) {
-        return ResponseEntity.ok(chipService.findByProgram(idProgram));
+        return noStore(chipService.findByProgram(idProgram));
     }
 
     @GetMapping("/chips/{idChip}")
@@ -52,7 +53,13 @@ public class ChipController {
 
     @GetMapping("/chips/search")
     public ResponseEntity<List<ChipResponseDTO>> search(@RequestParam String code) {
-        return ResponseEntity.ok(chipService.searchByCode(code));
+        return noStore(chipService.searchByCode(code));
+    }
+
+    private <T> ResponseEntity<T> noStore(T body) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(body);
     }
 
     @PutMapping("/chips/{idChip}")
