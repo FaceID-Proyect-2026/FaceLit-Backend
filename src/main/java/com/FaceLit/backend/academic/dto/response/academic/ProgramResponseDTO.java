@@ -1,5 +1,6 @@
 package com.FaceLit.backend.academic.dto.response.academic;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,6 +18,8 @@ public class ProgramResponseDTO {
     private final String programCode;
     private final String state;
     private final String deactivationReason;
+    private final OffsetDateTime createdAt;
+    private final OffsetDateTime updatedAt;
     private final List<ChipResponseDTO> chips;
     private final List<UUID> chipIds;
     private final List<String> chipCodes;
@@ -31,6 +34,8 @@ public class ProgramResponseDTO {
         this.programCode = program.getProgramCode();
         this.state = program.getState().name();
         this.deactivationReason = program.getDeactivationReason();
+        this.createdAt = program.getCreatedAt();
+        this.updatedAt = program.getUpdatedAt() != null ? program.getUpdatedAt() : program.getCreatedAt();
         this.chips = chips == null ? List.of() : chips.stream().map(ChipResponseDTO::new).toList();
         this.chipIds = this.chips.stream().map(ChipResponseDTO::getIdChip).toList();
         this.chipCodes = this.chips.stream().map(ChipResponseDTO::getChipCode).toList();

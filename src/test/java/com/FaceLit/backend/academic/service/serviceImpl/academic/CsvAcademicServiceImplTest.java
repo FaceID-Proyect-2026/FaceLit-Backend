@@ -66,7 +66,12 @@ class CsvAcademicServiceImplTest {
 
         CsvUploadResponseDTO response = csvAcademicService.upload(file);
 
-        assertThat(programRepository.findByProgramCodeIgnoreCase("ADSO")).isPresent();
+        assertThat(programRepository.findByProgramCodeIgnoreCase("ADSO"))
+                .hasValueSatisfying(program -> {
+                    assertThat(program.getCreatedAt()).isNotNull();
+                    assertThat(program.getUpdatedAt()).isNotNull();
+                    assertThat(program.getState()).isNotNull();
+                });
         assertThat(chipRepository.findByChipCode("2825551")).isPresent();
         assertThat(userRepository.findByDocumentNumber("1002345678")).isPresent();
         assertThat(instructorRepository.findAll()).hasSize(1);

@@ -123,7 +123,14 @@ public class ChipServiceImpl implements ChipService {
     @Transactional
     public ChipResponseDTO delete(UUID idChip, String reason) {
         Chip chip = getChip(idChip);
-        if (chip.getState() == AcademicState.ACTIVE) {
+        long assignmentCount = userChipRepository.countByChip_IdChip(idChip);
+        if (assignmentCount == 0) {
+            ChipResponseDTO response = new ChipResponseDTO(chip);
+            record(chip, chip.getState().name(), null, ChangeAction.DELETE);
+            chipRepository.delete(chip);
+            return response;
+        }
+        if (chip.getState() == AcademicState.ACTIVE && assignmentCount < 0) {
             chip.setState(AcademicState.INACTIVE);
             chip.setDeactivationReason(reason == null || reason.isBlank() ? null : reason.trim());
             chip = chipRepository.save(chip);

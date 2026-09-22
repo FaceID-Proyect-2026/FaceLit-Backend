@@ -3,6 +3,7 @@ package com.FaceLit.backend.academic.dto.response.academic;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -72,6 +73,10 @@ class AcademicResponseContractTest {
         program.setProgramName("Radiología");
         program.setProgramCode("RAD");
         program.setState(AcademicState.ACTIVE);
+        OffsetDateTime createdAt = OffsetDateTime.now().minusHours(1);
+        OffsetDateTime updatedAt = OffsetDateTime.now();
+        program.setCreatedAt(createdAt);
+        program.setUpdatedAt(updatedAt);
 
         Chip chip = new Chip();
         chip.setIdChip(UUID.randomUUID());
@@ -84,5 +89,7 @@ class AcademicResponseContractTest {
         assertNotNull(dto.getChips());
         assertEquals(1, dto.getChipIds().size());
         assertEquals("RAD-01", dto.getChipCodes().get(0));
+        assertEquals(createdAt, dto.getCreatedAt());
+        assertEquals(updatedAt, dto.getUpdatedAt());
     }
 }

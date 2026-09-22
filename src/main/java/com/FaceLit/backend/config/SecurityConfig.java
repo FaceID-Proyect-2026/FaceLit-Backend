@@ -4,6 +4,7 @@ import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -41,6 +42,10 @@ public class SecurityConfig {
                         // ─── SOLO COORDINADOR ────────────────────────
                         // Ver todos los usuarios, asignar roles, gestionar todo
                         .requestMatchers("/api/admin/**").hasRole("COORDINATOR")
+                        .requestMatchers(HttpMethod.GET, "/api/academic/me/**")
+                        .hasAnyRole("COORDINATOR", "INSTRUCTOR", "APPRENTICE")
+                        .requestMatchers(HttpMethod.GET, "/api/academic/programs/**", "/api/academic/chips/**")
+                        .hasAnyRole("COORDINATOR", "INSTRUCTOR")
                         .requestMatchers("/api/academic/**").hasRole("COORDINATOR")
 
                         // ─── PERFIL PERSONAL — cualquier usuario autenticado, sin importar rol ───

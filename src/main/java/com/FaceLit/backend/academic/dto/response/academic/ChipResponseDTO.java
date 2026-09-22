@@ -1,5 +1,6 @@
 package com.FaceLit.backend.academic.dto.response.academic;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import com.FaceLit.backend.academic.model.academic.Chip;
@@ -17,6 +18,8 @@ public class ChipResponseDTO {
     private final String chipCode;
     private final String state;
     private final String deactivationReason;
+    private final OffsetDateTime createdAt;
+    private final OffsetDateTime updatedAt;
 
     public ChipResponseDTO(Chip chip) {
         this.idChip = chip.getIdChip();
@@ -26,5 +29,7 @@ public class ChipResponseDTO {
         this.chipCode = chip.getChipCode();
         this.state = chip.getState().name();
         this.deactivationReason = chip.getDeactivationReason();
+        this.createdAt = chip.getCreatedAt();
+        this.updatedAt = chip.getUpdatedAt() != null ? chip.getUpdatedAt() : chip.getCreatedAt();
     }
 }

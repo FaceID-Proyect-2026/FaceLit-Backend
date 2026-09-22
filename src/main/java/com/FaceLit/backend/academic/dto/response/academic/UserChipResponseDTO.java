@@ -17,6 +17,11 @@ public class UserChipResponseDTO {
     private final UUID idUser;
     private final UUID idChip;
     private final String chipCode;
+    private final UUID idProgram;
+    private final String programName;
+    private final String programCode;
+    private final String programState;
+    private final String chipState;
     private final String firstName;
     private final String lastName;
     private final String document;
@@ -37,6 +42,11 @@ public class UserChipResponseDTO {
         this.idUser = user.getIdUser();
         this.idChip = userChip.getChip().getIdChip();
         this.chipCode = userChip.getChip().getChipCode();
+        this.idProgram = userChip.getChip().getProgram().getIdProgram();
+        this.programName = userChip.getChip().getProgram().getProgramName();
+        this.programCode = userChip.getChip().getProgram().getProgramCode();
+        this.programState = userChip.getChip().getProgram().getState().name();
+        this.chipState = userChip.getChip().getState().name();
         this.firstName = user.getFirstName();
         this.lastName = user.getLastName();
         this.document = user.getDocumentNumber();

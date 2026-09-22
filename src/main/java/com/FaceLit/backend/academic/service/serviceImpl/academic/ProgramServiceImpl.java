@@ -135,18 +135,18 @@ public class ProgramServiceImpl implements ProgramService {
     @Transactional
     public ProgramResponseDTO delete(UUID idProgram, String reason) {
         Program program = getProgram(idProgram);
+        long chips = chipRepository.countByProgram_IdProgram(idProgram);
+        long instructors = instructorProgramRepository.countByProgram_IdProgram(idProgram);
+        if (chips > 0 || instructors > 0) {
+            throw new AcademicException("No se puede inactivar ni eliminar el programa porque tiene fichas o instructores asociados");
+        }
+
         if (program.getState() == AcademicState.ACTIVE) {
             program.setState(AcademicState.INACTIVE);
             program.setDeactivationReason(reason == null || reason.isBlank() ? null : reason.trim());
             program = programRepository.save(program);
             record(program, "program", AcademicState.ACTIVE.name(), AcademicState.INACTIVE.name(), ChangeAction.DEACTIVATE);
             return new ProgramResponseDTO(program);
-        }
-
-        long chips = chipRepository.countByProgram_IdProgram(idProgram);
-        long instructors = instructorProgramRepository.countByProgram_IdProgram(idProgram);
-        if (chips > 0 || instructors > 0) {
-            throw new AcademicException("No se puede eliminar el programa porque tiene fichas o instructores asociados");
         }
 
         record(program, "program", AcademicState.INACTIVE.name(), null, ChangeAction.DELETE);

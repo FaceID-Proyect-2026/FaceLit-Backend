@@ -176,8 +176,10 @@ public class UserChipServiceImpl implements UserChipService {
         }
 
         UUID currentChipId = current.get().getChip().getIdChip();
+        UUID currentProgramId = current.get().getChip().getProgram().getIdProgram();
         return chipRepository.findByState(AcademicState.ACTIVE).stream()
                 .filter(chip -> !chip.getIdChip().equals(currentChipId))
+                .filter(chip -> chip.getProgram().getIdProgram().equals(currentProgramId))
                 .map(chip -> new UserChipResponseDTO(userChipRepository.findAll().stream()
                         .filter(uc -> uc.getUser().getIdUser().equals(user.getIdUser()) && uc.getChip().getIdChip().equals(chip.getIdChip()) && uc.getState() == AcademicState.ACTIVE)
                         .findFirst()
@@ -219,16 +221,23 @@ public class UserChipServiceImpl implements UserChipService {
             throw new AcademicException("La ficha destino debe ser diferente a la actual.", HttpStatus.BAD_REQUEST);
         }
 
+        if (!destination.getProgram().getIdProgram().equals(current.getChip().getProgram().getIdProgram())) {
+            throw new AcademicException(destination.getChipCode(), HttpStatus.BAD_REQUEST);
+        }
+
         String previousCode = current.getChip().getChipCode();
         current.setState(AcademicState.INACTIVE);
-        userChipRepository.save(current);
+        // La base de datos solo permite una ficha ACTIVE por aprendiz.
+        // Forzamos primero el UPDATE de la asignacion anterior para evitar
+        // que Hibernate intente insertar la nueva relacion antes de desactivarla.
+        userChipRepository.saveAndFlush(current);
 
         UserChip newAssignment = new UserChip();
         newAssignment.setUser(user);
         newAssignment.setChip(destination);
         newAssignment.setState(AcademicState.ACTIVE);
         newAssignment.setAssignmentDate(OffsetDateTime.now());
-        newAssignment = userChipRepository.save(newAssignment);
+        newAssignment = userChipRepository.saveAndFlush(newAssignment);
 
         recordChange(newAssignment, "user_chip", previousCode, destination.getChipCode(), ChangeAction.UPDATE, "chip");
         return new UserChipResponseDTO(newAssignment);

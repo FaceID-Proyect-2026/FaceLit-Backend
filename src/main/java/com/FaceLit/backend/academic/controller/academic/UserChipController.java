@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.CacheControl;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -45,6 +47,14 @@ public class UserChipController {
     @GetMapping("/users/{idUser}/chip")
     public ResponseEntity<UserChipResponseDTO> getActiveChipByUser(@PathVariable UUID idUser) {
         return ResponseEntity.ok(userChipService.getActiveChipByUser(idUser));
+    }
+
+    @GetMapping("/me/chip")
+    public ResponseEntity<UserChipResponseDTO> getAuthenticatedUserChip(
+            @AuthenticationPrincipal Object principal) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(userChipService.getActiveChipByUser(UUID.fromString(principal.toString())));
     }
 
     @GetMapping("/users/{idUser}/chip/history")

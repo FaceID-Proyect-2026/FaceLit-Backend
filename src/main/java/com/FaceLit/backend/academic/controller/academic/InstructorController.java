@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -64,6 +65,12 @@ public class InstructorController {
     @GetMapping("/instructors/user/{idUser}")
     public ResponseEntity<InstructorResponseDTO> findByUser(@PathVariable UUID idUser) {
         return ResponseEntity.ok(instructorService.findByUser(idUser));
+    }
+
+    @GetMapping("/me/instructor")
+    public ResponseEntity<InstructorResponseDTO> findAuthenticatedInstructor(
+            @AuthenticationPrincipal Object principal) {
+        return noStore(instructorService.findByUser(UUID.fromString(principal.toString())));
     }
 
     @GetMapping("/instructors/search")
