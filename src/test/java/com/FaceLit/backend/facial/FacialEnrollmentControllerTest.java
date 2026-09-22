@@ -18,6 +18,39 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 class FacialEnrollmentControllerTest {
+    private String photo() throws Exception {
+        var output = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(320, 320, java.awt.image.BufferedImage.TYPE_INT_RGB), "jpeg", output);
+        return "data:image/jpeg;base64," + java.util.Base64.getEncoder().encodeToString(output.toByteArray());
+    }
+
+    @Test void validatesActualPhotoContent() throws Exception {
+        assertNotNull(FacialEnrollmentController.decodePhoto(photo()));
+        assertThrows(ResponseStatusException.class, () -> FacialEnrollmentController.decodePhoto("data:image/jpeg;base64,aGVsbG8="));
+        assertThrows(ResponseStatusException.class, () -> FacialEnrollmentController.decodePhoto("data:image/png;base64,aGVsbG8="));
+    }
+
+    @Test void existingFacePhotoMustMatchStoredIdentity() throws Exception {
+        when(jdbc.queryForObject(anyString(), eq(Boolean.class), eq(user))).thenReturn(true);
+        doAnswer(call -> {
+            Consumer<TransactionStatus> action = call.getArgument(0);
+            action.accept(mock(TransactionStatus.class)); return null;
+        }).when(tx).executeWithoutResult(any());
+        var stored = java.nio.ByteBuffer.allocate(20484).putInt(0x464c4831);
+        for (int i = 0; i < 5120; i++) stored.putFloat(-0.1f);
+        when(jdbc.queryForObject(anyString(), eq(byte[].class), eq(user))).thenReturn(stored.array());
+        var challenge = controller.challenge(user, true);
+        var request = new FacialEnrollmentController.Enrollment(challenge.id(), samples(challenge), photo());
+        assertThrows(ResponseStatusException.class, () -> controller.enroll(user, request));
+        verify(jdbc, never()).update(contains("UPDATE"), any(byte[].class), eq(user));
+        stored.position(4);
+        for (int i = 0; i < 5120; i++) stored.putFloat(0.1f);
+        challenge = controller.challenge(user, true);
+        assertTrue(controller.enroll(user, new FacialEnrollmentController.Enrollment(challenge.id(), samples(challenge), photo())).get("registered"));
+        verify(jdbc).update(contains("UPDATE"), any(byte[].class), eq(user));
+        verify(jdbc, never()).update(contains("INSERT"), eq(user), any(byte[].class), anyString());
+    }
+
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     private final TransactionTemplate tx = mock(TransactionTemplate.class);
     private final FacialEnrollmentController controller = new FacialEnrollmentController(jdbc, tx);
