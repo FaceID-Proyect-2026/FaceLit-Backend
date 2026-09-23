@@ -40,26 +40,38 @@ class FacialEnrollmentControllerTest {
         for (int i = 0; i < 5120; i++) stored.putFloat(-0.1f);
         when(jdbc.queryForObject(anyString(), eq(byte[].class), eq(user))).thenReturn(stored.array());
         var challenge = controller.challenge(user, true);
-        var request = new FacialEnrollmentController.Enrollment(challenge.id(), samples(challenge), photo());
+        var request = enrollment(challenge, samples(challenge), photo());
         assertThrows(ResponseStatusException.class, () -> controller.enroll(user, request));
         verify(jdbc, never()).update(contains("UPDATE"), any(byte[].class), eq(user));
         stored.position(4);
         for (int i = 0; i < 5120; i++) stored.putFloat(0.1f);
         challenge = controller.challenge(user, true);
-        assertTrue(controller.enroll(user, new FacialEnrollmentController.Enrollment(challenge.id(), samples(challenge), photo())).get("registered"));
+        assertTrue(controller.enroll(user, enrollment(challenge, samples(challenge), photo())).get("registered"));
         verify(jdbc).update(contains("UPDATE"), any(byte[].class), eq(user));
         verify(jdbc, never()).update(contains("INSERT"), eq(user), any(byte[].class), anyString());
     }
 
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     private final TransactionTemplate tx = mock(TransactionTemplate.class);
-    private final FacialEnrollmentController controller = new FacialEnrollmentController(jdbc, tx);
+    private final PadVerifier pad = mock(PadVerifier.class);
+    private final FacialEnrollmentController controller = new FacialEnrollmentController(jdbc, tx, pad);
     private final UUID user = UUID.randomUUID();
 
     private List<FacialEnrollmentController.Sample> samples(FacialEnrollmentController.Challenge challenge) {
-        return new ArrayList<>(challenge.poses().stream().map(pose -> new FacialEnrollmentController.Sample(
-            pose, pose.equals("center") ? 0 : pose.equals("left") ? 0.4 : -0.4,
-            0.95, 0.95, Collections.nCopies(1024, 0.1))).toList());
+        var result = new ArrayList<FacialEnrollmentController.Sample>();
+        for (String pose : challenge.poses()) result.add(new FacialEnrollmentController.Sample(
+            pose, pose.equals("left") ? 0.4 : pose.equals("right") ? -0.4 : 0,
+            0.95, 0.95, Collections.nCopies(1024, 0.1), (result.size() + 1) * 1000L, 800, 4,
+            pose.equals("blink") ? 1 : pose.equals("blink_twice") ? 2 : 0, pose.equals("smile")));
+        return result;
+    }
+
+    private FacialEnrollmentController.Enrollment enrollment(FacialEnrollmentController.Challenge challenge,
+            List<FacialEnrollmentController.Sample> samples, String photo) {
+        var evidence = new ArrayList<FacialEnrollmentController.Frame>();
+        for (long time = 0; time <= 7000; time += 200)
+            evidence.add(new FacialEnrollmentController.Frame(time, "data:image/jpeg;base64,test"));
+        return new FacialEnrollmentController.Enrollment(challenge.id(), samples, photo, evidence);
     }
 
     @Test void acceptsCompleteSequenceAndPersistsOnlyOnce() {
@@ -68,8 +80,9 @@ class FacialEnrollmentControllerTest {
             action.accept(mock(TransactionStatus.class)); return null;
         }).when(tx).executeWithoutResult(any());
         var challenge = controller.challenge(user);
-        var request = new FacialEnrollmentController.Enrollment(challenge.id(), samples(challenge));
+        var request = enrollment(challenge, samples(challenge), null);
         assertTrue(controller.enroll(user, request).get("registered"));
+        verify(pad).requireReal(user, challenge, request);
         verify(jdbc).update(contains("INSERT INTO facialrecognition.user_face"), eq(user),
             argThat((byte[] template) -> template.length == 20484), eq(user.toString()));
         assertThrows(ResponseStatusException.class, () -> controller.enroll(user, request));
@@ -78,7 +91,7 @@ class FacialEnrollmentControllerTest {
     @Test void challengeCannotBeUsedByAnotherUser() {
         var challenge = controller.challenge(user);
         assertThrows(ResponseStatusException.class, () -> controller.enroll(UUID.randomUUID(),
-            new FacialEnrollmentController.Enrollment(challenge.id(), samples(challenge))));
+            enrollment(challenge, samples(challenge), null)));
         verifyNoInteractions(tx);
     }
 
@@ -86,23 +99,23 @@ class FacialEnrollmentControllerTest {
         var old = controller.challenge(user);
         controller.challenge(user);
         assertThrows(ResponseStatusException.class, () -> controller.enroll(user,
-            new FacialEnrollmentController.Enrollment(old.id(), samples(old))));
+            enrollment(old, samples(old), null)));
         verifyNoInteractions(tx);
     }
 
     @Test void rejectsStationaryPhotoDespiteHighScores() {
         var challenge = controller.challenge(user);
-        var still = samples(challenge).stream().map(s -> new FacialEnrollmentController.Sample(s.pose(), 0, s.real(), s.live(), s.embedding())).toList();
+        var still = samples(challenge).stream().map(s -> new FacialEnrollmentController.Sample(s.pose(), 0, s.real(), s.live(), s.embedding(), s.elapsedMs(), s.durationMs(), s.frames(), s.blinks(), s.smileTransition())).toList();
         assertThrows(ResponseStatusException.class, () -> controller.enroll(user,
-            new FacialEnrollmentController.Enrollment(challenge.id(), still)));
+            enrollment(challenge, still, null)));
         verifyNoInteractions(tx);
     }
 
     @Test void rejectsSpoofScoresAndConsumesChallenge() {
         var challenge = controller.challenge(user);
         var samples = samples(challenge);
-        samples.set(0, new FacialEnrollmentController.Sample("center", 0, 0.3, 0.95, samples.get(0).embedding()));
-        var request = new FacialEnrollmentController.Enrollment(challenge.id(), samples);
+        samples.set(0, new FacialEnrollmentController.Sample("center", 0, 0.3, 0.95, samples.get(0).embedding(), 1000, 800, 4, 0, false));
+        var request = enrollment(challenge, samples, null);
         assertThrows(ResponseStatusException.class, () -> controller.enroll(user, request));
         assertThrows(ResponseStatusException.class, () -> controller.enroll(user, request));
         verifyNoInteractions(tx);
@@ -114,7 +127,7 @@ class FacialEnrollmentControllerTest {
             var samples = samples(challenge);
             var previous = samples.get(1);
             samples.set(1, new FacialEnrollmentController.Sample(previous.pose(), previous.yaw(), 0.95, 0.95,
-                Collections.nCopies(1024, value)));
+                Collections.nCopies(1024, value), previous.elapsedMs(), previous.durationMs(), previous.frames(), previous.blinks(), previous.smileTransition()));
             assertThrows(ResponseStatusException.class, () -> FacialEnrollmentController.validateSamples(challenge, samples));
         }
     }
@@ -133,5 +146,42 @@ class FacialEnrollmentControllerTest {
         when(jdbc.queryForObject(anyString(), eq(Boolean.class), eq(user))).thenReturn(true);
         assertThrows(ResponseStatusException.class, () -> controller.challenge(user));
         verifyNoInteractions(tx);
+    }
+
+    @Test void padFailureBlocksBothEnrollmentAndPhotoUpdates() throws Exception {
+        for (boolean registered : new boolean[] { false, true }) {
+            when(jdbc.queryForObject(anyString(), eq(Boolean.class), eq(user))).thenReturn(registered);
+            var challenge = controller.challenge(user, registered);
+            var request = enrollment(challenge, samples(challenge), registered ? photo() : null);
+            doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE))
+                .when(pad).requireReal(user, challenge, request);
+            assertThrows(ResponseStatusException.class, () -> controller.enroll(user, request));
+            verifyNoInteractions(tx);
+            assertThrows(ResponseStatusException.class, () -> controller.enroll(user, request));
+        }
+    }
+
+    @Test void rejectsMissingEvidenceAndInstantGestures() {
+        var challenge = controller.challenge(user);
+        var samples = samples(challenge);
+        var request = new FacialEnrollmentController.Enrollment(challenge.id(), samples, null, List.of());
+        assertThrows(ResponseStatusException.class, () -> controller.enroll(user, request));
+        var first = samples.get(0);
+        samples.set(0, new FacialEnrollmentController.Sample(first.pose(), first.yaw(), 1, 1, first.embedding(), 1000, 0, 1, 0, false));
+        assertThrows(ResponseStatusException.class, () -> FacialEnrollmentController.validateSamples(challenge, samples));
+        verifyNoInteractions(pad, tx);
+    }
+
+    @Test void randomChallengesContainRequiredActionsAndFiveTemplatePoses() {
+        var sequences = new java.util.HashSet<List<String>>();
+        for (int i = 0; i < 100; i++) {
+            var poses = controller.challenge(user).poses();
+            assertEquals(7, poses.size());
+            assertEquals(3, Collections.frequency(poses, "center"));
+            assertTrue(poses.containsAll(List.of("left", "right", "smile")));
+            assertTrue(poses.contains("blink") ^ poses.contains("blink_twice"));
+            sequences.add(poses);
+        }
+        assertTrue(sequences.size() > 2);
     }
 }

@@ -29,21 +29,25 @@ import jakarta.validation.constraints.Size;
 public class FacialEnrollmentController {
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transactions;
+    private final PadVerifier pad;
     private final SecureRandom random = new SecureRandom();
     private final Map<UUID, Challenge> challenges = new ConcurrentHashMap<>();
 
-    public FacialEnrollmentController(JdbcTemplate jdbc, TransactionTemplate transactions) {
+    public FacialEnrollmentController(JdbcTemplate jdbc, TransactionTemplate transactions, PadVerifier pad) {
         this.jdbc = jdbc;
         this.transactions = transactions;
+        this.pad = pad;
     }
 
     public record Challenge(UUID id, List<String> poses, Instant expiresAt) {}
     public record Sample(@NotNull String pose, double yaw, double real, double live,
-                         @NotNull @Size(min = 1024, max = 1024) List<@NotNull Double> embedding) {}
+                         @NotNull @Size(min = 1024, max = 1024) List<@NotNull Double> embedding,
+                         long elapsedMs, long durationMs, int frames, int blinks, boolean smileTransition) {}
+    public record Frame(long elapsedMs, @NotNull @Size(max = 60000) String jpeg) {}
     public record Enrollment(@NotNull UUID challengeId,
-                             @NotNull @Size(min = 5, max = 5) List<@NotNull @Valid Sample> samples,
-                             @Size(max = 350000) String profilePhoto) {
-        public Enrollment(UUID challengeId, List<Sample> samples) { this(challengeId, samples, null); }
+                             @NotNull @Size(min = 7, max = 7) List<@NotNull @Valid Sample> samples,
+                             @Size(max = 350000) String profilePhoto,
+                             @NotNull @Size(min = 21, max = 240) List<@NotNull @Valid Frame> evidence) {
     }
 
     @GetMapping("/profile-photo")
@@ -81,7 +85,7 @@ public class FacialEnrollmentController {
 
     @GetMapping("/me")
     public Map<String, Boolean> status(@AuthenticationPrincipal UUID userId) {
-        return Map.of("registered", registered(userId));
+        return Map.of("registered", registered(userId), "padAvailable", pad.available());
     }
 
     @PostMapping("/challenge")
@@ -89,8 +93,11 @@ public class FacialEnrollmentController {
         challenges.entrySet().removeIf(entry -> entry.getValue().expiresAt().isBefore(Instant.now()));
         if (registered(userId) && !updatePhoto) throw new ResponseStatusException(HttpStatus.CONFLICT, "Rostro ya registrado");
         boolean leftFirst = random.nextBoolean();
+        var poses = new java.util.ArrayList<>(List.of("center", leftFirst ? "left" : "right", "center", leftFirst ? "right" : "left", "center"));
+        poses.add(1 + random.nextInt(poses.size()), random.nextBoolean() ? "blink" : "blink_twice");
+        poses.add(1 + random.nextInt(poses.size()), "smile");
         Challenge challenge = new Challenge(UUID.randomUUID(),
-            List.of("center", leftFirst ? "left" : "right", "center", leftFirst ? "right" : "left", "center"),
+            List.copyOf(poses),
             Instant.now().plusSeconds(90));
         challenges.put(userId, challenge);
         return challenge;
@@ -106,11 +113,18 @@ public class FacialEnrollmentController {
             throw new ResponseStatusException(HttpStatus.GONE, "Sesión expirada o utilizada");
         }
         validateSamples(challenge, request.samples());
+        validateEvidence(request);
         byte[] photo = decodePhoto(request.profilePhoto());
+        // Must precede every database mutation, including profile-photo updates.
+        pad.requireReal(userId, challenge, request);
+        if (!challenge.expiresAt().isAfter(Instant.now())) {
+            throw new ResponseStatusException(HttpStatus.GONE, "Sesión expirada durante la verificación PAD");
+        }
         // Versioned template: magic FLH1 followed by five 1024-float embeddings.
         ByteBuffer template = ByteBuffer.allocate(4 + 5 * 1024 * Float.BYTES);
         template.putInt(0x464c4831);
-        request.samples().forEach(sample -> sample.embedding().forEach(value -> template.putFloat(value.floatValue())));
+        request.samples().stream().filter(sample -> List.of("center", "left", "right").contains(sample.pose()))
+            .forEach(sample -> sample.embedding().forEach(value -> template.putFloat(value.floatValue())));
         transactions.executeWithoutResult(tx -> {
             // Serialize concurrent registrations for this user using the existing user row.
             jdbc.queryForObject("SELECT id_user_app FROM security.user_app WHERE id_user_app = ? FOR UPDATE", UUID.class, userId);
@@ -148,10 +162,15 @@ public class FacialEnrollmentController {
         for (int i = 0; i < samples.size(); i++) {
             Sample sample = samples.get(i);
             if (sample == null || !challenge.poses().get(i).equals(sample.pose()) || !matchesPose(sample.pose(), sample.yaw())
-                    || !Double.isFinite(sample.real()) || sample.real() < 0.65 || sample.real() > 1
-                    || !Double.isFinite(sample.live()) || sample.live() < 0.65 || sample.live() > 1
+                    || !Double.isFinite(sample.real()) || sample.real() < 0.85 || sample.real() > 1
+                    || !Double.isFinite(sample.live()) || sample.live() < 0.85 || sample.live() > 1
                     || sample.embedding() == null || sample.embedding().size() != 1024
                     || sample.embedding().stream().anyMatch(v -> v == null || !Double.isFinite(v) || Math.abs(v) > 100)) invalid();
+            long previous = i == 0 ? 0 : samples.get(i - 1).elapsedMs();
+            if (sample.durationMs() < 650 || sample.durationMs() > 90000 || sample.frames() < 3 || sample.frames() > 240
+                    || sample.elapsedMs() < 0 || sample.elapsedMs() > 90000 || sample.elapsedMs() - previous < sample.durationMs()
+                    || sample.blinks() != (sample.pose().equals("blink") ? 1 : sample.pose().equals("blink_twice") ? 2 : 0)
+                    || (sample.pose().equals("smile") && !sample.smileTransition())) invalid();
             double norm = sample.embedding().stream().mapToDouble(v -> v * v).sum();
             if (norm < 1e-12) invalid();
             if (i > 0) {
@@ -169,11 +188,27 @@ public class FacialEnrollmentController {
     static boolean matchesPose(String pose, double yaw) {
         if (!Double.isFinite(yaw)) return false;
         return switch (pose) {
-            case "center" -> Math.abs(yaw) <= 0.18;
+            case "center", "blink", "blink_twice", "smile" -> Math.abs(yaw) <= 0.18;
             case "left" -> yaw >= 0.18 && yaw <= 0.85;
             case "right" -> yaw <= -0.18 && yaw >= -0.85;
             default -> false;
         };
+    }
+
+    static void validateEvidence(Enrollment request) {
+        if (request.evidence() == null || request.evidence().size() < 21 || request.evidence().size() > 240) invalid();
+        long previous = -1;
+        for (Frame frame : request.evidence()) {
+            if (frame == null || frame.elapsedMs() <= previous || frame.elapsedMs() > 90000
+                    || frame.jpeg() == null || frame.jpeg().length() > 60000
+                    || !frame.jpeg().startsWith("data:image/jpeg;base64,")) invalid();
+            previous = frame.elapsedMs();
+        }
+        for (Sample sample : request.samples()) {
+            long count = request.evidence().stream().filter(frame -> frame.elapsedMs() > sample.elapsedMs() - sample.durationMs()
+                && frame.elapsedMs() <= sample.elapsedMs()).count();
+            if (count < 3) invalid();
+        }
     }
 
     private static void invalid() {
