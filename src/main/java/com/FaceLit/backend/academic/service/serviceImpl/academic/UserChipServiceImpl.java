@@ -31,6 +31,7 @@ import com.FaceLit.backend.auth.model.enums.CredentialStatus;
 import com.FaceLit.backend.auth.model.enums.RoleName;
 import com.FaceLit.backend.auth.model.security.Credential;
 import com.FaceLit.backend.auth.model.security.User;
+import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.AdminRoleService;
@@ -45,6 +46,7 @@ public class UserChipServiceImpl implements UserChipService {
     private final ChangeHistoryRepository changeHistoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final AdminRoleService adminRoleService;
+    private final UserRoleRepository userRoleRepository;
 
     public UserChipServiceImpl(
             UserChipRepository userChipRepository,
@@ -53,7 +55,8 @@ public class UserChipServiceImpl implements UserChipService {
             ChipRepository chipRepository,
             ChangeHistoryRepository changeHistoryRepository,
             PasswordEncoder passwordEncoder,
-            AdminRoleService adminRoleService) {
+            AdminRoleService adminRoleService,
+            UserRoleRepository userRoleRepository) {
         this.userChipRepository = userChipRepository;
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
@@ -61,6 +64,7 @@ public class UserChipServiceImpl implements UserChipService {
         this.changeHistoryRepository = changeHistoryRepository;
         this.passwordEncoder = passwordEncoder;
         this.adminRoleService = adminRoleService;
+        this.userRoleRepository = userRoleRepository;
     }
 
     @Override
@@ -84,6 +88,11 @@ public class UserChipServiceImpl implements UserChipService {
                 throw new AcademicException("El documento debe contener solo dígitos y tener entre 6 y 15 caracteres.", HttpStatus.BAD_REQUEST);
             }
             user = userRepository.findByDocumentNumber(document).orElseGet(() -> {
+                String email = dto.getCorreo() == null ? "" : dto.getCorreo().trim().toLowerCase(Locale.ROOT);
+                if (credentialRepository.existsByEmailIgnoreCase(email)) {
+                    throw new AcademicException("El correo ya esta registrado en otro usuario.", HttpStatus.CONFLICT);
+                }
+
                 User newUser = new User();
                 newUser.setDocumentNumber(document);
                 newUser.setFirstName(dto.getNombre());
@@ -95,7 +104,7 @@ public class UserChipServiceImpl implements UserChipService {
                 generatedPasswordHolder[0] = generatedPassword;
                 Credential credential = new Credential();
                 credential.setUser(newUser);
-                credential.setEmail(dto.getCorreo().toLowerCase(Locale.ROOT));
+                credential.setEmail(email);
                 credential.setPassword(passwordEncoder.encode(generatedPassword));
                 credential.setCredentialStatus(CredentialStatus.ACTIVE);
                 credential.setFailedAttempts(0);
@@ -103,6 +112,8 @@ public class UserChipServiceImpl implements UserChipService {
                 return newUser;
             });
         }
+
+        ensureExistingUserCanBeApprentice(user);
 
         if (userChipRepository.existsByUser_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE)) {
             throw new AcademicException("Este aprendiz ya tiene una ficha activa. Usa el traslado para cambiarlo de ficha.", HttpStatus.CONFLICT);
@@ -243,6 +254,16 @@ public class UserChipServiceImpl implements UserChipService {
         return new UserChipResponseDTO(newAssignment);
     }
 
+    private void ensureExistingUserCanBeApprentice(User user) {
+        userRoleRepository.findByUserId(user.getIdUser()).ifPresent(userRole -> {
+            RoleName currentRole = userRole.getRole().getNameRole();
+            if (currentRole != RoleName.APPRENTICE) {
+                throw new AcademicException(
+                        "El documento ya pertenece a un usuario con rol " + currentRole.name() + ". No se puede registrar como aprendiz.",
+                        HttpStatus.CONFLICT);
+            }
+        });
+    }
     private String generatePassword() {
         String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@$!%*?";
         StringBuilder password = new StringBuilder();

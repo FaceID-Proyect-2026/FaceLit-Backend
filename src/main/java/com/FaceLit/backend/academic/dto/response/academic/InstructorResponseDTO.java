@@ -1,5 +1,6 @@
 package com.FaceLit.backend.academic.dto.response.academic;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -22,7 +23,10 @@ public class InstructorResponseDTO {
     private final String document;
     private final String email;
     private final String instructorType;
+    private final String status;
     private final String initialPassword;
+    private final OffsetDateTime createdAt;
+    private final OffsetDateTime updatedAt;
     private final List<UUID> programIds;
     private final List<String> programNames;
 
@@ -41,7 +45,10 @@ public class InstructorResponseDTO {
         this.document = user.getDocumentNumber();
         this.email = credential != null ? credential.getEmail() : null;
         this.instructorType = instructor.getInstructorType().name();
+        this.status = user.getAccountStatus().name();
         this.initialPassword = initialPassword;
+        this.createdAt = instructor.getCreatedAt();
+        this.updatedAt = instructor.getUpdatedAt();
         this.programIds = instructorPrograms == null ? List.of() : instructorPrograms.stream()
                 .map(ip -> ip.getProgram().getIdProgram())
                 .collect(Collectors.toList());

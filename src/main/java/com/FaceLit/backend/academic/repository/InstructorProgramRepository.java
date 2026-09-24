@@ -1,6 +1,7 @@
 package com.FaceLit.backend.academic.repository;
 
 import java.util.UUID;
+import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -13,4 +14,6 @@ public interface InstructorProgramRepository extends JpaRepository<InstructorPro
     long countByProgram_IdProgram(UUID idProgram);
 
     long countByInstructor_IdInstructor(UUID idInstructor);
+
+    List<InstructorProgram> findByInstructor_IdInstructor(UUID idInstructor);
 }

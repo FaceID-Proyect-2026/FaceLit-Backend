@@ -1,13 +1,25 @@
 package com.FaceLit.backend.auth.service.serviceImpl.security;
 
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.FaceLit.backend.academic.model.academic.Chip;
+import com.FaceLit.backend.academic.model.academic.Instructor;
+import com.FaceLit.backend.academic.model.academic.InstructorProgram;
+import com.FaceLit.backend.academic.model.academic.UserChip;
+import com.FaceLit.backend.academic.model.enums.AcademicState;
+import com.FaceLit.backend.academic.repository.ChipRepository;
+import com.FaceLit.backend.academic.repository.InstructorProgramRepository;
+import com.FaceLit.backend.academic.repository.InstructorRepository;
+import com.FaceLit.backend.academic.repository.UserChipRepository;
 import com.FaceLit.backend.auth.dto.request.roleandpermission.AssignRoleRequestDTO;
 import com.FaceLit.backend.auth.dto.request.security.CreateManagedUserRequestDTO;
 import com.FaceLit.backend.auth.dto.request.security.UpdateUserRequestDTO;
@@ -32,7 +44,6 @@ import com.FaceLit.backend.shared.constants.AppConstants;
 
 import jakarta.transaction.Transactional;
 
-// Gestion de usuario
 @Service
 public class UserManagementServiceImpl implements UserManagementService {
 
@@ -41,6 +52,10 @@ public class UserManagementServiceImpl implements UserManagementService {
         private final UserRoleRepository userRoleRepository;
         private final UserSessionRepository userSessionRepository;
         private final UserConfigurationRepository userConfigurationRepository;
+        private final UserChipRepository userChipRepository;
+        private final InstructorRepository instructorRepository;
+        private final InstructorProgramRepository instructorProgramRepository;
+        private final ChipRepository chipRepository;
         private final AdminRoleService adminRoleService;
         private final AcceptanceTermsRepository acceptanceTermsRepository;
         private final PasswordRecoveryRepository passwordRecoveryRepository;
@@ -52,6 +67,10 @@ public class UserManagementServiceImpl implements UserManagementService {
                         UserRoleRepository userRoleRepository,
                         UserSessionRepository userSessionRepository,
                         UserConfigurationRepository userConfigurationRepository,
+                        UserChipRepository userChipRepository,
+                        InstructorRepository instructorRepository,
+                        InstructorProgramRepository instructorProgramRepository,
+                        ChipRepository chipRepository,
                         AdminRoleService adminRoleService,
                         AcceptanceTermsRepository acceptanceTermsRepository,
                         PasswordRecoveryRepository passwordRecoveryRepository,
@@ -61,6 +80,10 @@ public class UserManagementServiceImpl implements UserManagementService {
                 this.userRoleRepository = userRoleRepository;
                 this.userSessionRepository = userSessionRepository;
                 this.userConfigurationRepository = userConfigurationRepository;
+                this.userChipRepository = userChipRepository;
+                this.instructorRepository = instructorRepository;
+                this.instructorProgramRepository = instructorProgramRepository;
+                this.chipRepository = chipRepository;
                 this.adminRoleService = adminRoleService;
                 this.acceptanceTermsRepository = acceptanceTermsRepository;
                 this.passwordRecoveryRepository = passwordRecoveryRepository;
@@ -69,9 +92,7 @@ public class UserManagementServiceImpl implements UserManagementService {
 
         @Override
         public List<UserDetailResponseDTO> getAllUsers() {
-                // RF-10.1: solo usuarios que han iniciado sesión al menos una vez
                 return userRepository.findAll().stream()
-                                .filter(u -> userSessionRepository.existsByUser_IdUser(u.getIdUser()))
                                 .map(this::toDTO)
                                 .collect(Collectors.toList());
         }
@@ -82,8 +103,7 @@ public class UserManagementServiceImpl implements UserManagementService {
                         throw new UserManagementException("No se encontraron usuarios con ese criterio");
                 }
 
-                List<UserDetailResponseDTO> results = userRepository.searchByFullNameOrEmail(query).stream()
-                                .filter(u -> userSessionRepository.existsByUser_IdUser(u.getIdUser()))
+                List<UserDetailResponseDTO> results = userRepository.searchByFullNameOrEmail(query.trim()).stream()
                                 .map(this::toDTO)
                                 .collect(Collectors.toList());
 
@@ -105,7 +125,7 @@ public class UserManagementServiceImpl implements UserManagementService {
         @Transactional
         public UserDetailResponseDTO createUser(CreateManagedUserRequestDTO dto) {
                 if (dto.getRole() != com.FaceLit.backend.auth.model.enums.RoleName.COORDINATOR) {
-                        throw new UserManagementException("La gestión administrativa solo puede crear coordinadores");
+                        throw new UserManagementException("La gestion administrativa solo puede crear coordinadores");
                 }
 
                 String documentNumber = dto.getNumberDocument().trim();
@@ -143,16 +163,35 @@ public class UserManagementServiceImpl implements UserManagementService {
         @Override
         @Transactional
         public UserDetailResponseDTO updateUser(UUID userId, UpdateUserRequestDTO dto) {
-
                 User user = userRepository.findById(userId)
                                 .orElseThrow(() -> new UserManagementException("Usuario no encontrado"));
+                Credential credential = credentialRepository.findByUser(user)
+                                .orElseThrow(() -> new UserManagementException("El usuario no tiene credenciales"));
 
-                user.setFirstName(dto.getFirstName());
-                user.setLastName(dto.getLastName());
+                String documentNumber = dto.getNumberDocument().trim();
+                String email = dto.getEmail().trim().toLowerCase();
+
+                userRepository.findByDocumentNumber(documentNumber)
+                                .filter(existing -> !existing.getIdUser().equals(userId))
+                                .ifPresent(existing -> {
+                                        throw new UserManagementException("Ya existe un usuario con ese documento");
+                                });
+
+                credentialRepository.findByEmailIgnoreCase(email)
+                                .filter(existing -> !existing.getUser().getIdUser().equals(userId))
+                                .ifPresent(existing -> {
+                                        throw new UserManagementException("Ya existe un usuario con ese correo");
+                                });
+
+                user.setDocumentNumber(documentNumber);
+                user.setFirstName(dto.getFirstName().trim());
+                user.setLastName(dto.getLastName().trim());
                 user.setAccountStatus(dto.getAccountStatus());
                 userRepository.save(user);
 
-                // Reutiliza la lógica ya existente de asignación de rol — no la duplica
+                credential.setEmail(email);
+                credentialRepository.save(credential);
+
                 AssignRoleRequestDTO roleDto = new AssignRoleRequestDTO();
                 roleDto.setRole(dto.getRole());
                 adminRoleService.assignRole(userId, roleDto);
@@ -163,42 +202,31 @@ public class UserManagementServiceImpl implements UserManagementService {
         @Override
         @Transactional
         public void deleteUser(UUID userId) {
-
                 User user = userRepository.findById(userId)
                                 .orElseThrow(() -> new UserManagementException("Usuario no encontrado"));
 
-                // terms_acceptance — se elimina si existe
                 acceptanceTermsRepository.findByUser(user)
                                 .ifPresent(acceptanceTermsRepository::delete);
 
-                // password_recovery — historial completo, no solo el activo
                 List<PasswordRecovery> recoveries = passwordRecoveryRepository.findAllByUser_IdUser(userId);
                 passwordRecoveryRepository.deleteAll(recoveries);
 
-                // user_session
                 List<UserSession> sessions = userSessionRepository.findByUser_IdUser(userId);
                 userSessionRepository.deleteAll(sessions);
 
-                // user_configuration
                 userConfigurationRepository.findByUser_IdUser(userId)
                                 .ifPresent(userConfigurationRepository::delete);
 
-                // user_role
                 userRoleRepository.findByUserId(userId)
                                 .ifPresent(userRoleRepository::delete);
 
-                // credential
                 credentialRepository.findByUser(user)
                                 .ifPresent(credentialRepository::delete);
 
-                // user_app — al final, cuando ya no queda nada apuntándole
                 userRepository.delete(user);
         }
 
-        // Convierte un User a UserDetailResponseDTO — reutilizado en los 3 métodos de
-        // lectura
         private UserDetailResponseDTO toDTO(User user) {
-
                 String email = credentialRepository.findByUser(user)
                                 .map(Credential::getEmail)
                                 .orElse(null);
@@ -208,14 +236,42 @@ public class UserManagementServiceImpl implements UserManagementService {
                                 .orElse("Sin rol");
 
                 boolean hasSession = userSessionRepository.existsByUser_IdUser(user.getIdUser());
+                OffsetDateTime cutoff = OffsetDateTime.now().minusHours(AppConstants.JWT_EXPIRY_HOURS);
+                String sessionStatus = userSessionRepository.hasActiveSession(user.getIdUser(), cutoff)
+                                ? "ACTIVE"
+                                : "INACTIVE";
 
-                // Calcula si el JWT del usuario sigue vigente — automático, sin tocar manual
-                OffsetDateTime cutoff = OffsetDateTime.now()
-                                .minusHours(AppConstants.JWT_EXPIRY_HOURS);
-                String sessionStatus = userSessionRepository
-                                .hasActiveSession(user.getIdUser(), cutoff)
-                                                ? "ACTIVE"
-                                                : "INACTIVE";
+                Optional<UserChip> activeChip = userChipRepository.findByUser_IdUserAndState(
+                                user.getIdUser(),
+                                AcademicState.ACTIVE);
+
+                String chipCode = activeChip.map(UserChip::getChip).map(Chip::getChipCode).orElse(null);
+                String programName = activeChip.map(UserChip::getChip)
+                                .map(Chip::getProgram)
+                                .map(program -> program.getProgramName())
+                                .orElse(null);
+
+                List<InstructorProgram> instructorPrograms = instructorRepository.findByUser_IdUser(user.getIdUser())
+                                .map(Instructor::getIdInstructor)
+                                .map(instructorProgramRepository::findByInstructor_IdInstructor)
+                                .orElse(List.of());
+
+                List<String> instructorProgramNames = instructorPrograms.stream()
+                                .map(InstructorProgram::getProgram)
+                                .filter(Objects::nonNull)
+                                .map(program -> program.getProgramName())
+                                .distinct()
+                                .sorted()
+                                .toList();
+
+                List<String> instructorChipCodes = instructorPrograms.stream()
+                                .map(InstructorProgram::getProgram)
+                                .filter(Objects::nonNull)
+                                .flatMap(program -> chipRepository.findByProgram_IdProgram(program.getIdProgram()).stream())
+                                .map(Chip::getChipCode)
+                                .distinct()
+                                .sorted()
+                                .toList();
 
                 return new UserDetailResponseDTO(
                                 user.getIdUser(),
@@ -224,10 +280,22 @@ public class UserManagementServiceImpl implements UserManagementService {
                                 user.getDocumentNumber(),
                                 email,
                                 roleName,
-                                user.getAccountStatus().name(), // ← estado REAL de cuenta, tal como en la BD
-                                sessionStatus, // ← estado de sesión, calculado
+                                user.getAccountStatus().name(),
+                                sessionStatus,
                                 user.getCreatedAt(),
-                                hasSession);
+                                getSessionExpiresAt(user),
+                                hasSession,
+                                chipCode,
+                                programName,
+                                instructorChipCodes,
+                                instructorProgramNames);
         }
 
+        private OffsetDateTime getSessionExpiresAt(User user) {
+                return userSessionRepository.findByUser_IdUser(user.getIdUser()).stream()
+                                .filter(session -> session.getStartDate() != null)
+                                .max(Comparator.comparing(UserSession::getStartDate))
+                                .map(session -> session.getStartDate().plusHours(AppConstants.JWT_EXPIRY_HOURS))
+                                .orElse(null);
+        }
 }

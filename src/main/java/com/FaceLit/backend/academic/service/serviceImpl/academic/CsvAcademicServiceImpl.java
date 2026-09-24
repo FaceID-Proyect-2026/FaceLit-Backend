@@ -58,6 +58,7 @@ import com.FaceLit.backend.auth.model.enums.CredentialStatus;
 import com.FaceLit.backend.auth.model.enums.RoleName;
 import com.FaceLit.backend.auth.model.security.Credential;
 import com.FaceLit.backend.auth.model.security.User;
+import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.AdminRoleService;
@@ -97,6 +98,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
 
     private final PasswordEncoder passwordEncoder;
     private final AdminRoleService adminRoleService;
+    private final UserRoleRepository userRoleRepository;
 
     public CsvAcademicServiceImpl(
             ProgramRepository programRepository,
@@ -112,7 +114,8 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
             InstructorService instructorService,
             UserChipService userChipService,
             PasswordEncoder passwordEncoder,
-            AdminRoleService adminRoleService) {
+            AdminRoleService adminRoleService,
+            UserRoleRepository userRoleRepository) {
         this.programRepository = programRepository;
         this.chipRepository = chipRepository;
         this.instructorRepository = instructorRepository;
@@ -127,6 +130,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         this.userChipService = userChipService;
         this.passwordEncoder = passwordEncoder;
         this.adminRoleService = adminRoleService;
+        this.userRoleRepository = userRoleRepository;
     }
 
     @Override
@@ -141,7 +145,6 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
     }
 
     @Override
-    @Transactional
     public CsvUploadResponseDTO upload(MultipartFile file) {
         List<Row> rows = readAndValidate(file);
         CsvUploadResponseDTO result = new CsvUploadResponseDTO();
@@ -287,9 +290,11 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                 return;
             }
             User user = findOrCreateUser(first, result);
+            if (user == null) {
+                return;
+            }
             assignRole(user, RoleName.INSTRUCTOR);
-            Instructor instructor = instructorRepository.findAll().stream()
-                    .filter(item -> item.getUser().getIdUser().equals(user.getIdUser())).findFirst().orElse(null);
+            Instructor instructor = instructorRepository.findByUser_IdUser(user.getIdUser()).orElse(null);
             if (instructor == null) {
                 InstructorRequestDTO dto = new InstructorRequestDTO();
                 dto.setIdUser(user.getIdUser());
@@ -312,12 +317,11 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                                 instructor.getInstructorType().name(), type.name()));
                 return;
             }
-            Set<UUID> existing = instructorProgramRepository.findAll().stream()
-                    .filter(item -> item.getInstructor().getIdInstructor().equals(instructor.getIdInstructor()))
+            Set<UUID> existing = instructorProgramRepository.findByInstructor_IdInstructor(instructor.getIdInstructor()).stream()
                     .map(item -> item.getProgram().getIdProgram()).collect(Collectors.toSet());
             for (Row row : instructorRows) {
                 Program program = programs.get(row.value("programa_codigo").toUpperCase(Locale.ROOT));
-                if (type == InstructorType.ESPECIFICO && program != null
+                if (program != null
                         && !existing.contains(program.getIdProgram())) {
                     InstructorProgram relation = new InstructorProgram();
                     relation.setInstructor(instructor);
@@ -351,6 +355,9 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         User user = userRepository.findByDocumentNumber(document).orElse(null);
         if (user == null) {
             user = findOrCreateUser(row, result);
+            if (user == null) {
+                return;
+            }
             assignRole(user, RoleName.APPRENTICE);
             UserChipRequestDTO assignment = new UserChipRequestDTO();
             assignment.setIdUser(user.getIdUser());
@@ -359,12 +366,14 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                     .add(new CsvUploadResponseDTO.CsvRowResult(row.number, "aprendiz", document + " creado"));
             return;
         }
+        if (!canUseExistingUserAsApprentice(user)) {
+            result.getErroresDeReferencia().add(error(row,
+                    "El documento " + document + " ya pertenece a un usuario con otro rol. No se puede registrar como aprendiz."));
+            return;
+        }
         assignRole(user, RoleName.APPRENTICE);
         User resolvedUser = user;
-        UserChip current = userChipRepository.findAll().stream()
-                .filter(item -> item.getUser().getIdUser().equals(resolvedUser.getIdUser())
-                        && item.getState() == AcademicState.ACTIVE)
-                .findFirst()
+        UserChip current = userChipRepository.findByUser_IdUserAndState(resolvedUser.getIdUser(), AcademicState.ACTIVE)
                 .orElse(null);
         if (current == null || current.getChip().getIdChip().equals(chip.getIdChip())) {
             result.getActualizados()
@@ -390,6 +399,11 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                         chip.getChipCode()));
     }
 
+    private boolean canUseExistingUserAsApprentice(User user) {
+        return userRoleRepository.findByUserId(user.getIdUser())
+                .map(userRole -> userRole.getRole().getNameRole() == RoleName.APPRENTICE)
+                .orElse(true);
+    }
     private User findOrCreateUser(Row row, CsvUploadResponseDTO result) {
         User existing = userRepository.findByDocumentNumber(row.value("documento")).orElse(null);
         if (existing != null) {
@@ -398,10 +412,16 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
             existing = userRepository.saveAndFlush(existing);
 
             if (credentialRepository.findByUser(existing).isEmpty()) {
+                String email = row.value("correo").toLowerCase(Locale.ROOT);
+                if (credentialRepository.existsByEmailIgnoreCase(email)) {
+                    result.getErroresDeReferencia().add(error(row,
+                            "El correo " + email + " ya esta registrado en otro usuario. Corrige el correo o usa el documento correcto."));
+                    return null;
+                }
                 String password = generatePassword();
                 Credential credential = new Credential();
                 credential.setUser(existing);
-                credential.setEmail(row.value("correo").toLowerCase(Locale.ROOT));
+                credential.setEmail(email);
                 credential.setPassword(passwordEncoder.encode(password));
                 credential.setCredentialStatus(CredentialStatus.ACTIVE);
                 credential.setFailedAttempts(0);
@@ -411,6 +431,13 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
             }
             return existing;
         }
+        String email = row.value("correo").toLowerCase(Locale.ROOT);
+        if (credentialRepository.existsByEmailIgnoreCase(email)) {
+            result.getErroresDeReferencia().add(error(row,
+                    "El correo " + email + " ya esta registrado en otro usuario. Corrige el correo o usa el documento correcto."));
+            return null;
+        }
+
         User user = new User();
         user.setDocumentNumber(row.value("documento"));
         user.setFirstName(row.value("nombre"));
@@ -420,7 +447,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         String password = generatePassword();
         Credential credential = new Credential();
         credential.setUser(user);
-        credential.setEmail(row.value("correo").toLowerCase(Locale.ROOT));
+        credential.setEmail(email);
         credential.setPassword(passwordEncoder.encode(password));
         credential.setCredentialStatus(CredentialStatus.ACTIVE);
         credential.setFailedAttempts(0);

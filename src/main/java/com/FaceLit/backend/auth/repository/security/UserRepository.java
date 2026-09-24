@@ -35,6 +35,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                 JOIN Credential c ON c.user = u
                 WHERE LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :query, '%'))
                 OR LOWER(c.email) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR u.documentNumber LIKE CONCAT('%', :query, '%')
             """)
     List<User> searchByFullNameOrEmail(@Param("query") String query);
 

@@ -119,9 +119,6 @@ public class InstructorServiceImpl implements InstructorService {
                 .orElseThrow(() -> new AcademicException("Instructor no encontrado.", HttpStatus.NOT_FOUND));
 
         InstructorType oldType = instructor.getInstructorType();
-        if (oldType == InstructorType.ESPECIFICO && dto.getInstructorType() == InstructorType.TRANSVERSAL) {
-            throw new AcademicException("No se puede cambiar un instructor específico a tipo transversal.", HttpStatus.CONFLICT);
-        }
 
         List<UUID> oldProgramIds = instructorProgramRepository.findAll().stream()
                 .filter(ip -> ip.getInstructor().getIdInstructor().equals(idInstructor))
@@ -136,19 +133,17 @@ public class InstructorServiceImpl implements InstructorService {
                 .filter(ip -> ip.getInstructor().getIdInstructor().equals(idInstructor))
                 .forEach(instructorProgramRepository::delete);
 
-        if (newType == InstructorType.ESPECIFICO) {
-            List<UUID> ids = dto.getProgramIds() == null ? List.of() : dto.getProgramIds();
-            if (ids.isEmpty()) {
-                throw new AcademicException("Un instructor específico debe indicar el programa al que pertenece.", HttpStatus.BAD_REQUEST);
-            }
-            for (UUID idProgram : ids) {
-                programRepository.findById(idProgram)
-                        .orElseThrow(() -> new AcademicException("El programa indicado no existe.", HttpStatus.NOT_FOUND));
-                InstructorProgram ip = new InstructorProgram();
-                ip.setInstructor(instructor);
-                ip.setProgram(programRepository.getReferenceById(idProgram));
-                instructorProgramRepository.save(ip);
-            }
+        List<UUID> ids = dto.getProgramIds() == null ? List.of() : dto.getProgramIds().stream().distinct().toList();
+        if (newType == InstructorType.ESPECIFICO && ids.isEmpty()) {
+            throw new AcademicException("Un instructor especifico debe indicar el programa al que pertenece.", HttpStatus.BAD_REQUEST);
+        }
+        for (UUID idProgram : ids) {
+            programRepository.findById(idProgram)
+                    .orElseThrow(() -> new AcademicException("El programa indicado no existe.", HttpStatus.NOT_FOUND));
+            InstructorProgram ip = new InstructorProgram();
+            ip.setInstructor(instructor);
+            ip.setProgram(programRepository.getReferenceById(idProgram));
+            instructorProgramRepository.save(ip);
         }
 
         if (!oldType.equals(newType)) {
@@ -169,6 +164,30 @@ public class InstructorServiceImpl implements InstructorService {
                 .toList());
     }
 
+    @Override
+    @Transactional
+    public InstructorResponseDTO reactivate(UUID idInstructor) {
+        Instructor instructor = instructorRepository.findById(idInstructor)
+                .orElseThrow(() -> new AcademicException("Instructor no encontrado.", HttpStatus.NOT_FOUND));
+
+        User user = instructor.getUser();
+        if (user.getAccountStatus() == AccountStatus.ACTIVE) {
+            return new InstructorResponseDTO(instructor, instructorProgramRepository.findAll().stream()
+                    .filter(ip -> ip.getInstructor().getIdInstructor().equals(idInstructor))
+                    .toList());
+        }
+
+        user.setAccountStatus(AccountStatus.ACTIVE);
+        if (user.getCredential() != null) {
+            user.getCredential().setCredentialStatus(CredentialStatus.ACTIVE);
+        }
+        userRepository.save(user);
+        recordChange(instructor, "instructor", AccountStatus.INACTIVE.name(), AccountStatus.ACTIVE.name(), ChangeAction.REACTIVATE, "account_status", AccountStatus.ACTIVE.name());
+
+        return new InstructorResponseDTO(instructor, instructorProgramRepository.findAll().stream()
+                .filter(ip -> ip.getInstructor().getIdInstructor().equals(idInstructor))
+                .toList());
+    }
     @Override
     @Transactional
     public void delete(UUID idInstructor) {
@@ -200,7 +219,6 @@ public class InstructorServiceImpl implements InstructorService {
     @Transactional(readOnly = true)
     public List<InstructorResponseDTO> findAll() {
         return instructorRepository.findAll().stream()
-                .filter(instructor -> instructor.getUser().getAccountStatus() == AccountStatus.ACTIVE)
                 .map(instructor -> new InstructorResponseDTO(instructor, instructorProgramRepository.findAll().stream()
                         .filter(ip -> ip.getInstructor().getIdInstructor().equals(instructor.getIdInstructor()))
                         .toList()))
@@ -237,9 +255,6 @@ public class InstructorServiceImpl implements InstructorService {
 
         for (Instructor instructor : instructors) {
             User user = instructor.getUser();
-            if (user.getAccountStatus() != AccountStatus.ACTIVE) {
-                continue;
-            }
             String doc = user.getDocumentNumber() == null ? "" : user.getDocumentNumber();
             String fullName = (user.getFirstName() == null ? "" : user.getFirstName()) + " " + (user.getLastName() == null ? "" : user.getLastName());
             boolean matchDocument = document == null || document.isBlank() || doc.toLowerCase().contains(document.toLowerCase());
@@ -282,9 +297,9 @@ public class InstructorServiceImpl implements InstructorService {
         if (instructorRepository.existsByUser_IdUser(user.getIdUser())) {
             throw new AcademicException("Este usuario ya está registrado como instructor.", HttpStatus.CONFLICT);
         }
-        if (type == InstructorType.ESPECIFICO) {
+        if (type == InstructorType.ESPECIFICO || (requestedProgramIds != null && !requestedProgramIds.isEmpty())) {
             List<UUID> effectiveProgramIds = requestedProgramIds == null ? List.of() : requestedProgramIds;
-            if (effectiveProgramIds.isEmpty()) {
+            if (type == InstructorType.ESPECIFICO && effectiveProgramIds.isEmpty()) {
                 throw new AcademicException("Un instructor específico debe indicar el programa al que pertenece.", HttpStatus.BAD_REQUEST);
             }
             List<UUID> validated = new ArrayList<>();

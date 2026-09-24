@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import com.FaceLit.backend.auth.exception.LoginException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -67,6 +68,12 @@ public class GlobalExceptionHandler { // esta clase es para que capture errores 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", ex.getMessage()));
     }
 
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, String>> handleDataIntegrity(DataIntegrityViolationException ex) {
+        LOGGER.warn("Conflicto de integridad en base de datos", ex);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                "message", "El archivo contiene datos duplicados o inconsistentes. Revisa documentos, correos, programas y fichas."));
+    }
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGeneral(Exception ex) {
         // El cliente recibe un mensaje estable, pero la causa queda registrada para diagnóstico.

@@ -29,6 +29,8 @@ public class UserChipResponseDTO {
     private final String state;
     private final String initialPassword;
     private final OffsetDateTime assignmentDate;
+    private final OffsetDateTime createdAt;
+    private final OffsetDateTime updatedAt;
 
     public UserChipResponseDTO(UserChip userChip) {
         this(userChip, null);
@@ -54,5 +56,7 @@ public class UserChipResponseDTO {
         this.state = userChip.getState().name();
         this.initialPassword = initialPassword;
         this.assignmentDate = userChip.getAssignmentDate();
+        this.createdAt = userChip.getCreatedAt();
+        this.updatedAt = userChip.getUpdatedAt();
     }
 }
