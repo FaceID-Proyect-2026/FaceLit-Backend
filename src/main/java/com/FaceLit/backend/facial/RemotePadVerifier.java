@@ -23,7 +23,7 @@ public class RemotePadVerifier implements PadVerifier {
         this.token = token;
         var factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(5));
-        factory.setReadTimeout(Duration.ofSeconds(20));
+        factory.setReadTimeout(Duration.ofSeconds(75));
         client = RestClient.builder().requestFactory(factory).build();
     }
 
@@ -35,8 +35,8 @@ public class RemotePadVerifier implements PadVerifier {
 
     record Verification(UUID userId, FacialEnrollmentController.Challenge challenge,
                         FacialEnrollmentController.Enrollment enrollment) {}
-    record Verdict(UUID userId, UUID challengeId, String liveness, boolean depth,
-                   boolean textureAndReflection, boolean activeChallenge, boolean temporal,
+    record Verdict(UUID userId, UUID challengeId, String liveness, boolean singleFace,
+                   boolean imageQuality, boolean activeChallenge, boolean temporal,
                    boolean faceAntiSpoof, boolean identityAndEmbeddingMatch) {}
 
     public void requireReal(UUID user, FacialEnrollmentController.Challenge challenge,
@@ -55,7 +55,7 @@ public class RemotePadVerifier implements PadVerifier {
 
     static boolean accepts(Verdict v, UUID user, UUID challenge) {
         return v != null && user.equals(v.userId()) && challenge.equals(v.challengeId())
-            && "REAL".equals(v.liveness()) && v.depth() && v.textureAndReflection()
+            && "REAL".equals(v.liveness()) && v.singleFace() && v.imageQuality()
             && v.activeChallenge() && v.temporal() && v.faceAntiSpoof() && v.identityAndEmbeddingMatch();
     }
 
