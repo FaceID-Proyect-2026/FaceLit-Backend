@@ -91,7 +91,6 @@ public class AdminRoleServiceImpl implements AdminRoleService {
 
         userRole.setUser(user);
         userRole.setRole(newRole);
-        userRole.setAssignmentDate(LocalDate.now());
         userRole.setAssignedAt(OffsetDateTime.now());
         userRoleRepository.save(userRole);
 

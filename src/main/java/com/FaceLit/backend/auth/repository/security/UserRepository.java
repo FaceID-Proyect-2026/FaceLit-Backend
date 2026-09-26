@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import com.FaceLit.backend.auth.dto.response.security.UserListProjection;
 import com.FaceLit.backend.auth.model.security.User;
 
 // EL JpaRespository es  una interfas que proporciona metodos para relacionar con la base de datos. 
@@ -35,7 +36,47 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                 JOIN Credential c ON c.user = u
                 WHERE LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :query, '%'))
                 OR LOWER(c.email) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR u.documentNumber LIKE CONCAT('%', :query, '%')
             """)
     List<User> searchByFullNameOrEmail(@Param("query") String query);
+
+    @Query("""
+                SELECT
+                    u.idUser AS userId,
+                    u.firstName AS firstName,
+                    u.lastName AS lastName,
+                    u.documentNumber AS documentNumber,
+                    c.email AS email,
+                    r.nameRole AS role,
+                    u.accountStatus AS accountStatus,
+                    u.createdAt AS registrationDate
+                FROM User u
+                LEFT JOIN Credential c ON c.user = u
+                LEFT JOIN UserRole ur ON ur.user = u
+                LEFT JOIN Role r ON r = ur.role
+                ORDER BY u.createdAt DESC
+            """)
+    List<UserListProjection> findAllUserSummaries();
+
+    @Query("""
+                SELECT
+                    u.idUser AS userId,
+                    u.firstName AS firstName,
+                    u.lastName AS lastName,
+                    u.documentNumber AS documentNumber,
+                    c.email AS email,
+                    r.nameRole AS role,
+                    u.accountStatus AS accountStatus,
+                    u.createdAt AS registrationDate
+                FROM User u
+                LEFT JOIN Credential c ON c.user = u
+                LEFT JOIN UserRole ur ON ur.user = u
+                LEFT JOIN Role r ON r = ur.role
+                WHERE LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(c.email) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR u.documentNumber LIKE CONCAT('%', :query, '%')
+                ORDER BY u.createdAt DESC
+            """)
+    List<UserListProjection> searchUserSummaries(@Param("query") String query);
 
 }

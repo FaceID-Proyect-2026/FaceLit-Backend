@@ -5,32 +5,22 @@ import java.util.UUID;
 
 import com.FaceLit.backend.academic.dto.request.academic.ProgramRequestDTO;
 import com.FaceLit.backend.academic.dto.response.academic.ProgramResponseDTO;
-import com.FaceLit.backend.academic.model.enums.ProgramState;
 
 public interface ProgramService {
 
-    // Registra un nuevo programa
-    ProgramResponseDTO createProgram(ProgramRequestDTO dto);
+    ProgramResponseDTO create(ProgramRequestDTO dto);
 
-    // Edita un programa existente
-    ProgramResponseDTO updateProgram(UUID id, ProgramRequestDTO dto);
+    List<ProgramResponseDTO> findAll();
 
-    // Eliminacion logica — cambia state a INACTIVE
-    void deleteProgram(UUID id);
+    List<ProgramResponseDTO> searchByName(String name);
 
-    // Lista todos los programas
-    List<ProgramResponseDTO> getAllPrograms();
+    ProgramResponseDTO findByCode(String code);
 
-    // Consulta por ID
-    ProgramResponseDTO getProgramById(UUID id);
+    ProgramResponseDTO findById(UUID idProgram);
 
-    // Consulta por nombre
-    ProgramResponseDTO getProgramByName(String name);
+    ProgramResponseDTO update(UUID idProgram, ProgramRequestDTO dto);
 
-    // Consulta por estado
-    List<ProgramResponseDTO> getProgramsByState(ProgramState state);
+    ProgramResponseDTO reactivate(UUID idProgram);
 
-    // Eliminar completamente el programa
-    void permanentDeleteProgram(UUID id);
-
+    ProgramResponseDTO delete(UUID idProgram, String reason);
 }

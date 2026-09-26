@@ -2,6 +2,7 @@ package com.FaceLit.backend.auth.dto.request.security;
 
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
 import com.FaceLit.backend.auth.model.enums.RoleName;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -13,9 +14,11 @@ import lombok.Setter;
 @Setter
 public class UpdateUserRequestDTO {
 
-    // Gestion de usuario
+    @NotBlank(message = "El documento es obligatorio")
+    @Pattern(regexp = "\\d{6,15}", message = "El documento debe tener entre 6 y 15 digitos")
+    private String numberDocument;
 
- @NotBlank(message = "El nombre es obligatorio")
+    @NotBlank(message = "El nombre es obligatorio")
     @Pattern(regexp = "^[a-zA-ZáéíóúÁÉÍÓÚñÑ ]+$", message = "El nombre solo puede contener letras")
     @Size(max = 50, message = "El nombre no puede superar los 50 caracteres")
     private String firstName;
@@ -25,13 +28,14 @@ public class UpdateUserRequestDTO {
     @Size(max = 50, message = "El apellido no puede superar los 50 caracteres")
     private String lastName;
 
+    @NotBlank(message = "El correo es obligatorio")
+    @Email(message = "El correo no tiene un formato valido")
+    @Size(max = 100, message = "El correo no puede superar los 100 caracteres")
+    private String email;
+
     @NotNull(message = "El estado de cuenta es obligatorio")
     private AccountStatus accountStatus;
 
-    // Se incluye aquí por decisión del proyecto — internamente delega
-    // en la misma lógica que ya usa AdminRoleService.assignRole(), sin duplicarla.
     @NotNull(message = "El rol es obligatorio")
     private RoleName role;
-
-
 }

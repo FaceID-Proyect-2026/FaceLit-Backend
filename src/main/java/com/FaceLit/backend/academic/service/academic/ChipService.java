@@ -5,31 +5,20 @@ import java.util.UUID;
 
 import com.FaceLit.backend.academic.dto.request.academic.ChipRequestDTO;
 import com.FaceLit.backend.academic.dto.response.academic.ChipResponseDTO;
-import com.FaceLit.backend.academic.model.enums.ChipState;
 
 public interface ChipService {
 
-    // Registra una nueva ficha — el sistema genera el codigo automaticamente
-    ChipResponseDTO createChip(ChipRequestDTO dto);
+    ChipResponseDTO create(UUID idProgram, ChipRequestDTO dto);
 
-    // Edita una ficha existente
-    ChipResponseDTO updateChip(UUID id, ChipRequestDTO dto);
+    List<ChipResponseDTO> findByProgram(UUID idProgram);
 
-    // Eliminacion logica
-    void deleteChip(UUID id);
+    ChipResponseDTO findById(UUID idChip);
 
-    // Lista todas las fichas
-    List<ChipResponseDTO> getAllChips();
+    List<ChipResponseDTO> searchByCode(String code);
 
-    // Consulta por ID
-    ChipResponseDTO getChipById(UUID id);
+    ChipResponseDTO update(UUID idChip, ChipRequestDTO dto);
 
-    // Lista fichas de un programa especifico
-    List<ChipResponseDTO> getChipsByProgram(UUID idProgram);
+    ChipResponseDTO reactivate(UUID idChip);
 
-    // Filtra por estado
-    List<ChipResponseDTO> getChipsByState(ChipState state);
-
-    void permanentDeleteChip(UUID id);
-
+    ChipResponseDTO delete(UUID idChip, String reason);
 }

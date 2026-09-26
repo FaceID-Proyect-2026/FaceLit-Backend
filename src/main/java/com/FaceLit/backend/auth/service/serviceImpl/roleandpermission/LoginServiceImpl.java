@@ -1,5 +1,6 @@
 package com.FaceLit.backend.auth.service.serviceImpl.roleandpermission;
 
+import java.time.OffsetDateTime;
 import java.util.stream.Collectors;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,6 +20,7 @@ import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.JwtService;
 import com.FaceLit.backend.auth.service.roleandpermission.LoginService;
 import com.FaceLit.backend.auth.service.security.UserSessionService;
+import com.FaceLit.backend.shared.constants.AppConstants;
 
 import java.util.List;
 
@@ -49,23 +51,30 @@ public class LoginServiceImpl implements LoginService {
     @Override
     public LoginResponseDTO login(LoginRequestDTO dto) {
 
-        // 1. Verificar que aceptó las políticas de privacidad
-        // Sin esto el sistema rechaza el acceso — igual que en registro
-        if (!Boolean.TRUE.equals(dto.getAceptoPoliticas())) {
-            throw new LoginException("Debe aceptar las políticas de privacidad");
+        String identifier = dto.resolveIdentifier();
+        if (identifier == null || identifier.isBlank()) {
+            throw new LoginException("Debes indicar un documento o correo válido.");
         }
 
-        // 2. Buscar las credenciales por email
-        // Si no existe ese email en BD → rechazar
-        Credential credential = credentialRepository.findByEmail(dto.getEmail())
-                .orElseThrow(() -> new LoginException("Correo electrónico no registrado"));
+        Credential credential = credentialRepository.findByUser_DocumentNumber(identifier)
+            .or(() -> credentialRepository.findByEmailIgnoreCase(identifier))
+            .orElseThrow(() -> new LoginException("Usuario o contraseña incorrectos"));
 
         // 3. Obtener el usuario asociado a esa credencial
         User user = credential.getUser();
 
-        // 4. Verificar que la cuenta esté ACTIVE
-        // PENDING_CONSENT = no verificó email o falta acudiente
-        // BLOCKED = demasiados intentos fallidos
+        if (credential.getLockedUntil() != null
+                && credential.getLockedUntil().isAfter(OffsetDateTime.now())) {
+            throw new LoginException("La cuenta está bloqueada temporalmente");
+        }
+
+        if (credential.getLockedUntil() != null) {
+            credential.setLockedUntil(null);
+            credential.setFailedAttempts(0);
+        }
+
+        // Verificar que la cuenta esté ACTIVE
+        // BLOCKED = demasiados intentos fallidos o bloqueo administrativo.
         if (!AccountStatus.ACTIVE.equals(user.getAccountStatus())) {
             throw new LoginException("La cuenta no está activa. Verifica tu correo o contacta al administrador");
         }
@@ -75,7 +84,11 @@ public class LoginServiceImpl implements LoginService {
         if (!passwordEncoder.matches(dto.getPassword(), credential.getPassword())) {
 
             // Incrementar intentos fallidos
-            credential.setFailedAttempts(credential.getFailedAttempts() + 1);
+            int failedAttempts = credential.getFailedAttempts() + 1;
+            credential.setFailedAttempts(failedAttempts);
+            if (failedAttempts >= AppConstants.MAX_LOGIN_ATTEMPTS) {
+                credential.setLockedUntil(OffsetDateTime.now().plusMinutes(AppConstants.LOGIN_LOCK_MINUTES));
+            }
             credentialRepository.save(credential);
 
             throw new LoginException("Usuario o contraseña incorrectos");

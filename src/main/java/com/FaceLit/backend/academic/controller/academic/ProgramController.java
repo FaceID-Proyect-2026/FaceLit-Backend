@@ -1,10 +1,14 @@
 package com.FaceLit.backend.academic.controller.academic;
 
-// controller
-import org.springframework.http.HttpStatus;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -12,16 +16,16 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
 import com.FaceLit.backend.academic.dto.request.academic.ProgramRequestDTO;
 import com.FaceLit.backend.academic.dto.response.academic.ProgramResponseDTO;
-import com.FaceLit.backend.academic.model.enums.ProgramState;
 import com.FaceLit.backend.academic.service.academic.ProgramService;
-import java.util.List;
-import java.util.UUID;
+
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/api/admin/programs")
+@Validated
+@RequestMapping("/api/academic/programs")
 public class ProgramController {
 
     private final ProgramService programService;
@@ -30,58 +34,53 @@ public class ProgramController {
         this.programService = programService;
     }
 
-    // POST /api/admin/programs
     @PostMapping
-    public ResponseEntity<ProgramResponseDTO> create(
-            @Valid @RequestBody ProgramRequestDTO dto) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(programService.createProgram(dto));
+    public ResponseEntity<ProgramResponseDTO> create(@Valid @RequestBody ProgramRequestDTO dto) {
+        return ResponseEntity.ok(programService.create(dto));
     }
 
-    // PUT /api/admin/programs/{id}
-    @PutMapping("/{id}")
-    public ResponseEntity<ProgramResponseDTO> update(
-            @PathVariable UUID id,
-            @Valid @RequestBody ProgramRequestDTO dto) {
-        return ResponseEntity.ok(programService.updateProgram(id, dto));
-    }
-
-    // DELETE /api/admin/programs/{id} — eliminacion logica
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable UUID id) {
-        programService.deleteProgram(id);
-        return ResponseEntity.noContent().build();
-    }
-
-    // GET /api/admin/programs
     @GetMapping
-    public ResponseEntity<List<ProgramResponseDTO>> getAll() {
-        return ResponseEntity.ok(programService.getAllPrograms());
+    public ResponseEntity<List<ProgramResponseDTO>> findAll() {
+        return noStore(programService.findAll());
     }
 
-    // GET /api/admin/programs/{id}
-    @GetMapping("/{id}")
-    public ResponseEntity<ProgramResponseDTO> getById(@PathVariable UUID id) {
-        return ResponseEntity.ok(programService.getProgramById(id));
-    }
-
-    // GET /api/admin/programs/search?name=ADSO
     @GetMapping("/search")
-    public ResponseEntity<ProgramResponseDTO> getByName(@RequestParam String name) {
-        return ResponseEntity.ok(programService.getProgramByName(name));
+    public ResponseEntity<List<ProgramResponseDTO>> search(@RequestParam String name) {
+        return noStore(programService.searchByName(name));
     }
 
-    // GET /api/admin/programs/status?state=ACTIVE
-    @GetMapping("/status")
-    public ResponseEntity<List<ProgramResponseDTO>> getByState(
-            @RequestParam ProgramState state) {
-        return ResponseEntity.ok(programService.getProgramsByState(state));
+    @GetMapping("/code/{code}")
+    public ResponseEntity<ProgramResponseDTO> findByCode(@PathVariable String code) {
+        return ResponseEntity.ok(programService.findByCode(code));
     }
 
-    // DELETE /api/admin/programs/{id}/permanent
-    @DeleteMapping("/{id}/permanent")
-    public ResponseEntity<Void> permanentDelete(@PathVariable UUID id) {
-        programService.permanentDeleteProgram(id);
-        return ResponseEntity.noContent().build();
+    private <T> ResponseEntity<T> noStore(T body) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(body);
+    }
+
+    @GetMapping("/{idProgram}")
+    public ResponseEntity<ProgramResponseDTO> findById(@PathVariable UUID idProgram) {
+        return ResponseEntity.ok(programService.findById(idProgram));
+    }
+
+    @PutMapping("/{idProgram}")
+    public ResponseEntity<ProgramResponseDTO> update(
+            @PathVariable UUID idProgram,
+            @Valid @RequestBody ProgramRequestDTO dto) {
+        return ResponseEntity.ok(programService.update(idProgram, dto));
+    }
+
+    @PatchMapping("/{idProgram}/reactivate")
+    public ResponseEntity<ProgramResponseDTO> reactivate(@PathVariable UUID idProgram) {
+        return ResponseEntity.ok(programService.reactivate(idProgram));
+    }
+
+    @DeleteMapping("/{idProgram}")
+    public ResponseEntity<ProgramResponseDTO> delete(
+            @PathVariable UUID idProgram,
+            @RequestParam(required = false) String reason) {
+        return ResponseEntity.ok(programService.delete(idProgram, reason));
     }
 }

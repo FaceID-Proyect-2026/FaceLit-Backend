@@ -7,6 +7,7 @@ import java.util.UUID;
 
 @Getter
 @AllArgsConstructor
+// Adapter: transforma el resultado de autenticación en el contrato público de la API.
 public class LoginResponseDTO {
 
     // JWT que el frontend guarda y manda en cada request posterior
@@ -27,7 +28,7 @@ public class LoginResponseDTO {
     // Ejemplo: "Inicio de sesión exitoso"
     private String message;
 
-    // Método de fábrica — igual que usas en RegisterResponseDTO
+    // Factory Method: crea la variante de respuesta correspondiente a un login exitoso.
     public static LoginResponseDTO success(String token, String role, List<String> permissions, UUID userId) {
         return new LoginResponseDTO(token, role, permissions, userId, "Inicio de sesión exitoso");
     }

@@ -1,11 +1,13 @@
 package com.FaceLit.backend.auth.controller.security;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.FaceLit.backend.auth.dto.request.security.UpdateUserRequestDTO;
+import com.FaceLit.backend.auth.dto.request.security.CreateManagedUserRequestDTO;
 import com.FaceLit.backend.auth.dto.response.security.UserDetailResponseDTO;
 import com.FaceLit.backend.auth.service.security.UserManagementService;
 
@@ -30,10 +33,15 @@ public class UserManagementController {
     }
 
     // GET /api/admin/users
-    // Lista todos los usuarios que han iniciado sesion al menos una vez
+    // Lista todos los usuarios registrados en la base de datos.
     @GetMapping
     public ResponseEntity<List<UserDetailResponseDTO>> getAllUsers() {
         return ResponseEntity.ok(userManagementService.getAllUsers());
+    }
+
+    @GetMapping("/count")
+    public ResponseEntity<Map<String, Long>> countUsers() {
+        return ResponseEntity.ok(Map.of("total", userManagementService.countUsers()));
     }
 
     // GET /api/admin/users/search?query=maria
@@ -50,6 +58,14 @@ public class UserManagementController {
     public ResponseEntity<UserDetailResponseDTO> getDetail(
             @PathVariable UUID userId) {
         return ResponseEntity.ok(userManagementService.getUserDetail(userId));
+    }
+
+    // POST /api/admin/users
+    // Crear un coordinador desde la gestion administrativa
+    @PostMapping
+    public ResponseEntity<UserDetailResponseDTO> createUser(
+            @Valid @RequestBody CreateManagedUserRequestDTO dto) {
+        return ResponseEntity.ok(userManagementService.createUser(dto));
     }
 
     // PUT /api/admin/users/{userId}

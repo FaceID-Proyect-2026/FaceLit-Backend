@@ -16,6 +16,10 @@ public class PasswordRecoveryResponseDTO {
 
     }
 
+    public static PasswordRecoveryResponseDTO tokenVerified() {
+        return new PasswordRecoveryResponseDTO("Código válido");
+    }
+
     // Se devuelve cuando la contraseña se actualizó correctamente
     public static PasswordRecoveryResponseDTO passwordReset() {
         return new PasswordRecoveryResponseDTO("Contraseña restablecida correctamente");

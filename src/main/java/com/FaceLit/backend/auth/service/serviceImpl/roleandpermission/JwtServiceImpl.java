@@ -2,6 +2,7 @@ package com.FaceLit.backend.auth.service.serviceImpl.roleandpermission;
 
 import com.FaceLit.backend.auth.service.roleandpermission.JwtService;
 import com.FaceLit.backend.auth.model.security.User;
+import com.FaceLit.backend.shared.constants.AppConstants;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
+// Singleton gestionado por Spring: servicio stateless para crear y validar JWT.
 public class JwtServiceImpl implements JwtService {
 
     // Se lee desde application.yml — NUNCA hardcodeado
@@ -34,13 +36,13 @@ public class JwtServiceImpl implements JwtService {
     public String generateToken(User user, String role, List<String> permissions) {
         return Jwts.builder()
                 // userId — para identificar al usuario en cada request
-                .claim("userId", user.getIdUser().toString())
+                .claim(AppConstants.JWT_CLAIM_USER_ID, user.getIdUser().toString())
                 // email — útil para logs y auditoría
-                .claim("email", user.getCredential().getEmail())
+                .claim(AppConstants.JWT_CLAIM_EMAIL, user.getCredential().getEmail())
                 // role — el frontend lo usa para redirigir al dashboard correcto
-                .claim("role", role)
+                .claim(AppConstants.JWT_CLAIM_ROLE, role)
                 // permissions — el backend los usa para proteger endpoints
-                .claim("permissions", permissions)
+                .claim(AppConstants.JWT_CLAIM_PERMISSIONS, permissions)
                 // subject — identificador principal del token
                 .subject(user.getIdUser().toString())
                 // fecha de emisión
@@ -58,30 +60,30 @@ public class JwtServiceImpl implements JwtService {
             // Si no lanza excepción, el token es válido y no expiró
             getClaims(token);
             return true;
-        } catch (Exception e) {
+        } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
             return false;
         }
     }
 
     @Override
     public UUID extractUserId(String token) {
-        return UUID.fromString(getClaims(token).get("userId", String.class));
+        return UUID.fromString(getClaims(token).get(AppConstants.JWT_CLAIM_USER_ID, String.class));
     }
 
     @Override
     public String extractRole(String token) {
-        return getClaims(token).get("role", String.class);
+        return getClaims(token).get(AppConstants.JWT_CLAIM_ROLE, String.class);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public List<String> extractPermissions(String token) {
-        return getClaims(token).get("permissions", List.class);
+        return getClaims(token).get(AppConstants.JWT_CLAIM_PERMISSIONS, List.class);
     }
 
     @Override
     public String extractEmail(String token) {
-        return getClaims(token).get("email", String.class);
+        return getClaims(token).get(AppConstants.JWT_CLAIM_EMAIL, String.class);
     }
 
     // Método interno — parsea y valida el token, extrae todos los claims

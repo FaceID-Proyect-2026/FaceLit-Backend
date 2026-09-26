@@ -12,9 +12,13 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
 
     // Validar si ya existe una credencial con ese email
     boolean existsByEmail(String email);
+    boolean existsByEmailIgnoreCase(String email);
 
     // Busacr credenciales por email
     Optional<Credential> findByEmail(String email); // Opcional es una clase que puede contener un valor o vacio.
+    Optional<Credential> findByEmailIgnoreCase(String email);
+
+    Optional<Credential> findByUser_DocumentNumber(String documentNumber);
 
     // En auth/repository/security/CredentialRepository.java
     Optional<Credential> findByUser(User user);

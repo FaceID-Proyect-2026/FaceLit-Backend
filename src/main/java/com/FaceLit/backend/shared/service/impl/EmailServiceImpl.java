@@ -28,47 +28,6 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
-    public void sendVerificationCode(String toEmail, String code) {
-
-        // Se crea un objeto que representará el correo electrónico.
-        SimpleMailMessage message = new SimpleMailMessage();
-
-        // Correo del destinatario al que se enviará el mensaje.
-        message.setTo(toEmail);
-        // Asunto o título del correo.
-        message.setSubject("FaceLit — Código de verificación");
-        // Contenido del correo.
-        message.setText(
-                "Hola,\n\n" +
-                        "Tu código de verificación es: " + code + "\n\n" +
-                        "Este código expira en 5 minutos.\n" +
-                        "Si no solicitaste este código, ignora este mensaje.\n\n" +
-                        "FaceLit");
-        // Envía el correo usando JavaMailSender.
-        mailSender.send(message);
-    }
-
-    @Override
-    public void sendConsentRequest(String toEmail, String fullName, String token) {
-
-        // Se crea un objeto que representará el correo electrónico.
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(toEmail);
-        message.setSubject("FaceLit — Solicitud de autorización para menor de edad");
-        message.setText(
-                "Estimado/a " + fullName + ",\n\n" +
-                        "Un menor de edad bajo su responsabilidad se ha registrado en FaceLit.\n\n" +
-                        "Para autorizar o rechazar el tratamiento de sus datos personales, " +
-                        "ingrese el siguiente código de verificación en la aplicación:\n\n" +
-                        token + "\n\n" +
-                        "Este código expira en 5 minutos.\n" +
-                        "Si no reconoce esta solicitud, ignore este mensaje.\n\n" +
-                        "FaceLit");
-        mailSender.send(message);
-
-    }
-
-    @Override
     public void sendRecoveryCode(String toEmail, String code) {
 
         SimpleMailMessage message = new SimpleMailMessage();

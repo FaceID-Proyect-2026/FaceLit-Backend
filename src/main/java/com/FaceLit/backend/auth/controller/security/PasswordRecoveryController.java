@@ -9,10 +9,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.FaceLit.backend.auth.dto.request.security.RequestPasswordRecoveryDTO;
 import com.FaceLit.backend.auth.dto.request.security.ResetPasswordDTO;
+import com.FaceLit.backend.auth.dto.request.security.VerifyTokenDTO;
+import com.FaceLit.backend.auth.dto.request.security.ChangePasswordRequestDTO;
 import com.FaceLit.backend.auth.dto.response.security.PasswordRecoveryResponseDTO;
+import com.FaceLit.backend.auth.service.security.ChangePasswordService;
 import com.FaceLit.backend.auth.service.security.PasswordRecoveryService;
 
 import jakarta.validation.Valid;
+import java.util.UUID;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -20,9 +25,12 @@ import jakarta.validation.Valid;
 public class PasswordRecoveryController {
 
     private final PasswordRecoveryService passwordRecoveryService;
+    private final ChangePasswordService changePasswordService;
 
-    public PasswordRecoveryController(PasswordRecoveryService passwordRecoveryService) {
+    public PasswordRecoveryController(PasswordRecoveryService passwordRecoveryService,
+            ChangePasswordService changePasswordService) {
         this.passwordRecoveryService = passwordRecoveryService;
+        this.changePasswordService = changePasswordService;
     }
 
     // PASO 1 — Solicitar recuperación: el usuario manda su correo
@@ -35,6 +43,12 @@ public class PasswordRecoveryController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/verify-token")
+    public ResponseEntity<PasswordRecoveryResponseDTO> verifyToken(
+            @Valid @RequestBody VerifyTokenDTO dto) {
+        return ResponseEntity.ok(passwordRecoveryService.verifyToken(dto));
+    }
+
     // PASO 2 — Restablecer contraseña: el usuario manda el código + nueva
     // contraseña
     // POST /api/auth/restablecer-contrasena
@@ -45,5 +59,12 @@ public class PasswordRecoveryController {
         PasswordRecoveryResponseDTO response = passwordRecoveryService.resetPassword(dto);
         return ResponseEntity.ok(response);
 
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<PasswordRecoveryResponseDTO> changePassword(
+            @AuthenticationPrincipal UUID userId,
+            @Valid @RequestBody ChangePasswordRequestDTO dto) {
+        return ResponseEntity.ok(changePasswordService.changePassword(userId, dto));
     }
 }

@@ -1,7 +1,6 @@
 package com.FaceLit.backend.auth.model.roleandpermission;
 
 
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -52,9 +51,6 @@ public class UserRole extends AuditBase {
     @JoinColumn(name = "id_role", nullable = false)
     private Role role;
 
-    @Column(name = "assignment_date")
-    private LocalDate assignmentDate;
-
-    @Column(name = "assigned_at")
+    @Column(name = "asigned_at", nullable = false)
     private OffsetDateTime assignedAt;
 }

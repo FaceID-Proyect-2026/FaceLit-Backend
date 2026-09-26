@@ -1,24 +1,30 @@
 package com.FaceLit.backend.academic.controller.academic;
 
-import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
+import java.util.List;
+import java.util.UUID;
+
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.http.CacheControl;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.FaceLit.backend.academic.dto.request.academic.TransferChipRequestDTO;
 import com.FaceLit.backend.academic.dto.request.academic.UserChipRequestDTO;
 import com.FaceLit.backend.academic.dto.response.academic.UserChipResponseDTO;
 import com.FaceLit.backend.academic.service.academic.UserChipService;
 
-import java.util.List;
-import java.util.UUID;
+import jakarta.validation.Valid;
 
 @RestController
+@Validated
+@RequestMapping("/api/academic")
 public class UserChipController {
 
     private final UserChipService userChipService;
@@ -27,40 +33,50 @@ public class UserChipController {
         this.userChipService = userChipService;
     }
 
-    // POST /api/apprentice/join-chip
-    // Solo APPRENTICE — el aprendiz ingresa el codigo de ficha
-    // El userId viene del JWT, no del body — seguridad
-    @PostMapping("/api/apprentice/join-chip")
-    public ResponseEntity<UserChipResponseDTO> joinChip(
-            @AuthenticationPrincipal UUID userId,
+    @PostMapping("/chips/{idChip}/apprentices")
+    public ResponseEntity<UserChipResponseDTO> assignInitialChip(
+            @PathVariable UUID idChip,
             @Valid @RequestBody UserChipRequestDTO dto) {
-
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(userChipService.joinChip(userId, dto));
+        return ResponseEntity.ok(userChipService.assignInitialChip(idChip, dto));
     }
 
-    // GET /api/admin/chips/{idChip}/apprentices
-    // El admin ve todos los aprendices de una ficha
-    @GetMapping("/api/admin/chips/{idChip}/apprentices")
-    public ResponseEntity<List<UserChipResponseDTO>> getApprentices(
-            @PathVariable UUID idChip) {
-        return ResponseEntity.ok(userChipService.getApprenticesByChip(idChip));
+    @GetMapping("/chips/{idChip}/apprentices")
+    public ResponseEntity<List<UserChipResponseDTO>> findApprenticesByChip(@PathVariable UUID idChip) {
+        return ResponseEntity.ok(userChipService.findApprenticesByChip(idChip));
     }
 
-    // DELETE /api/admin/user-chips/{idUserChip}
-    // El admin desvincula un aprendiz de una ficha
-    @DeleteMapping("/api/admin/user-chips/{idUserChip}")
-    public ResponseEntity<Void> removeApprentice(
-            @PathVariable UUID idUserChip) {
-        userChipService.removeApprenticeFromChip(idUserChip);
-        return ResponseEntity.noContent().build();
+    @GetMapping("/chips/apprentices")
+    public ResponseEntity<List<UserChipResponseDTO>> findApprenticesByChips(@RequestParam List<UUID> ids) {
+        return ResponseEntity.ok(userChipService.findApprenticesByChips(ids));
     }
 
-    // GET /api/apprentice/my-chips
-    // El aprendiz ve su historial de fichas
-    @GetMapping("/api/apprentice/my-chips")
-    public ResponseEntity<List<UserChipResponseDTO>> myChips(
-            @AuthenticationPrincipal UUID userId) {
-        return ResponseEntity.ok(userChipService.getChipsByUser(userId));
+    @GetMapping("/users/{idUser}/chip")
+    public ResponseEntity<UserChipResponseDTO> getActiveChipByUser(@PathVariable UUID idUser) {
+        return ResponseEntity.ok(userChipService.getActiveChipByUser(idUser));
+    }
+
+    @GetMapping("/me/chip")
+    public ResponseEntity<UserChipResponseDTO> getAuthenticatedUserChip(
+            @AuthenticationPrincipal Object principal) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(userChipService.getActiveChipByUser(UUID.fromString(principal.toString())));
+    }
+
+    @GetMapping("/users/{idUser}/chip/history")
+    public ResponseEntity<List<UserChipResponseDTO>> getChipHistoryByUser(@PathVariable UUID idUser) {
+        return ResponseEntity.ok(userChipService.getChipHistoryByUser(idUser));
+    }
+
+    @GetMapping("/users/{idUser}/chip/transfer-targets")
+    public ResponseEntity<List<UserChipResponseDTO>> getTransferTargets(@PathVariable UUID idUser) {
+        return ResponseEntity.ok(userChipService.getTransferTargets(idUser));
+    }
+
+    @PostMapping("/users/{idUser}/chip/transfer")
+    public ResponseEntity<UserChipResponseDTO> transferChip(
+            @PathVariable UUID idUser,
+            @Valid @RequestBody TransferChipRequestDTO dto) {
+        return ResponseEntity.ok(userChipService.transferChip(idUser, dto));
     }
 }
