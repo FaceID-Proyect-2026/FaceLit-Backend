@@ -67,8 +67,7 @@ public class ChipServiceImpl implements ChipService {
     @Transactional(readOnly = true)
     public List<ChipResponseDTO> findByProgram(UUID idProgram) {
         getProgram(idProgram);
-        return chipRepository.findAll().stream()
-                .filter(chip -> chip.getProgram().getIdProgram().equals(idProgram))
+        return chipRepository.findByProgram_IdProgram(idProgram).stream()
                 .map(ChipResponseDTO::new)
                 .toList();
     }

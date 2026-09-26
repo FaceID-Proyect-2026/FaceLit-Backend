@@ -9,8 +9,10 @@ import com.FaceLit.backend.auth.dto.response.security.UserDetailResponseDTO;
 // Gestion de usuario
 public interface UserManagementService {
 
-    // Lista todos los usuarios que han iniciado sesion al menos una vez
+    // Lista todos los usuarios registrados en la base de datos.
     List<UserDetailResponseDTO> getAllUsers();
+
+    long countUsers();
 
     // Busca usuarios por nombre o correo (coincidencia parcial)
     List<UserDetailResponseDTO> searchUsers(String query);

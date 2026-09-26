@@ -139,8 +139,29 @@ public class UserChipServiceImpl implements UserChipService {
     public List<UserChipResponseDTO> findApprenticesByChip(UUID idChip) {
         Chip chip = chipRepository.findById(idChip)
                 .orElseThrow(() -> new AcademicException("Ficha no encontrada.", HttpStatus.NOT_FOUND));
-        return userChipRepository.findAll().stream()
-                .filter(uc -> uc.getChip().getIdChip().equals(chip.getIdChip()) && uc.getState() == AcademicState.ACTIVE)
+        return userChipRepository.findByChip_IdChip(chip.getIdChip()).stream()
+                .filter(uc -> uc.getState() == AcademicState.ACTIVE)
+                .map(UserChipResponseDTO::new)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserChipResponseDTO> findApprenticesByChips(List<UUID> idChips) {
+        if (idChips == null || idChips.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> uniqueIds = idChips.stream()
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (uniqueIds.isEmpty()) {
+            return List.of();
+        }
+
+        return userChipRepository.findByChip_IdChipInAndState(uniqueIds, AcademicState.ACTIVE).stream()
                 .map(UserChipResponseDTO::new)
                 .toList();
     }
@@ -151,9 +172,7 @@ public class UserChipServiceImpl implements UserChipService {
         User user = userRepository.findById(idUser)
                 .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
 
-        UserChip chip = userChipRepository.findAll().stream()
-                .filter(uc -> uc.getUser().getIdUser().equals(user.getIdUser()) && uc.getState() == AcademicState.ACTIVE)
-                .findFirst()
+        UserChip chip = userChipRepository.findByUser_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE)
                 .orElseThrow(() -> new AcademicException("El aprendiz no tiene una ficha activa para trasladar.", HttpStatus.BAD_REQUEST));
 
         return new UserChipResponseDTO(chip);
@@ -165,8 +184,7 @@ public class UserChipServiceImpl implements UserChipService {
         User user = userRepository.findById(idUser)
                 .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
 
-        return userChipRepository.findAll().stream()
-                .filter(uc -> uc.getUser().getIdUser().equals(user.getIdUser()))
+        return userChipRepository.findByUser_IdUser(user.getIdUser()).stream()
                 .sorted(Comparator.comparing(UserChip::getAssignmentDate).reversed())
                 .map(UserChipResponseDTO::new)
                 .toList();
@@ -178,9 +196,7 @@ public class UserChipServiceImpl implements UserChipService {
         User user = userRepository.findById(idUser)
                 .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
 
-        Optional<UserChip> current = userChipRepository.findAll().stream()
-                .filter(uc -> uc.getUser().getIdUser().equals(user.getIdUser()) && uc.getState() == AcademicState.ACTIVE)
-                .findFirst();
+        Optional<UserChip> current = userChipRepository.findByUser_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE);
 
         if (current.isEmpty()) {
             throw new AcademicException("El aprendiz no tiene una ficha activa para trasladar.", HttpStatus.BAD_REQUEST);
@@ -191,18 +207,7 @@ public class UserChipServiceImpl implements UserChipService {
         return chipRepository.findByState(AcademicState.ACTIVE).stream()
                 .filter(chip -> !chip.getIdChip().equals(currentChipId))
                 .filter(chip -> chip.getProgram().getIdProgram().equals(currentProgramId))
-                .map(chip -> new UserChipResponseDTO(userChipRepository.findAll().stream()
-                        .filter(uc -> uc.getUser().getIdUser().equals(user.getIdUser()) && uc.getChip().getIdChip().equals(chip.getIdChip()) && uc.getState() == AcademicState.ACTIVE)
-                        .findFirst()
-                        .orElseGet(() -> {
-                            UserChip temp = new UserChip();
-                            temp.setIdUserChip(UUID.randomUUID());
-                            temp.setUser(user);
-                            temp.setChip(chip);
-                            temp.setState(AcademicState.ACTIVE);
-                            temp.setAssignmentDate(OffsetDateTime.now());
-                            return temp;
-                        })))
+                .map(chip -> new UserChipResponseDTO(buildTransferTarget(user, chip)))
                 .toList();
     }
 
@@ -216,9 +221,7 @@ public class UserChipServiceImpl implements UserChipService {
         User user = userRepository.findById(idUser)
                 .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
 
-        UserChip current = userChipRepository.findAll().stream()
-                .filter(uc -> uc.getUser().getIdUser().equals(user.getIdUser()) && uc.getState() == AcademicState.ACTIVE)
-                .findFirst()
+        UserChip current = userChipRepository.findByUser_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE)
                 .orElseThrow(() -> new AcademicException("El aprendiz no tiene una ficha activa para trasladar.", HttpStatus.BAD_REQUEST));
 
         Chip destination = chipRepository.findById(dto.getIdNewChip())
@@ -264,6 +267,17 @@ public class UserChipServiceImpl implements UserChipService {
             }
         });
     }
+
+    private UserChip buildTransferTarget(User user, Chip chip) {
+        UserChip temp = new UserChip();
+        temp.setIdUserChip(UUID.randomUUID());
+        temp.setUser(user);
+        temp.setChip(chip);
+        temp.setState(AcademicState.ACTIVE);
+        temp.setAssignmentDate(OffsetDateTime.now());
+        return temp;
+    }
+
     private String generatePassword() {
         String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@$!%*?";
         StringBuilder password = new StringBuilder();

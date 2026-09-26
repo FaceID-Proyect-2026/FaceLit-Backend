@@ -16,6 +16,7 @@ public interface ChipRepository extends JpaRepository<Chip, UUID> {
     List<Chip> findByChipCodeContainingIgnoreCase(String chipCode);
     List<Chip> findByState(AcademicState state);
     List<Chip> findByProgram_IdProgram(UUID idProgram);
+    List<Chip> findByProgram_IdProgramIn(List<UUID> idPrograms);
 
     long countByProgram_IdProgram(UUID idProgram);
     long countByProgram_IdProgramAndState(UUID idProgram, AcademicState state);

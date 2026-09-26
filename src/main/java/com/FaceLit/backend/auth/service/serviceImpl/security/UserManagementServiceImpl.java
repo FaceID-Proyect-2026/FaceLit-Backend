@@ -24,6 +24,7 @@ import com.FaceLit.backend.auth.dto.request.roleandpermission.AssignRoleRequestD
 import com.FaceLit.backend.auth.dto.request.security.CreateManagedUserRequestDTO;
 import com.FaceLit.backend.auth.dto.request.security.UpdateUserRequestDTO;
 import com.FaceLit.backend.auth.dto.response.security.UserDetailResponseDTO;
+import com.FaceLit.backend.auth.dto.response.security.UserListProjection;
 import com.FaceLit.backend.auth.exception.UserManagementException;
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
 import com.FaceLit.backend.auth.model.enums.CredentialStatus;
@@ -92,9 +93,14 @@ public class UserManagementServiceImpl implements UserManagementService {
 
         @Override
         public List<UserDetailResponseDTO> getAllUsers() {
-                return userRepository.findAll().stream()
-                                .map(this::toDTO)
+                return userRepository.findAllUserSummaries().stream()
+                                .map(this::toListDTO)
                                 .collect(Collectors.toList());
+        }
+
+        @Override
+        public long countUsers() {
+                return userRepository.count();
         }
 
         @Override
@@ -103,8 +109,8 @@ public class UserManagementServiceImpl implements UserManagementService {
                         throw new UserManagementException("No se encontraron usuarios con ese criterio");
                 }
 
-                List<UserDetailResponseDTO> results = userRepository.searchByFullNameOrEmail(query.trim()).stream()
-                                .map(this::toDTO)
+                List<UserDetailResponseDTO> results = userRepository.searchUserSummaries(query.trim()).stream()
+                                .map(this::toListDTO)
                                 .collect(Collectors.toList());
 
                 if (results.isEmpty()) {
@@ -112,6 +118,25 @@ public class UserManagementServiceImpl implements UserManagementService {
                 }
 
                 return results;
+        }
+
+        private UserDetailResponseDTO toListDTO(UserListProjection user) {
+                return new UserDetailResponseDTO(
+                                user.getUserId(),
+                                user.getFirstName(),
+                                user.getLastName(),
+                                user.getDocumentNumber(),
+                                user.getEmail(),
+                                user.getRole() != null ? user.getRole().name() : "Sin rol",
+                                user.getAccountStatus() != null ? user.getAccountStatus().name() : AccountStatus.INACTIVE.name(),
+                                "INACTIVE",
+                                user.getRegistrationDate(),
+                                null,
+                                false,
+                                null,
+                                null,
+                                List.of(),
+                                List.of());
         }
 
         @Override
@@ -157,7 +182,22 @@ public class UserManagementServiceImpl implements UserManagementService {
                 roleDto.setRole(dto.getRole());
                 adminRoleService.assignRole(user.getIdUser(), roleDto);
 
-                return toDTO(user);
+                return new UserDetailResponseDTO(
+                                user.getIdUser(),
+                                user.getFirstName(),
+                                user.getLastName(),
+                                user.getDocumentNumber(),
+                                email,
+                                dto.getRole().name(),
+                                user.getAccountStatus().name(),
+                                "INACTIVE",
+                                user.getCreatedAt(),
+                                null,
+                                false,
+                                null,
+                                null,
+                                List.of(),
+                                List.of());
         }
 
         @Override

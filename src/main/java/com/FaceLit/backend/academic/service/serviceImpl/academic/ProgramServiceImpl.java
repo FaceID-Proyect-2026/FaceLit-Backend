@@ -1,8 +1,10 @@
 package com.FaceLit.backend.academic.service.serviceImpl.academic;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +14,7 @@ import com.FaceLit.backend.academic.dto.request.academic.ProgramRequestDTO;
 import com.FaceLit.backend.academic.dto.response.academic.ProgramResponseDTO;
 import com.FaceLit.backend.academic.exception.AcademicException;
 import com.FaceLit.backend.academic.model.academic.ChangeHistory;
+import com.FaceLit.backend.academic.model.academic.Chip;
 import com.FaceLit.backend.academic.model.academic.Program;
 import com.FaceLit.backend.academic.model.enums.AcademicState;
 import com.FaceLit.backend.academic.model.enums.ChangeAction;
@@ -66,8 +69,17 @@ public class ProgramServiceImpl implements ProgramService {
     @Override
     @Transactional(readOnly = true)
     public List<ProgramResponseDTO> findAll() {
-        return programRepository.findAll().stream()
-                .map(program -> new ProgramResponseDTO(program, chipRepository.findByProgram_IdProgram(program.getIdProgram())))
+        List<Program> programs = programRepository.findAll();
+        if (programs.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, List<Chip>> chipsByProgram = chipRepository
+                .findByProgram_IdProgramIn(programs.stream().map(Program::getIdProgram).toList())
+                .stream()
+                .collect(Collectors.groupingBy(chip -> chip.getProgram().getIdProgram()));
+
+        return programs.stream()
+                .map(program -> new ProgramResponseDTO(program, chipsByProgram.getOrDefault(program.getIdProgram(), List.of())))
                 .toList();
     }
 

@@ -1,5 +1,6 @@
 package com.FaceLit.backend.auth.controller.security;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
@@ -32,10 +33,15 @@ public class UserManagementController {
     }
 
     // GET /api/admin/users
-    // Lista todos los usuarios que han iniciado sesion al menos una vez
+    // Lista todos los usuarios registrados en la base de datos.
     @GetMapping
     public ResponseEntity<List<UserDetailResponseDTO>> getAllUsers() {
         return ResponseEntity.ok(userManagementService.getAllUsers());
+    }
+
+    @GetMapping("/count")
+    public ResponseEntity<Map<String, Long>> countUsers() {
+        return ResponseEntity.ok(Map.of("total", userManagementService.countUsers()));
     }
 
     // GET /api/admin/users/search?query=maria

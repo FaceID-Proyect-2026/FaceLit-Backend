@@ -11,6 +11,7 @@ public interface UserChipService {
 
     UserChipResponseDTO assignInitialChip(UUID idChip, UserChipRequestDTO dto);
     List<UserChipResponseDTO> findApprenticesByChip(UUID idChip);
+    List<UserChipResponseDTO> findApprenticesByChips(List<UUID> idChips);
     UserChipResponseDTO getActiveChipByUser(UUID idUser);
     List<UserChipResponseDTO> getChipHistoryByUser(UUID idUser);
     List<UserChipResponseDTO> getTransferTargets(UUID idUser);

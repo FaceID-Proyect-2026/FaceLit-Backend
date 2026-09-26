@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.FaceLit.backend.academic.dto.request.academic.TransferChipRequestDTO;
@@ -42,6 +43,11 @@ public class UserChipController {
     @GetMapping("/chips/{idChip}/apprentices")
     public ResponseEntity<List<UserChipResponseDTO>> findApprenticesByChip(@PathVariable UUID idChip) {
         return ResponseEntity.ok(userChipService.findApprenticesByChip(idChip));
+    }
+
+    @GetMapping("/chips/apprentices")
+    public ResponseEntity<List<UserChipResponseDTO>> findApprenticesByChips(@RequestParam List<UUID> ids) {
+        return ResponseEntity.ok(userChipService.findApprenticesByChips(ids));
     }
 
     @GetMapping("/users/{idUser}/chip")
