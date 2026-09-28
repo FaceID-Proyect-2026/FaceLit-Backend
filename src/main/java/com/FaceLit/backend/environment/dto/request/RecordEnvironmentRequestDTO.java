@@ -1,0 +1,31 @@
+package com.FaceLit.backend.environment.dto.request;
+
+import java.time.LocalTime;
+import java.util.UUID;
+
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class RecordEnvironmentRequestDTO {
+
+    @NotNull(message = "El ambiente es obligatorio.")
+    private UUID idEnvironment;
+
+    @NotNull(message = "El instructor es obligatorio.")
+    private UUID idInstructorInCharge;
+
+    @NotNull(message = "La ficha es obligatoria.")
+    private UUID idChip;
+
+    @NotNull(message = "El tiempo de registro es obligatorio.")
+    @Positive(message = "El tiempo de registro debe ser mayor a cero.")
+    private Integer registrationMinutes;
+
+    private LocalTime exitTime;
+
+    private LocalTime shutdownTime;
+}

@@ -19,6 +19,7 @@ import com.FaceLit.backend.auth.exception.PasswordRecoveryException;
 import com.FaceLit.backend.auth.exception.UserManagementException;
 import com.FaceLit.backend.auth.exception.ChangePasswordException;
 import com.FaceLit.backend.academic.exception.AcademicException;
+import com.FaceLit.backend.environment.exception.EnvironmentException;
 
 @RestControllerAdvice // esta anotacion funciona para que se escuchen TODOS los errores que ocurre en
 // los controller
@@ -49,6 +50,11 @@ public class GlobalExceptionHandler { // esta clase es para que capture errores 
 
     @ExceptionHandler(AcademicException.class)
     public ResponseEntity<Map<String, String>> handleAcademic(AcademicException ex) {
+        return ResponseEntity.status(ex.getStatus()).body(Map.of("message", ex.getMessage()));
+    }
+
+    @ExceptionHandler(EnvironmentException.class)
+    public ResponseEntity<Map<String, String>> handleEnvironment(EnvironmentException ex) {
         return ResponseEntity.status(ex.getStatus()).body(Map.of("message", ex.getMessage()));
     }
 

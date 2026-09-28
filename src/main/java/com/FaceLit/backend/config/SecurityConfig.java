@@ -47,6 +47,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/academic/programs/**", "/api/academic/chips/**")
                         .hasAnyRole("COORDINATOR", "INSTRUCTOR")
                         .requestMatchers("/api/academic/**").hasRole("COORDINATOR")
+                        .requestMatchers("/api/environment/**").hasRole("INSTRUCTOR")
 
                         // ─── PERFIL PERSONAL — cualquier usuario autenticado, sin importar rol ───
                         .requestMatchers("/api/profile/**").authenticated()
