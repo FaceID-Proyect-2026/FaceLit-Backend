@@ -245,6 +245,16 @@ public class UserManagementServiceImpl implements UserManagementService {
                 User user = userRepository.findById(userId)
                                 .orElseThrow(() -> new UserManagementException("Usuario no encontrado"));
 
+                if (user.getAccountStatus() == AccountStatus.ACTIVE) {
+                        user.setAccountStatus(AccountStatus.INACTIVE);
+                        userRepository.save(user);
+                        credentialRepository.findByUser(user).ifPresent(credential -> {
+                                credential.setCredentialStatus(CredentialStatus.INACTIVE);
+                                credentialRepository.save(credential);
+                        });
+                        return;
+                }
+
                 acceptanceTermsRepository.findByUser(user)
                                 .ifPresent(acceptanceTermsRepository::delete);
 

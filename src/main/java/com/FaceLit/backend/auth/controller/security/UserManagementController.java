@@ -78,7 +78,7 @@ public class UserManagementController {
     }
 
     // DELETE /api/admin/users/{userId}
-    // Eliminar usuario permanentemente
+    // Si esta activo, lo desactiva. Si ya esta inactivo, lo elimina permanentemente.
     @DeleteMapping("/{userId}")
     public ResponseEntity<Void> deleteUser(@PathVariable UUID userId) {
         userManagementService.deleteUser(userId);
