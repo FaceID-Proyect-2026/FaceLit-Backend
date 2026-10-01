@@ -20,6 +20,8 @@ import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.JwtService;
 import com.FaceLit.backend.auth.service.roleandpermission.LoginService;
 import com.FaceLit.backend.auth.service.security.UserSessionService;
+import com.FaceLit.backend.notification.dto.request.MonolithEventRequestDTO;
+import com.FaceLit.backend.notification.service.NotificationService;
 import com.FaceLit.backend.shared.constants.AppConstants;
 
 import java.util.List;
@@ -33,19 +35,23 @@ public class LoginServiceImpl implements LoginService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final UserSessionService userSessionService;
+    private final NotificationService notificationService;
 
     public LoginServiceImpl(
             CredentialRepository credentialRepository,
             UserRoleRepository userRoleRepository,
             RolePermissionRepository rolePermissionRepository,
             PasswordEncoder passwordEncoder,
-            JwtService jwtService, UserSessionService userSessionService) {
+            JwtService jwtService,
+            UserSessionService userSessionService,
+            NotificationService notificationService) {
         this.credentialRepository = credentialRepository;
         this.userRoleRepository = userRoleRepository;
         this.rolePermissionRepository = rolePermissionRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.userSessionService = userSessionService;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -90,6 +96,7 @@ public class LoginServiceImpl implements LoginService {
                 credential.setLockedUntil(OffsetDateTime.now().plusMinutes(AppConstants.LOGIN_LOCK_MINUTES));
             }
             credentialRepository.save(credential);
+            notifyFailedLogin(user, failedAttempts);
 
             throw new LoginException("Usuario o contraseña incorrectos");
         }
@@ -126,6 +133,40 @@ public class LoginServiceImpl implements LoginService {
 
         // 12. Devolver la respuesta con el token
         return LoginResponseDTO.success(token, roleName, permissions, user.getIdUser());
+    }
+
+    private void notifyFailedLogin(User user, int failedAttempts) {
+        try {
+            if (failedAttempts >= AppConstants.MAX_LOGIN_ATTEMPTS) {
+                notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                        "security_account_locked",
+                        "Cuenta bloqueada por intentos fallidos",
+                        "La cuenta con documento " + user.getDocumentNumber()
+                                + " quedo bloqueada temporalmente tras superar el limite de intentos fallidos.",
+                        null,
+                        user.getIdUser(),
+                        "user",
+                        null,
+                        "{\"accountDocument\":\"" + user.getDocumentNumber() + "\",\"failedCount\":" + failedAttempts
+                                + ",\"lockMinutes\":" + AppConstants.LOGIN_LOCK_MINUTES + "}"));
+                return;
+            }
+
+            if (failedAttempts >= 2) {
+                notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                        "security_multiple_failures",
+                        "Multiples intentos fallidos de inicio de sesion",
+                        "La cuenta con documento " + user.getDocumentNumber()
+                                + " acumulo " + failedAttempts + " intentos fallidos consecutivos.",
+                        null,
+                        user.getIdUser(),
+                        "user",
+                        null,
+                        "{\"accountDocument\":\"" + user.getDocumentNumber() + "\",\"failedCount\":" + failedAttempts + "}"));
+            }
+        } catch (RuntimeException ignored) {
+            // El login no debe fallar por un problema registrando la notificacion.
+        }
     }
 
 }

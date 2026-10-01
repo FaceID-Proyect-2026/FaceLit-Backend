@@ -23,6 +23,8 @@ import com.FaceLit.backend.academic.repository.ChipRepository;
 import com.FaceLit.backend.academic.repository.InstructorProgramRepository;
 import com.FaceLit.backend.academic.repository.ProgramRepository;
 import com.FaceLit.backend.academic.service.academic.ProgramService;
+import com.FaceLit.backend.notification.dto.request.MonolithEventRequestDTO;
+import com.FaceLit.backend.notification.service.NotificationService;
 
 @Service
 // Facade de programas: el controller usa este servicio y no conoce repositorios ni reglas de persistencia.
@@ -32,16 +34,19 @@ public class ProgramServiceImpl implements ProgramService {
     private final ChipRepository chipRepository;
     private final InstructorProgramRepository instructorProgramRepository;
     private final ChangeHistoryRepository changeHistoryRepository;
+    private final NotificationService notificationService;
 
     public ProgramServiceImpl(
             ProgramRepository programRepository,
             ChipRepository chipRepository,
             InstructorProgramRepository instructorProgramRepository,
-            ChangeHistoryRepository changeHistoryRepository) {
+            ChangeHistoryRepository changeHistoryRepository,
+            NotificationService notificationService) {
         this.programRepository = programRepository;
         this.chipRepository = chipRepository;
         this.instructorProgramRepository = instructorProgramRepository;
         this.changeHistoryRepository = changeHistoryRepository;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -150,6 +155,7 @@ public class ProgramServiceImpl implements ProgramService {
         long chips = chipRepository.countByProgram_IdProgram(idProgram);
         long instructors = instructorProgramRepository.countByProgram_IdProgram(idProgram);
         if (chips > 0 || instructors > 0) {
+            notifyDeleteBlocked(program, chips, instructors);
             throw new AcademicException("No se puede inactivar ni eliminar el programa porque tiene fichas o instructores asociados");
         }
 
@@ -181,5 +187,22 @@ public class ProgramServiceImpl implements ProgramService {
         history.setNewValue(newValue);
         history.setAction(action);
         changeHistoryRepository.save(history);
+    }
+
+    private void notifyDeleteBlocked(Program program, long chips, long instructors) {
+        try {
+            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                    "academic_delete_blocked",
+                    "Intento de eliminacion bloqueado",
+                    "No fue posible eliminar el programa " + program.getProgramName()
+                            + " porque tiene " + chips + " fichas y " + instructors + " instructores asociados.",
+                    null,
+                    program.getIdProgram(),
+                    "program",
+                    null,
+                    "{\"entityType\":\"program\",\"entityId\":\"" + program.getIdProgram() + "\"}"));
+        } catch (RuntimeException ignored) {
+            // La regla academica debe responder aunque falle el registro de la notificacion.
+        }
     }
 }

@@ -23,4 +23,6 @@ public interface CredentialRepository extends JpaRepository<Credential, UUID> {
     // En auth/repository/security/CredentialRepository.java
     Optional<Credential> findByUser(User user);
 
+    Optional<Credential> findByUser_IdUser(UUID idUser);
+
 }

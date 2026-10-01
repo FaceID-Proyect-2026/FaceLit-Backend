@@ -21,6 +21,8 @@ import com.FaceLit.backend.academic.repository.ChipRepository;
 import com.FaceLit.backend.academic.repository.ProgramRepository;
 import com.FaceLit.backend.academic.repository.UserChipRepository;
 import com.FaceLit.backend.academic.service.academic.ChipService;
+import com.FaceLit.backend.notification.dto.request.MonolithEventRequestDTO;
+import com.FaceLit.backend.notification.service.NotificationService;
 
 @Service
 // Facade de fichas: concentra validaciones, persistencia y bitácora detrás del contrato del servicio.
@@ -30,16 +32,19 @@ public class ChipServiceImpl implements ChipService {
     private final ProgramRepository programRepository;
     private final UserChipRepository userChipRepository;
     private final ChangeHistoryRepository changeHistoryRepository;
+    private final NotificationService notificationService;
 
     public ChipServiceImpl(
             ChipRepository chipRepository,
             ProgramRepository programRepository,
             UserChipRepository userChipRepository,
-            ChangeHistoryRepository changeHistoryRepository) {
+            ChangeHistoryRepository changeHistoryRepository,
+            NotificationService notificationService) {
         this.chipRepository = chipRepository;
         this.programRepository = programRepository;
         this.userChipRepository = userChipRepository;
         this.changeHistoryRepository = changeHistoryRepository;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -138,6 +143,7 @@ public class ChipServiceImpl implements ChipService {
         }
 
         if (userChipRepository.countByChip_IdChip(idChip) > 0) {
+            notifyDeleteBlocked(chip, assignmentCount);
             throw new AcademicException("No se puede eliminar la ficha porque tiene aprendices asociados");
         }
 
@@ -167,5 +173,22 @@ public class ChipServiceImpl implements ChipService {
         history.setNewValue(newValue);
         history.setAction(action);
         changeHistoryRepository.save(history);
+    }
+
+    private void notifyDeleteBlocked(Chip chip, long assignmentCount) {
+        try {
+            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                    "academic_delete_blocked",
+                    "Intento de eliminacion bloqueado",
+                    "No fue posible eliminar la ficha " + chip.getChipCode()
+                            + " porque tiene " + assignmentCount + " aprendices asociados.",
+                    null,
+                    chip.getIdChip(),
+                    "chip",
+                    null,
+                    "{\"entityType\":\"chip\",\"entityId\":\"" + chip.getIdChip() + "\"}"));
+        } catch (RuntimeException ignored) {
+            // La respuesta academica no debe depender del registro de notificaciones.
+        }
     }
 }

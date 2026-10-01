@@ -10,6 +10,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -71,6 +72,13 @@ public class UserChipController {
     @GetMapping("/users/{idUser}/chip/transfer-targets")
     public ResponseEntity<List<UserChipResponseDTO>> getTransferTargets(@PathVariable UUID idUser) {
         return ResponseEntity.ok(userChipService.getTransferTargets(idUser));
+    }
+
+    @PutMapping("/users/{idUser}/apprentice")
+    public ResponseEntity<UserChipResponseDTO> updateApprentice(
+            @PathVariable UUID idUser,
+            @Valid @RequestBody UserChipRequestDTO dto) {
+        return ResponseEntity.ok(userChipService.updateApprentice(idUser, dto));
     }
 
     @PostMapping("/users/{idUser}/chip/transfer")

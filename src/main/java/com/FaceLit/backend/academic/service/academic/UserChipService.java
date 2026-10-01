@@ -15,5 +15,6 @@ public interface UserChipService {
     UserChipResponseDTO getActiveChipByUser(UUID idUser);
     List<UserChipResponseDTO> getChipHistoryByUser(UUID idUser);
     List<UserChipResponseDTO> getTransferTargets(UUID idUser);
+    UserChipResponseDTO updateApprentice(UUID idUser, UserChipRequestDTO dto);
     UserChipResponseDTO transferChip(UUID idUser, TransferChipRequestDTO dto);
 }

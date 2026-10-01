@@ -1,8 +1,10 @@
 package com.FaceLit.backend.academic.service.serviceImpl.academic;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -34,6 +36,10 @@ import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.AdminRoleService;
+import com.FaceLit.backend.environment.repository.RecordEnvironmentRepository;
+import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
+import com.FaceLit.backend.notification.dto.request.MonolithEventRequestDTO;
+import com.FaceLit.backend.notification.service.NotificationService;
 
 @Service
 public class InstructorServiceImpl implements InstructorService {
@@ -44,8 +50,10 @@ public class InstructorServiceImpl implements InstructorService {
     private final UserRepository userRepository;
     private final CredentialRepository credentialRepository;
     private final ChangeHistoryRepository changeHistoryRepository;
+    private final RecordEnvironmentRepository recordEnvironmentRepository;
     private final PasswordEncoder passwordEncoder;
     private final AdminRoleService adminRoleService;
+    private final NotificationService notificationService;
 
     public InstructorServiceImpl(
             InstructorRepository instructorRepository,
@@ -54,16 +62,20 @@ public class InstructorServiceImpl implements InstructorService {
             UserRepository userRepository,
             CredentialRepository credentialRepository,
             ChangeHistoryRepository changeHistoryRepository,
+            RecordEnvironmentRepository recordEnvironmentRepository,
             PasswordEncoder passwordEncoder,
-            AdminRoleService adminRoleService) {
+            AdminRoleService adminRoleService,
+            NotificationService notificationService) {
         this.instructorRepository = instructorRepository;
         this.instructorProgramRepository = instructorProgramRepository;
         this.programRepository = programRepository;
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
         this.changeHistoryRepository = changeHistoryRepository;
+        this.recordEnvironmentRepository = recordEnvironmentRepository;
         this.passwordEncoder = passwordEncoder;
         this.adminRoleService = adminRoleService;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -118,28 +130,78 @@ public class InstructorServiceImpl implements InstructorService {
         Instructor instructor = instructorRepository.findById(idInstructor)
                 .orElseThrow(() -> new AcademicException("Instructor no encontrado.", HttpStatus.NOT_FOUND));
 
+        User user = instructor.getUser();
+        Credential credential = user.getCredential();
+        String document = normalizeDocument(dto.getDocumento());
+        String email = normalizeEmail(dto.getCorreo());
+        if (document.isBlank()) {
+            throw new AcademicException("El documento es obligatorio.", HttpStatus.BAD_REQUEST);
+        }
+        if (email.isBlank()) {
+            throw new AcademicException("El correo es obligatorio.", HttpStatus.BAD_REQUEST);
+        }
+        if (!document.matches("\\d{6,15}")) {
+            throw new AcademicException("El documento debe contener solo digitos y tener entre 6 y 15 caracteres.", HttpStatus.BAD_REQUEST);
+        }
+
+        userRepository.findByDocumentNumber(document)
+                .filter(existing -> !existing.getIdUser().equals(user.getIdUser()))
+                .ifPresent(existing -> {
+                    throw new AcademicException("Este numero de documento ya esta registrado.", HttpStatus.CONFLICT);
+                });
+
+        credentialRepository.findByEmailIgnoreCase(email)
+                .filter(existing -> !existing.getUser().getIdUser().equals(user.getIdUser()))
+                .ifPresent(existing -> {
+                    throw new AcademicException("Ya existe un usuario con ese correo electronico.", HttpStatus.CONFLICT);
+                });
+
+        String oldDocument = user.getDocumentNumber();
+        String oldFirstName = user.getFirstName();
+        String oldLastName = user.getLastName();
+        String oldEmail = credential != null ? credential.getEmail() : "";
+        String oldProfile = oldDocument + " / " + oldFirstName + " " + oldLastName + " / " + oldEmail;
         InstructorType oldType = instructor.getInstructorType();
 
-        List<UUID> oldProgramIds = instructorProgramRepository.findAll().stream()
-                .filter(ip -> ip.getInstructor().getIdInstructor().equals(idInstructor))
+        List<InstructorProgram> currentPrograms = instructorProgramRepository.findByInstructor_IdInstructor(idInstructor);
+        List<UUID> oldProgramIds = currentPrograms.stream()
                 .map(ip -> ip.getProgram().getIdProgram())
+                .toList();
+        List<String> oldProgramNames = currentPrograms.stream()
+                .map(ip -> ip.getProgram().getProgramName() + " (" + ip.getProgram().getProgramCode() + ")")
                 .toList();
 
         InstructorType newType = dto.getInstructorType();
+        user.setDocumentNumber(document);
+        user.setFirstName(dto.getNombre().trim());
+        user.setLastName(dto.getApellido().trim());
+        if (credential == null) {
+            throw new AcademicException("El instructor no tiene credencial asociada.", HttpStatus.CONFLICT);
+        }
+        credential.setEmail(email);
+        userRepository.save(user);
+        credentialRepository.save(credential);
+
         instructor.setInstructorType(newType);
         instructorRepository.save(instructor);
-
-        instructorProgramRepository.findAll().stream()
-                .filter(ip -> ip.getInstructor().getIdInstructor().equals(idInstructor))
-                .forEach(instructorProgramRepository::delete);
 
         List<UUID> ids = dto.getProgramIds() == null ? List.of() : dto.getProgramIds().stream().distinct().toList();
         if (newType == InstructorType.ESPECIFICO && ids.isEmpty()) {
             throw new AcademicException("Un instructor especifico debe indicar el programa al que pertenece.", HttpStatus.BAD_REQUEST);
         }
+
+        if (!sameIds(oldProgramIds, ids)) {
+            instructorProgramRepository.deleteAll(currentPrograms);
+            instructorProgramRepository.flush();
+        }
+
         for (UUID idProgram : ids) {
             programRepository.findById(idProgram)
                     .orElseThrow(() -> new AcademicException("El programa indicado no existe.", HttpStatus.NOT_FOUND));
+            if (sameIds(oldProgramIds, ids)
+                    && instructorProgramRepository.existsByInstructor_IdInstructorAndProgram_IdProgram(idInstructor, idProgram)) {
+                continue;
+            }
             InstructorProgram ip = new InstructorProgram();
             ip.setInstructor(instructor);
             ip.setProgram(programRepository.getReferenceById(idProgram));
@@ -148,20 +210,37 @@ public class InstructorServiceImpl implements InstructorService {
 
         if (!oldType.equals(newType)) {
             recordChange(instructor, "instructor", oldType.name(), newType.name(), ChangeAction.UPDATE, "instructor_type", oldType.name() + " -> " + newType.name());
+            notifyInstructor(instructor, "instructor_profile_updated", "Tus datos fueron modificados",
+                    "Coordinacion actualizo tu tipo de instructor: " + oldType.name() + " -> " + newType.name() + ".");
         }
 
-        List<UUID> newProgramIds = instructorProgramRepository.findAll().stream()
-                .filter(ip -> ip.getInstructor().getIdInstructor().equals(idInstructor))
-                .map(ip -> ip.getProgram().getIdProgram())
-                .toList();
+        String newProfile = user.getDocumentNumber() + " / " + user.getFirstName() + " " + user.getLastName()
+                + " / " + credential.getEmail();
+        if (!oldProfile.equals(newProfile)) {
+            recordChange(instructor, "instructor", oldProfile, newProfile, ChangeAction.UPDATE, "instructor_profile", newProfile);
+            notifyInstructor(instructor, "instructor_profile_updated", "Tus datos fueron modificados",
+                    "Coordinacion actualizo tus datos personales. " + describeChanges(Map.of(
+                            "documento", values(oldDocument, user.getDocumentNumber()),
+                            "nombre", values(oldFirstName, user.getFirstName()),
+                            "apellido", values(oldLastName, user.getLastName()),
+                            "correo", values(oldEmail, credential.getEmail()))));
+        }
+
+        List<UUID> newProgramIds = ids;
 
         if (!oldProgramIds.equals(newProgramIds)) {
+            List<String> newProgramNames = ids.stream()
+                    .map(id -> programRepository.findById(id)
+                            .map(program -> program.getProgramName() + " (" + program.getProgramCode() + ")")
+                            .orElse(id.toString()))
+                    .toList();
             recordChange(instructor, "instructor", oldProgramIds.toString(), newProgramIds.toString(), ChangeAction.UPDATE, "instructor_program", oldProgramIds.toString() + " -> " + newProgramIds.toString());
+            notifyInstructor(instructor, "instructor_assignment_updated", "Tu asignacion academica cambio",
+                    "Coordinacion actualizo tus programas: " + listOrNone(oldProgramNames)
+                            + " -> " + listOrNone(newProgramNames) + ".");
         }
 
-        return new InstructorResponseDTO(instructor, instructorProgramRepository.findAll().stream()
-                .filter(ip -> ip.getInstructor().getIdInstructor().equals(idInstructor))
-                .toList());
+        return toResponse(instructor);
     }
 
     @Override
@@ -172,9 +251,7 @@ public class InstructorServiceImpl implements InstructorService {
 
         User user = instructor.getUser();
         if (user.getAccountStatus() == AccountStatus.ACTIVE) {
-            return new InstructorResponseDTO(instructor, instructorProgramRepository.findAll().stream()
-                    .filter(ip -> ip.getInstructor().getIdInstructor().equals(idInstructor))
-                    .toList());
+            return toResponse(instructor);
         }
 
         user.setAccountStatus(AccountStatus.ACTIVE);
@@ -184,9 +261,7 @@ public class InstructorServiceImpl implements InstructorService {
         userRepository.save(user);
         recordChange(instructor, "instructor", AccountStatus.INACTIVE.name(), AccountStatus.ACTIVE.name(), ChangeAction.REACTIVATE, "account_status", AccountStatus.ACTIVE.name());
 
-        return new InstructorResponseDTO(instructor, instructorProgramRepository.findAll().stream()
-                .filter(ip -> ip.getInstructor().getIdInstructor().equals(idInstructor))
-                .toList());
+        return toResponse(instructor);
     }
     @Override
     @Transactional
@@ -206,6 +281,7 @@ public class InstructorServiceImpl implements InstructorService {
         }
 
         if (instructorProgramRepository.countByInstructor_IdInstructor(idInstructor) > 0) {
+            notifyDeleteBlocked(instructor);
             instructorProgramRepository.deleteAll(instructorProgramRepository.findAll().stream()
                     .filter(ip -> ip.getInstructor().getIdInstructor().equals(idInstructor))
                     .toList());
@@ -219,9 +295,7 @@ public class InstructorServiceImpl implements InstructorService {
     @Transactional(readOnly = true)
     public List<InstructorResponseDTO> findAll() {
         return instructorRepository.findAll().stream()
-                .map(instructor -> new InstructorResponseDTO(instructor, instructorProgramRepository.findAll().stream()
-                        .filter(ip -> ip.getInstructor().getIdInstructor().equals(instructor.getIdInstructor()))
-                        .toList()))
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -230,9 +304,7 @@ public class InstructorServiceImpl implements InstructorService {
     public InstructorResponseDTO findById(UUID idInstructor) {
         Instructor instructor = instructorRepository.findById(idInstructor)
                 .orElseThrow(() -> new AcademicException("Instructor no encontrado.", HttpStatus.NOT_FOUND));
-        return new InstructorResponseDTO(instructor, instructorProgramRepository.findAll().stream()
-                .filter(ip -> ip.getInstructor().getIdInstructor().equals(idInstructor))
-                .toList());
+        return toResponse(instructor);
     }
 
     @Override
@@ -242,9 +314,7 @@ public class InstructorServiceImpl implements InstructorService {
                 .filter(i -> i.getUser().getIdUser().equals(idUser))
                 .findFirst()
                 .orElseThrow(() -> new AcademicException("Instructor no encontrado.", HttpStatus.NOT_FOUND));
-        return new InstructorResponseDTO(instructor, instructorProgramRepository.findAll().stream()
-                .filter(ip -> ip.getInstructor().getIdInstructor().equals(instructor.getIdInstructor()))
-                .toList());
+        return toResponse(instructor);
     }
 
     @Override
@@ -262,9 +332,7 @@ public class InstructorServiceImpl implements InstructorService {
             boolean matchType = type == null || type.isBlank() || instructor.getInstructorType().name().equalsIgnoreCase(type);
 
             if (matchDocument && matchName && matchType) {
-                result.add(new InstructorResponseDTO(instructor, instructorProgramRepository.findAll().stream()
-                        .filter(ip -> ip.getInstructor().getIdInstructor().equals(instructor.getIdInstructor()))
-                        .toList()));
+                result.add(toResponse(instructor));
             }
         }
         return result;
@@ -283,9 +351,7 @@ public class InstructorServiceImpl implements InstructorService {
                         || instructorProgramRepository.findAll().stream()
                                 .anyMatch(ip -> ip.getInstructor().getIdInstructor().equals(inst.getIdInstructor())
                                         && ip.getProgram().getIdProgram().equals(program.getIdProgram())))
-                .map(inst -> new InstructorResponseDTO(inst, instructorProgramRepository.findAll().stream()
-                        .filter(ip -> ip.getInstructor().getIdInstructor().equals(inst.getIdInstructor()))
-                        .toList()))
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -332,9 +398,13 @@ public class InstructorServiceImpl implements InstructorService {
             recordChange(instructor, "instructor", null, "instructor_type", ChangeAction.CREATE, null, type.name());
             String programIdsString = validated.stream().map(UUID::toString).collect(Collectors.joining(","));
             recordChange(instructor, "instructor", null, "instructor_program", ChangeAction.CREATE, null, programIdsString);
-            return new InstructorResponseDTO(instructor, instructorProgramRepository.findAll().stream()
-                    .filter(ip -> ip.getInstructor().getIdInstructor().equals(instructor.getIdInstructor()))
-                    .toList(), generatedPassword);
+        notifyInstructor(instructor, "user_account_created", "Tu usuario de instructor fue creado",
+                "Coordinacion creo tu usuario de instructor. Programas asignados: "
+                        + listOrNone(instructorProgramRepository.findByInstructor_IdInstructor(instructor.getIdInstructor()).stream()
+                                .map(ip -> ip.getProgram().getProgramName() + " (" + ip.getProgram().getProgramCode() + ")")
+                                .toList())
+                        + ".");
+            return toResponse(instructor, generatedPassword);
         }
 
         Instructor instructor = new Instructor();
@@ -342,7 +412,26 @@ public class InstructorServiceImpl implements InstructorService {
         instructor.setInstructorType(type);
         instructor = instructorRepository.saveAndFlush(instructor);
         recordChange(instructor, "instructor", null, "instructor_type", ChangeAction.CREATE, null, type.name());
-        return new InstructorResponseDTO(instructor, List.of(), generatedPassword);
+        notifyInstructor(instructor, "user_account_created", "Tu usuario de instructor fue creado",
+                "Coordinacion creo tu usuario de instructor.");
+        return toResponse(instructor, generatedPassword);
+    }
+
+    private InstructorResponseDTO toResponse(Instructor instructor) {
+        return toResponse(instructor, null);
+    }
+
+    private InstructorResponseDTO toResponse(Instructor instructor, String initialPassword) {
+        UUID idInstructor = instructor.getIdInstructor();
+        List<InstructorProgram> programs = instructorProgramRepository.findAll().stream()
+                .filter(ip -> ip.getInstructor().getIdInstructor().equals(idInstructor))
+                .toList();
+        List<UUID> chipIds = recordEnvironmentRepository.findDistinctChipIdsByInstructor(idInstructor);
+        return new InstructorResponseDTO(instructor, programs, initialPassword, chipIds);
+    }
+
+    private boolean sameIds(List<UUID> currentIds, List<UUID> newIds) {
+        return currentIds.size() == newIds.size() && currentIds.containsAll(newIds) && newIds.containsAll(currentIds);
     }
 
     private String normalizeDocument(String document) {
@@ -374,5 +463,66 @@ public class InstructorServiceImpl implements InstructorService {
         history.setNewValue(newValue != null ? newValue : fieldValue);
         history.setAction(action);
         changeHistoryRepository.save(history);
+    }
+
+    private void notifyInstructor(Instructor instructor, String type, String title, String message) {
+        try {
+            notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                    instructor.getUser().getIdUser(),
+                    type,
+                    title,
+                    message,
+                    instructor.getIdInstructor(),
+                    "instructor",
+                    null,
+                    "{\"entityType\":\"instructor\",\"entityId\":\"" + instructor.getIdInstructor() + "\"}"));
+        } catch (RuntimeException ignored) {
+            // La actualizacion academica no debe fallar por notificaciones.
+        }
+    }
+
+    private String[] values(String oldValue, String newValue) {
+        return new String[] { oldValue == null ? "" : oldValue, newValue == null ? "" : newValue };
+    }
+
+    private String describeChanges(Map<String, String[]> changes) {
+        Map<String, String[]> changed = new LinkedHashMap<>();
+        changes.forEach((field, values) -> {
+            if (!values[0].equals(values[1])) {
+                changed.put(field, values);
+            }
+        });
+        if (changed.isEmpty()) {
+            return "No se detectaron diferencias visibles.";
+        }
+        return changed.entrySet().stream()
+                .map(entry -> entry.getKey() + ": " + emptyAsNone(entry.getValue()[0]) + " -> " + emptyAsNone(entry.getValue()[1]))
+                .collect(Collectors.joining("; "));
+    }
+
+    private String listOrNone(List<String> values) {
+        return values == null || values.isEmpty() ? "sin programas" : String.join(", ", values);
+    }
+
+    private String emptyAsNone(String value) {
+        return value == null || value.isBlank() ? "sin dato" : value;
+    }
+
+    private void notifyDeleteBlocked(Instructor instructor) {
+        try {
+            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                    "academic_delete_blocked",
+                    "Intento de eliminacion bloqueado",
+                    "No fue posible eliminar permanentemente al instructor "
+                            + instructor.getUser().getFirstName() + " " + instructor.getUser().getLastName()
+                            + " porque tiene programas asociados.",
+                    null,
+                    instructor.getIdInstructor(),
+                    "instructor",
+                    null,
+                    "{\"entityType\":\"instructor\",\"entityId\":\"" + instructor.getIdInstructor() + "\"}"));
+        } catch (RuntimeException ignored) {
+            // La eliminacion academica no debe fallar por notificaciones.
+        }
     }
 }
