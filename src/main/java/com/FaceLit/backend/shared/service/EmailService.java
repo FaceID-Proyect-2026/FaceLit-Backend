@@ -7,6 +7,8 @@ package com.FaceLit.backend.shared.service;
 public interface EmailService {
 
     void sendRecoveryCode(String toEmail, String code);
+
+    void sendNotificationEmail(String toEmail, String subject, String body);
     
 
 

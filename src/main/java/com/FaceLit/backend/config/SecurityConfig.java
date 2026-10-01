@@ -51,6 +51,8 @@ public class SecurityConfig {
 
                         // ─── PERFIL PERSONAL — cualquier usuario autenticado, sin importar rol ───
                         .requestMatchers("/api/profile/**").authenticated()
+                        .requestMatchers("/api/notifications/**").authenticated()
+                        .requestMatchers("/api/attendance/events").authenticated()
 
                         // Cualquier otro endpoint requiere autenticación
                         .anyRequest().authenticated())

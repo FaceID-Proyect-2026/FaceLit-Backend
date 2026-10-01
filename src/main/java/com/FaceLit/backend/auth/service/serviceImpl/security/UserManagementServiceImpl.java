@@ -41,6 +41,8 @@ import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.repository.security.UserSessionRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.AdminRoleService;
 import com.FaceLit.backend.auth.service.security.UserManagementService;
+import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
+import com.FaceLit.backend.notification.service.NotificationService;
 import com.FaceLit.backend.shared.constants.AppConstants;
 
 import jakarta.transaction.Transactional;
@@ -61,6 +63,7 @@ public class UserManagementServiceImpl implements UserManagementService {
         private final AcceptanceTermsRepository acceptanceTermsRepository;
         private final PasswordRecoveryRepository passwordRecoveryRepository;
         private final PasswordEncoder passwordEncoder;
+        private final NotificationService notificationService;
 
         public UserManagementServiceImpl(
                         UserRepository userRepository,
@@ -75,7 +78,8 @@ public class UserManagementServiceImpl implements UserManagementService {
                         AdminRoleService adminRoleService,
                         AcceptanceTermsRepository acceptanceTermsRepository,
                         PasswordRecoveryRepository passwordRecoveryRepository,
-                        PasswordEncoder passwordEncoder) {
+                        PasswordEncoder passwordEncoder,
+                        NotificationService notificationService) {
                 this.userRepository = userRepository;
                 this.credentialRepository = credentialRepository;
                 this.userRoleRepository = userRoleRepository;
@@ -89,6 +93,7 @@ public class UserManagementServiceImpl implements UserManagementService {
                 this.acceptanceTermsRepository = acceptanceTermsRepository;
                 this.passwordRecoveryRepository = passwordRecoveryRepository;
                 this.passwordEncoder = passwordEncoder;
+                this.notificationService = notificationService;
         }
 
         @Override
@@ -181,6 +186,9 @@ public class UserManagementServiceImpl implements UserManagementService {
                 AssignRoleRequestDTO roleDto = new AssignRoleRequestDTO();
                 roleDto.setRole(dto.getRole());
                 adminRoleService.assignRole(user.getIdUser(), roleDto);
+                notifyUser(user, "user_account_created", "Tu usuario fue creado",
+                                "Coordinacion creo tu usuario con rol " + dto.getRole().name() + ".",
+                                "{\"entityType\":\"user\",\"entityId\":\"" + user.getIdUser() + "\",\"action\":\"created\"}");
 
                 return new UserDetailResponseDTO(
                                 user.getIdUser(),
@@ -210,6 +218,14 @@ public class UserManagementServiceImpl implements UserManagementService {
 
                 String documentNumber = dto.getNumberDocument().trim();
                 String email = dto.getEmail().trim().toLowerCase();
+                String oldDocument = user.getDocumentNumber();
+                String oldFirstName = user.getFirstName();
+                String oldLastName = user.getLastName();
+                String oldEmail = credential.getEmail();
+                AccountStatus oldStatus = user.getAccountStatus();
+                String oldRole = userRoleRepository.findByUserId(userId)
+                                .map(userRole -> userRole.getRole().getNameRole().name())
+                                .orElse("Sin rol");
 
                 userRepository.findByDocumentNumber(documentNumber)
                                 .filter(existing -> !existing.getIdUser().equals(userId))
@@ -235,6 +251,22 @@ public class UserManagementServiceImpl implements UserManagementService {
                 AssignRoleRequestDTO roleDto = new AssignRoleRequestDTO();
                 roleDto.setRole(dto.getRole());
                 adminRoleService.assignRole(userId, roleDto);
+
+                List<String> changes = List.of(
+                                change("documento", oldDocument, user.getDocumentNumber()),
+                                change("nombre", oldFirstName, user.getFirstName()),
+                                change("apellido", oldLastName, user.getLastName()),
+                                change("correo", oldEmail, credential.getEmail()),
+                                change("estado", oldStatus.name(), user.getAccountStatus().name()),
+                                change("rol", oldRole, dto.getRole().name()))
+                                .stream()
+                                .filter(item -> !item.isBlank())
+                                .toList();
+                if (!changes.isEmpty()) {
+                        notifyUser(user, "user_profile_updated", "Tus datos fueron modificados",
+                                        "Coordinacion actualizo tus datos. " + String.join("; ", changes) + ".",
+                                        "{\"entityType\":\"user\",\"entityId\":\"" + user.getIdUser() + "\",\"action\":\"updated\"}");
+                }
 
                 return toDTO(user);
         }
@@ -347,5 +379,34 @@ public class UserManagementServiceImpl implements UserManagementService {
                                 .max(Comparator.comparing(UserSession::getStartDate))
                                 .map(session -> session.getStartDate().plusHours(AppConstants.JWT_EXPIRY_HOURS))
                                 .orElse(null);
+        }
+
+        private String change(String field, String oldValue, String newValue) {
+                String oldSafe = oldValue == null ? "" : oldValue;
+                String newSafe = newValue == null ? "" : newValue;
+                if (oldSafe.equals(newSafe)) {
+                        return "";
+                }
+                return field + ": " + emptyAsNone(oldSafe) + " -> " + emptyAsNone(newSafe);
+        }
+
+        private String emptyAsNone(String value) {
+                return value == null || value.isBlank() ? "sin dato" : value;
+        }
+
+        private void notifyUser(User user, String type, String title, String message, String metadata) {
+                try {
+                        notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                                        user.getIdUser(),
+                                        type,
+                                        title,
+                                        message,
+                                        user.getIdUser(),
+                                        "user",
+                                        null,
+                                        metadata));
+                } catch (RuntimeException ignored) {
+                        // La gestion de usuario no debe fallar por una notificacion informativa.
+                }
         }
 }

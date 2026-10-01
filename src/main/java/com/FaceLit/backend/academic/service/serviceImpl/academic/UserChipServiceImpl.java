@@ -2,9 +2,11 @@ package com.FaceLit.backend.academic.service.serviceImpl.academic;
 
 import java.time.OffsetDateTime;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -23,6 +25,7 @@ import com.FaceLit.backend.academic.model.enums.AcademicState;
 import com.FaceLit.backend.academic.model.enums.ChangeAction;
 import com.FaceLit.backend.academic.repository.ChangeHistoryRepository;
 import com.FaceLit.backend.academic.repository.ChipRepository;
+import com.FaceLit.backend.academic.repository.InstructorProgramRepository;
 import com.FaceLit.backend.academic.repository.UserChipRepository;
 import com.FaceLit.backend.academic.service.academic.UserChipService;
 import com.FaceLit.backend.auth.dto.request.roleandpermission.AssignRoleRequestDTO;
@@ -35,6 +38,10 @@ import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.AdminRoleService;
+import com.FaceLit.backend.environment.repository.RecordEnvironmentRepository;
+import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
+import com.FaceLit.backend.notification.dto.request.MonolithEventRequestDTO;
+import com.FaceLit.backend.notification.service.NotificationService;
 
 @Service
 public class UserChipServiceImpl implements UserChipService {
@@ -47,6 +54,9 @@ public class UserChipServiceImpl implements UserChipService {
     private final PasswordEncoder passwordEncoder;
     private final AdminRoleService adminRoleService;
     private final UserRoleRepository userRoleRepository;
+    private final RecordEnvironmentRepository recordEnvironmentRepository;
+    private final InstructorProgramRepository instructorProgramRepository;
+    private final NotificationService notificationService;
 
     public UserChipServiceImpl(
             UserChipRepository userChipRepository,
@@ -56,7 +66,10 @@ public class UserChipServiceImpl implements UserChipService {
             ChangeHistoryRepository changeHistoryRepository,
             PasswordEncoder passwordEncoder,
             AdminRoleService adminRoleService,
-            UserRoleRepository userRoleRepository) {
+            UserRoleRepository userRoleRepository,
+            RecordEnvironmentRepository recordEnvironmentRepository,
+            InstructorProgramRepository instructorProgramRepository,
+            NotificationService notificationService) {
         this.userChipRepository = userChipRepository;
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
@@ -65,6 +78,9 @@ public class UserChipServiceImpl implements UserChipService {
         this.passwordEncoder = passwordEncoder;
         this.adminRoleService = adminRoleService;
         this.userRoleRepository = userRoleRepository;
+        this.recordEnvironmentRepository = recordEnvironmentRepository;
+        this.instructorProgramRepository = instructorProgramRepository;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -131,6 +147,7 @@ public class UserChipServiceImpl implements UserChipService {
         userChip = userChipRepository.saveAndFlush(userChip);
 
         recordChange(userChip, "user_chip", null, chip.getChipCode(), ChangeAction.CREATE, "chip");
+        notifyApprenticeCreated(user, chip, userChip);
         return new UserChipResponseDTO(userChip, generatedPasswordHolder[0]);
     }
 
@@ -213,6 +230,53 @@ public class UserChipServiceImpl implements UserChipService {
 
     @Override
     @Transactional
+    public UserChipResponseDTO updateApprentice(UUID idUser, UserChipRequestDTO dto) {
+        User user = userRepository.findById(idUser)
+                .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
+        Credential credential = credentialRepository.findByUser(user)
+                .orElseThrow(() -> new AcademicException("El aprendiz no tiene credencial asociada.", HttpStatus.CONFLICT));
+        UserChip activeChip = userChipRepository.findByUser_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE)
+                .orElseThrow(() -> new AcademicException("El aprendiz no tiene una ficha activa.", HttpStatus.BAD_REQUEST));
+
+        String document = dto.getDocumento() == null ? "" : dto.getDocumento().trim();
+        String email = dto.getCorreo() == null ? "" : dto.getCorreo().trim().toLowerCase(Locale.ROOT);
+        if (!document.matches("\\d{6,15}")) {
+            throw new AcademicException("El documento debe contener solo digitos y tener entre 6 y 15 caracteres.", HttpStatus.BAD_REQUEST);
+        }
+        if (email.isBlank()) {
+            throw new AcademicException("El correo es obligatorio.", HttpStatus.BAD_REQUEST);
+        }
+
+        userRepository.findByDocumentNumber(document)
+                .filter(existing -> !existing.getIdUser().equals(user.getIdUser()))
+                .ifPresent(existing -> {
+                    throw new AcademicException("Este numero de documento ya esta registrado.", HttpStatus.CONFLICT);
+                });
+        credentialRepository.findByEmailIgnoreCase(email)
+                .filter(existing -> !existing.getUser().getIdUser().equals(user.getIdUser()))
+                .ifPresent(existing -> {
+                    throw new AcademicException("Ya existe un usuario con ese correo electronico.", HttpStatus.CONFLICT);
+                });
+
+        String oldDocument = user.getDocumentNumber();
+        String oldFirstName = user.getFirstName();
+        String oldLastName = user.getLastName();
+        String oldEmail = credential.getEmail();
+
+        user.setDocumentNumber(document);
+        user.setFirstName(dto.getNombre().trim());
+        user.setLastName(dto.getApellido().trim());
+        userRepository.save(user);
+
+        credential.setEmail(email);
+        credentialRepository.save(credential);
+
+        notifyApprenticeProfileUpdated(user, activeChip, oldDocument, oldFirstName, oldLastName, oldEmail, email);
+        return new UserChipResponseDTO(activeChip);
+    }
+
+    @Override
+    @Transactional
     public UserChipResponseDTO transferChip(UUID idUser, TransferChipRequestDTO dto) {
         if (dto == null || dto.getIdNewChip() == null) {
             throw new AcademicException("Debes seleccionar una ficha destino.", HttpStatus.BAD_REQUEST);
@@ -254,6 +318,7 @@ public class UserChipServiceImpl implements UserChipService {
         newAssignment = userChipRepository.saveAndFlush(newAssignment);
 
         recordChange(newAssignment, "user_chip", previousCode, destination.getChipCode(), ChangeAction.UPDATE, "chip");
+        notifyTransfer(user, current.getChip(), destination, newAssignment);
         return new UserChipResponseDTO(newAssignment);
     }
 
@@ -299,5 +364,135 @@ public class UserChipServiceImpl implements UserChipService {
         history.setNewValue(newValue);
         history.setAction(action);
         changeHistoryRepository.save(history);
+    }
+
+    private void notifyTransfer(User user, Chip previousChip, Chip destination, UserChip newAssignment) {
+        String learnerName = (user.getFirstName() == null ? "" : user.getFirstName()) + " "
+                + (user.getLastName() == null ? "" : user.getLastName());
+        String message = "El aprendiz " + learnerName.trim() + " (" + user.getDocumentNumber()
+                + ") fue trasladado de la ficha " + previousChip.getChipCode()
+                + " a la ficha " + destination.getChipCode() + ".";
+
+        try {
+            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                    "learner_transferred",
+                    "Traslado de aprendiz",
+                    message,
+                    null,
+                    newAssignment.getIdUserChip(),
+                    "user_chip",
+                    null,
+                    transferMetadata(user, previousChip, destination)));
+
+            notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                    user.getIdUser(),
+                    "apprentice_transfer_applied",
+                    "Cambio de ficha registrado",
+                    "Tu ficha fue cambiada de " + previousChip.getChipCode()
+                            + " a " + destination.getChipCode() + ".",
+                    newAssignment.getIdUserChip(),
+                    "user_chip",
+                    null,
+                    transferMetadata(user, previousChip, destination)));
+
+            Set<UUID> instructorUserIds = new HashSet<>();
+            instructorUserIds.addAll(recordEnvironmentRepository.findDistinctInstructorUserIdsByChip(previousChip.getIdChip()));
+            instructorUserIds.addAll(recordEnvironmentRepository.findDistinctInstructorUserIdsByChip(destination.getIdChip()));
+            instructorUserIds.addAll(instructorUserIdsByProgram(previousChip));
+            instructorUserIds.addAll(instructorUserIdsByProgram(destination));
+            for (UUID instructorUserId : instructorUserIds) {
+                notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                        instructorUserId,
+                        "learner_transferred",
+                        "Cambio de ficha de aprendiz",
+                        message,
+                        newAssignment.getIdUserChip(),
+                        "user_chip",
+                        null,
+                        transferMetadata(user, previousChip, destination)));
+            }
+        } catch (RuntimeException ignored) {
+            // El traslado no debe revertirse por una falla al registrar notificaciones.
+        }
+    }
+
+    private Set<UUID> instructorUserIdsByProgram(Chip chip) {
+        UUID programId = chip.getProgram().getIdProgram();
+        return instructorProgramRepository.findAll().stream()
+                .filter(relation -> relation.getProgram().getIdProgram().equals(programId))
+                .map(relation -> relation.getInstructor().getUser().getIdUser())
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    private void notifyApprenticeCreated(User user, Chip chip, UserChip userChip) {
+        try {
+            notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                    user.getIdUser(),
+                    "user_account_created",
+                    "Tu usuario de aprendiz fue creado",
+                    "Coordinacion creo tu usuario de aprendiz y te asigno a la ficha "
+                            + chip.getChipCode() + ".",
+                    userChip.getIdUserChip(),
+                    "user_chip",
+                    null,
+                    "{\"entityType\":\"user_chip\",\"entityId\":\"" + userChip.getIdUserChip()
+                            + "\",\"chip\":\"" + safe(chip.getChipCode()) + "\"}"));
+        } catch (RuntimeException ignored) {
+            // La asignacion academica no debe fallar por una notificacion informativa.
+        }
+    }
+
+    private void notifyApprenticeProfileUpdated(
+            User user,
+            UserChip userChip,
+            String oldDocument,
+            String oldFirstName,
+            String oldLastName,
+            String oldEmail,
+            String newEmail) {
+        java.util.List<String> changes = new java.util.ArrayList<>();
+        addChange(changes, "documento", oldDocument, user.getDocumentNumber());
+        addChange(changes, "nombre", oldFirstName, user.getFirstName());
+        addChange(changes, "apellido", oldLastName, user.getLastName());
+        addChange(changes, "correo", oldEmail, newEmail);
+        if (changes.isEmpty()) {
+            return;
+        }
+        try {
+            notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                    user.getIdUser(),
+                    "apprentice_profile_updated",
+                    "Tus datos fueron modificados",
+                    "Coordinacion actualizo tus datos personales. " + String.join("; ", changes) + ".",
+                    userChip.getIdUserChip(),
+                    "user_chip",
+                    null,
+                    "{\"entityType\":\"apprentice\",\"entityId\":\"" + user.getIdUser() + "\"}"));
+        } catch (RuntimeException ignored) {
+            // La actualizacion academica no debe fallar por una notificacion informativa.
+        }
+    }
+
+    private void addChange(java.util.List<String> changes, String field, String oldValue, String newValue) {
+        String oldSafe = oldValue == null ? "" : oldValue;
+        String newSafe = newValue == null ? "" : newValue;
+        if (!oldSafe.equals(newSafe)) {
+            changes.add(field + ": " + emptyAsNone(oldSafe) + " -> " + emptyAsNone(newSafe));
+        }
+    }
+
+    private String emptyAsNone(String value) {
+        return value == null || value.isBlank() ? "sin dato" : value;
+    }
+
+    private String transferMetadata(User user, Chip previousChip, Chip destination) {
+        return "{\"learnerName\":\"" + safe(user.getFirstName()) + " " + safe(user.getLastName())
+                + "\",\"learnerDocument\":\"" + safe(user.getDocumentNumber())
+                + "\",\"fromFichaNumber\":\"" + safe(previousChip.getChipCode())
+                + "\",\"toFichaNumber\":\"" + safe(destination.getChipCode()) + "\"}";
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value.replace("\"", "\\\"");
     }
 }

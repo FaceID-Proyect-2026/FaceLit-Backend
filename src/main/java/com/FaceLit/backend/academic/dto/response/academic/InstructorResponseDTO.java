@@ -29,12 +29,21 @@ public class InstructorResponseDTO {
     private final OffsetDateTime updatedAt;
     private final List<UUID> programIds;
     private final List<String> programNames;
+    private final List<UUID> chipIds;
 
     public InstructorResponseDTO(Instructor instructor, List<InstructorProgram> instructorPrograms) {
-        this(instructor, instructorPrograms, null);
+        this(instructor, instructorPrograms, null, List.of());
     }
 
     public InstructorResponseDTO(Instructor instructor, List<InstructorProgram> instructorPrograms, String initialPassword) {
+        this(instructor, instructorPrograms, initialPassword, List.of());
+    }
+
+    public InstructorResponseDTO(Instructor instructor, List<InstructorProgram> instructorPrograms, List<UUID> chipIds) {
+        this(instructor, instructorPrograms, null, chipIds);
+    }
+
+    public InstructorResponseDTO(Instructor instructor, List<InstructorProgram> instructorPrograms, String initialPassword, List<UUID> chipIds) {
         User user = instructor.getUser();
         Credential credential = user.getCredential();
 
@@ -55,5 +64,6 @@ public class InstructorResponseDTO {
         this.programNames = instructorPrograms == null ? List.of() : instructorPrograms.stream()
                 .map(ip -> ip.getProgram().getProgramName())
                 .collect(Collectors.toList());
+        this.chipIds = chipIds == null ? List.of() : chipIds;
     }
 }

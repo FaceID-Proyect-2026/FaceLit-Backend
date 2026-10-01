@@ -62,12 +62,22 @@ import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.AdminRoleService;
+import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
+import com.FaceLit.backend.notification.dto.request.MonolithEventRequestDTO;
+import com.FaceLit.backend.notification.service.NotificationService;
 import com.FaceLit.backend.shared.constants.AppConstants;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 // Facade/orquestador: recibe la carga CSV y coordina los servicios de programa,
 // ficha, instructor y aprendiz sin exponer repositorios al controller.
 public class CsvAcademicServiceImpl implements CsvAcademicService {
+
+    private static final Logger log = LoggerFactory.getLogger(CsvAcademicServiceImpl.class);
 
     private record Row(int number, Map<String, String> cells) {
         String value(String key) {
@@ -99,6 +109,8 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
     private final PasswordEncoder passwordEncoder;
     private final AdminRoleService adminRoleService;
     private final UserRoleRepository userRoleRepository;
+    private final NotificationService notificationService;
+    private final ObjectMapper objectMapper;
 
     public CsvAcademicServiceImpl(
             ProgramRepository programRepository,
@@ -115,7 +127,9 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
             UserChipService userChipService,
             PasswordEncoder passwordEncoder,
             AdminRoleService adminRoleService,
-            UserRoleRepository userRoleRepository) {
+            UserRoleRepository userRoleRepository,
+            NotificationService notificationService,
+            ObjectMapper objectMapper) {
         this.programRepository = programRepository;
         this.chipRepository = chipRepository;
         this.instructorRepository = instructorRepository;
@@ -131,6 +145,8 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         this.passwordEncoder = passwordEncoder;
         this.adminRoleService = adminRoleService;
         this.userRoleRepository = userRoleRepository;
+        this.notificationService = notificationService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -145,6 +161,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
     }
 
     @Override
+    @Transactional
     public CsvUploadResponseDTO upload(MultipartFile file) {
         List<Row> rows = readAndValidate(file);
         CsvUploadResponseDTO result = new CsvUploadResponseDTO();
@@ -158,6 +175,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         processInstructors(rows, programs, result);
         rows.stream().filter(row -> row.value("tipo").equals("aprendiz"))
                 .forEach(row -> processApprentice(row, chips, result));
+        notifyCsvUpload(result);
         return result;
     }
 
@@ -179,6 +197,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         pending.setResolvedAt(OffsetDateTime.now());
         pendingTransferRepository.save(pending);
         recordCsvHistory(pending, ChangeAction.CSV_CONFIRM);
+        notifyTransferApplied(pending);
         return response;
     }
 
@@ -190,6 +209,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         pending.setResolvedAt(OffsetDateTime.now());
         pendingTransferRepository.save(pending);
         recordCsvHistory(pending, ChangeAction.CSV_CANCEL);
+        notifyTransferRejected(pending);
     }
 
     private void processProgram(Row row, Map<String, Program> programs, CsvUploadResponseDTO result) {
@@ -220,11 +240,11 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
             program.setProgramCode(code);
             program.setState(AcademicState.ACTIVE);
             program.setProgramName(name);
-            program = programRepository.saveAndFlush(program);
+            program = programRepository.save(program);
             result.getCreados().add(new CsvUploadResponseDTO.CsvRowResult(row.number, "programa", code + " creado"));
         } else {
             program.setProgramName(name);
-            program = programRepository.saveAndFlush(program);
+            program = programRepository.save(program);
             result.getActualizados()
                     .add(new CsvUploadResponseDTO.CsvRowResult(row.number, "programa", code + " actualizado"));
         }
@@ -319,6 +339,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
             }
             Set<UUID> existing = instructorProgramRepository.findByInstructor_IdInstructor(instructor.getIdInstructor()).stream()
                     .map(item -> item.getProgram().getIdProgram()).collect(Collectors.toSet());
+            List<String> addedPrograms = new ArrayList<>();
             for (Row row : instructorRows) {
                 Program program = programs.get(row.value("programa_codigo").toUpperCase(Locale.ROOT));
                 if (program != null
@@ -326,11 +347,12 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                     InstructorProgram relation = new InstructorProgram();
                     relation.setInstructor(instructor);
                     relation.setProgram(program);
-                    instructorProgramRepository.saveAndFlush(relation);
+                    instructorProgramRepository.save(relation);
                     existing.add(program.getIdProgram());
+                    addedPrograms.add(program.getProgramName() + " (" + program.getProgramCode() + ")");
                 }
             }
-            instructorProgramRepository.flush();
+            notifyCsvInstructorPrograms(instructor, addedPrograms);
             result.getActualizados()
                     .add(new CsvUploadResponseDTO.CsvRowResult(first.number, "instructor", document + " actualizado"));
         });
@@ -407,28 +429,45 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
     private User findOrCreateUser(Row row, CsvUploadResponseDTO result) {
         User existing = userRepository.findByDocumentNumber(row.value("documento")).orElse(null);
         if (existing != null) {
+            String oldFirstName = existing.getFirstName();
+            String oldLastName = existing.getLastName();
+            String newEmail = row.value("correo").toLowerCase(Locale.ROOT);
+            Credential credential = credentialRepository.findByUser(existing).orElse(null);
+            String oldEmail = credential != null ? credential.getEmail() : "";
+
             existing.setFirstName(row.value("nombre"));
             existing.setLastName(row.value("apellido"));
-            existing = userRepository.saveAndFlush(existing);
+            existing = userRepository.save(existing);
 
-            if (credentialRepository.findByUser(existing).isEmpty()) {
-                String email = row.value("correo").toLowerCase(Locale.ROOT);
-                if (credentialRepository.existsByEmailIgnoreCase(email)) {
+            if (credential == null) {
+                if (credentialRepository.existsByEmailIgnoreCase(newEmail)) {
                     result.getErroresDeReferencia().add(error(row,
-                            "El correo " + email + " ya esta registrado en otro usuario. Corrige el correo o usa el documento correcto."));
+                            "El correo " + newEmail + " ya esta registrado en otro usuario. Corrige el correo o usa el documento correcto."));
                     return null;
                 }
                 String password = generatePassword();
-                Credential credential = new Credential();
+                credential = new Credential();
                 credential.setUser(existing);
-                credential.setEmail(email);
+                credential.setEmail(newEmail);
                 credential.setPassword(passwordEncoder.encode(password));
                 credential.setCredentialStatus(CredentialStatus.ACTIVE);
                 credential.setFailedAttempts(0);
-                credentialRepository.saveAndFlush(credential);
+                credentialRepository.save(credential);
                 result.getContrasenasGeneradas()
                         .add(new CsvUploadResponseDTO.GeneratedPassword(existing.getDocumentNumber(), password));
+            } else if (!oldEmail.equalsIgnoreCase(newEmail)) {
+                UUID existingUserId = existing.getIdUser();
+                credentialRepository.findByEmailIgnoreCase(newEmail)
+                        .filter(item -> !item.getUser().getIdUser().equals(existingUserId))
+                        .ifPresent(item -> {
+                            throw new AcademicException("El correo " + newEmail
+                                    + " ya esta registrado en otro usuario. Corrige el correo o usa el documento correcto.",
+                                    HttpStatus.CONFLICT);
+                        });
+                credential.setEmail(newEmail);
+                credentialRepository.save(credential);
             }
+            notifyCsvPersonalUpdate(row, existing, oldFirstName, oldLastName, oldEmail, newEmail);
             return existing;
         }
         String email = row.value("correo").toLowerCase(Locale.ROOT);
@@ -443,7 +482,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         user.setFirstName(row.value("nombre"));
         user.setLastName(row.value("apellido"));
         user.setAccountStatus(AccountStatus.ACTIVE);
-        user = userRepository.saveAndFlush(user);
+        user = userRepository.save(user);
         String password = generatePassword();
         Credential credential = new Credential();
         credential.setUser(user);
@@ -451,7 +490,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         credential.setPassword(passwordEncoder.encode(password));
         credential.setCredentialStatus(CredentialStatus.ACTIVE);
         credential.setFailedAttempts(0);
-        credentialRepository.saveAndFlush(credential);
+        credentialRepository.save(credential);
         result.getContrasenasGeneradas()
                 .add(new CsvUploadResponseDTO.GeneratedPassword(user.getDocumentNumber(), password));
         return user;
@@ -577,5 +616,171 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
             password.append(alphabet.charAt(RANDOM.nextInt(alphabet.length())));
         }
         return password.toString();
+    }
+
+    private void notifyCsvUpload(CsvUploadResponseDTO result) {
+        try {
+            Map<String, Integer> summary = Map.of(
+                    "created", result.getCreados().size(),
+                    "updated", result.getActualizados().size(),
+                    "blocked", result.getInconsistenciasBloqueadas().size(),
+                    "errors", result.getErroresDeReferencia().size());
+            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                    "csv_upload_done",
+                    "Carga de CSV finalizada",
+                    "Carga finalizada: " + summary.get("created") + " creados, "
+                            + summary.get("updated") + " actualizados, "
+                            + summary.get("blocked") + " pendientes de confirmacion, "
+                            + summary.get("errors") + " con error.",
+                    null,
+                    null,
+                    "csv_upload",
+                    null,
+                    json(Map.of("csvSummary", summary))));
+
+            result.getInconsistenciasBloqueadas().forEach(item ->
+                    notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                            "csv_inconsistency",
+                            "Inconsistencia pendiente de revision",
+                            item.mensaje(),
+                            null,
+                            null,
+                            item.tipo(),
+                            null,
+                            json(Map.of(
+                                    "conflictRecordType", item.tipo(),
+                                    "fromValue", valueOrEmpty(item.valorActual()),
+                                    "toValue", valueOrEmpty(item.valorArchivo()))))));
+
+            result.getErroresDeReferencia().forEach(item ->
+                    notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                            "csv_ref_error",
+                            "Fila con error de referencia",
+                            item.mensaje(),
+                            null,
+                            null,
+                            item.tipo(),
+                            null,
+                            json(Map.of("row", item.fila(), "entityType", item.tipo())))));
+        } catch (Exception exception) {
+            log.warn("No se pudieron generar notificaciones de carga CSV", exception);
+        }
+    }
+
+    private void notifyTransferApplied(CsvPendingTransfer pending) {
+        notifyTransferDecision(
+                "csv_transfer_applied",
+                "Cambio de ficha aplicado",
+                "El aprendiz " + fullName(pending.getUser()) + " fue movido de la ficha "
+                        + pending.getCurrentChip().getChipCode() + " a la ficha "
+                        + pending.getProposedChip().getChipCode() + ".",
+                pending);
+    }
+
+    private void notifyTransferRejected(CsvPendingTransfer pending) {
+        notifyTransferDecision(
+                "csv_transfer_rejected",
+                "Cambio de ficha rechazado",
+                "Se decidio no aplicar el cambio de ficha del aprendiz " + fullName(pending.getUser())
+                        + ". El registro no fue modificado.",
+                pending);
+    }
+
+    private void notifyTransferDecision(String type, String title, String message, CsvPendingTransfer pending) {
+        try {
+            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                    type,
+                    title,
+                    message,
+                    null,
+                    pending.getIdPendingTransfer(),
+                    "csv_pending_transfer",
+                    null,
+                    json(Map.of(
+                            "learnerName", fullName(pending.getUser()),
+                            "learnerDocument", pending.getUser().getDocumentNumber(),
+                            "fromFichaNumber", pending.getCurrentChip().getChipCode(),
+                            "toFichaNumber", pending.getProposedChip().getChipCode()))));
+        } catch (Exception exception) {
+            log.warn("No se pudo generar notificacion de traslado CSV {}", pending.getIdPendingTransfer(), exception);
+        }
+    }
+
+    private void notifyCsvPersonalUpdate(Row row, User user, String oldFirstName, String oldLastName, String oldEmail, String newEmail) {
+        List<String> changes = new ArrayList<>();
+        addChange(changes, "nombre", oldFirstName, user.getFirstName());
+        addChange(changes, "apellido", oldLastName, user.getLastName());
+        addChange(changes, "correo", oldEmail, newEmail);
+        if (changes.isEmpty()) {
+            return;
+        }
+        String type = row.value("tipo").equals("instructor") ? "instructor_profile_updated" : "apprentice_profile_updated";
+        try {
+            notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                    user.getIdUser(),
+                    type,
+                    "Tus datos fueron modificados",
+                    "Coordinacion actualizo tus datos por carga CSV. " + String.join("; ", changes) + ".",
+                    user.getIdUser(),
+                    "user",
+                    null,
+                    json(Map.of(
+                            "entityType", row.value("tipo"),
+                            "document", user.getDocumentNumber(),
+                            "channel", "csv"))));
+        } catch (Exception exception) {
+            log.warn("No se pudo generar notificacion de actualizacion CSV para {}", user.getIdUser(), exception);
+        }
+    }
+
+    private void notifyCsvInstructorPrograms(Instructor instructor, List<String> addedPrograms) {
+        if (addedPrograms.isEmpty()) {
+            return;
+        }
+        try {
+            notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                    instructor.getUser().getIdUser(),
+                    "instructor_assignment_updated",
+                    "Tu asignacion academica cambio",
+                    "Coordinacion agrego programas por carga CSV: " + String.join(", ", addedPrograms) + ".",
+                    instructor.getIdInstructor(),
+                    "instructor",
+                    null,
+                    json(Map.of(
+                            "entityType", "instructor",
+                            "entityId", instructor.getIdInstructor(),
+                            "channel", "csv",
+                            "addedPrograms", addedPrograms))));
+        } catch (Exception exception) {
+            log.warn("No se pudo generar notificacion de programas CSV para {}", instructor.getIdInstructor(), exception);
+        }
+    }
+
+    private void addChange(List<String> changes, String field, String oldValue, String newValue) {
+        String oldSafe = oldValue == null ? "" : oldValue;
+        String newSafe = newValue == null ? "" : newValue;
+        if (!oldSafe.equals(newSafe)) {
+            changes.add(field + ": " + emptyAsNone(oldSafe) + " -> " + emptyAsNone(newSafe));
+        }
+    }
+
+    private String emptyAsNone(String value) {
+        return value == null || value.isBlank() ? "sin dato" : value;
+    }
+
+    private String json(Map<String, ?> value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            return "{}";
+        }
+    }
+
+    private String valueOrEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    private String fullName(User user) {
+        return (user.getFirstName() + " " + user.getLastName()).trim();
     }
 }

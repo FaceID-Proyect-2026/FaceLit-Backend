@@ -33,6 +33,8 @@ import com.FaceLit.backend.environment.model.enums.EnvironmentState;
 import com.FaceLit.backend.environment.repository.EnvironmentRepository;
 import com.FaceLit.backend.environment.repository.RecordEnvironmentRepository;
 import com.FaceLit.backend.environment.service.EnvironmentService;
+import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
+import com.FaceLit.backend.notification.service.NotificationService;
 
 @Service
 public class EnvironmentServiceImpl implements EnvironmentService {
@@ -42,18 +44,21 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     private final InstructorRepository instructorRepository;
     private final InstructorProgramRepository instructorProgramRepository;
     private final ChipRepository chipRepository;
+    private final NotificationService notificationService;
 
     public EnvironmentServiceImpl(
             EnvironmentRepository environmentRepository,
             RecordEnvironmentRepository recordEnvironmentRepository,
             InstructorRepository instructorRepository,
             InstructorProgramRepository instructorProgramRepository,
-            ChipRepository chipRepository) {
+            ChipRepository chipRepository,
+            NotificationService notificationService) {
         this.environmentRepository = environmentRepository;
         this.recordEnvironmentRepository = recordEnvironmentRepository;
         this.instructorRepository = instructorRepository;
         this.instructorProgramRepository = instructorProgramRepository;
         this.chipRepository = chipRepository;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -151,7 +156,9 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         record.setActive(true);
         record.setCreatedBy(authenticatedUserId.toString());
 
-        return new RecordEnvironmentResponseDTO(recordEnvironmentRepository.save(record));
+        record = recordEnvironmentRepository.save(record);
+        notifySessionSubstitution(record, authenticatedUserId);
+        return new RecordEnvironmentResponseDTO(record);
     }
 
     @Override
@@ -234,5 +241,50 @@ public class EnvironmentServiceImpl implements EnvironmentService {
 
     private String fullName(Instructor instructor) {
         return "%s %s".formatted(instructor.getUser().getFirstName(), instructor.getUser().getLastName()).trim();
+    }
+
+    private void notifySessionSubstitution(RecordEnvironment record, UUID authenticatedUserId) {
+        Instructor configuredBy = instructorRepository.findByUser_IdUser(authenticatedUserId).orElse(null);
+        Instructor inCharge = record.getInstructorInCharge();
+        if (configuredBy == null || inCharge == null
+                || configuredBy.getIdInstructor().equals(inCharge.getIdInstructor())) {
+            return;
+        }
+
+        String environmentName = record.getEnvironment().getEnvironmentName();
+        String chipCode = record.getChip().getChipCode();
+        String metadata = "{\"entityType\":\"record_environment\",\"entityId\":\"" + record.getIdRecordEnvironment()
+                + "\",\"environment\":\"" + safe(environmentName)
+                + "\",\"chip\":\"" + safe(chipCode) + "\"}";
+
+        try {
+            notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                    inCharge.getUser().getIdUser(),
+                    "facial_session_substitution",
+                    "Sesion de reconocimiento asignada",
+                    fullName(configuredBy) + " abrio una sesion de reconocimiento facial y te dejo a ti como instructor a cargo - Ambiente "
+                            + environmentName + ", Ficha " + chipCode + ".",
+                    record.getIdRecordEnvironment(),
+                    "record_environment",
+                    null,
+                    metadata));
+
+            notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                    configuredBy.getUser().getIdUser(),
+                    "facial_session_substitution",
+                    "Sesion de reconocimiento configurada",
+                    "Configuraste la sesion de reconocimiento facial dejando a " + fullName(inCharge)
+                            + " como responsable - Ambiente " + environmentName + ", Ficha " + chipCode + ".",
+                    record.getIdRecordEnvironment(),
+                    "record_environment",
+                    null,
+                    metadata));
+        } catch (RuntimeException ignored) {
+            // La configuracion de la sesion no debe fallar por notificaciones informativas.
+        }
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value.replace("\"", "\\\"");
     }
 }
