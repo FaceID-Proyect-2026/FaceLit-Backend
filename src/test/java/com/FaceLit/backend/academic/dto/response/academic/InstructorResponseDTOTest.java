@@ -11,6 +11,7 @@ import com.FaceLit.backend.academic.model.academic.Instructor;
 import com.FaceLit.backend.academic.model.academic.InstructorProgram;
 import com.FaceLit.backend.academic.model.academic.Program;
 import com.FaceLit.backend.academic.model.enums.InstructorType;
+import com.FaceLit.backend.auth.model.enums.AccountStatus;
 import com.FaceLit.backend.auth.model.security.User;
 
 class InstructorResponseDTOTest {
@@ -22,6 +23,7 @@ class InstructorResponseDTOTest {
         user.setDocumentNumber("1029384756");
         user.setFirstName("Laura");
         user.setLastName("Gómez");
+        user.setAccountStatus(AccountStatus.ACTIVE);
 
         Instructor instructor = new Instructor();
         instructor.setIdInstructor(UUID.randomUUID());
