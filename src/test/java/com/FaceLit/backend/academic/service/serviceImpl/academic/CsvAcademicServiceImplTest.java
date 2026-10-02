@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
@@ -18,6 +19,9 @@ import com.FaceLit.backend.academic.repository.ProgramRepository;
 import com.FaceLit.backend.academic.repository.UserChipRepository;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
+import com.FaceLit.backend.auth.model.enums.RoleName;
+import com.FaceLit.backend.auth.model.roleandpermission.Role;
+import com.FaceLit.backend.auth.repository.roleandpermission.RoleRepository;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -46,6 +50,23 @@ class CsvAcademicServiceImplTest {
 
     @Autowired
     private UserChipRepository userChipRepository;
+
+    @Autowired
+    private RoleRepository roleRepository;
+
+    @BeforeEach
+    void seedRequiredRoles() {
+        ensureRoleExists(RoleName.INSTRUCTOR);
+        ensureRoleExists(RoleName.APPRENTICE);
+    }
+
+    private void ensureRoleExists(RoleName roleName) {
+        if (roleRepository.findByNameRole(roleName).isEmpty()) {
+            Role role = new Role();
+            role.setNameRole(roleName);
+            roleRepository.save(role);
+        }
+    }
 
     @Test
     void upload_shouldCreateProgramChipInstructorAndApprenticeWithPassword() throws Exception {
