@@ -128,9 +128,8 @@ Acciones registradas:
 - `PUT /api/academic/instructors/{id}`
   - reemplaza la lista completa de programas del instructor
   - si cambia a `TRANSVERSAL`, elimina todas las filas relacionadas
-- `DELETE /api/academic/instructors/{id}`
-  - elimina primero las relaciones `instructor_program`
-  - deja preparado el control por asistencias como TODO estructural, sin romper el flujo
+- `PATCH /api/academic/instructors/{idInstructor}/deactivate`
+  - inactiva la cuenta y conserva el instructor y sus relaciones para mantener el historial
 
 ### 4.2 Asignación inicial de ficha
 
@@ -191,7 +190,7 @@ Las búsquedas por texto son insensibles a mayúsculas y usan coincidencia parci
 
 - `POST /api/academic/instructors`
 - `PUT /api/academic/instructors/{idInstructor}`
-- `DELETE /api/academic/instructors/{idInstructor}`
+- `PATCH /api/academic/instructors/{idInstructor}/deactivate`
 - `GET /api/academic/instructors`
 - `GET /api/academic/instructors/{idInstructor}`
 - `GET /api/academic/instructors/user/{idUser}`

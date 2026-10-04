@@ -3,6 +3,7 @@ package com.FaceLit.backend.auth.service.serviceImpl.security;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -106,6 +107,15 @@ public class UserManagementServiceImpl implements UserManagementService {
         @Override
         public long countUsers() {
                 return userRepository.count();
+        }
+
+        @Override
+        public Map<String, Long> getUserCounts() {
+                return Map.of(
+                                "total", userRepository.count(),
+                                "active", userRepository.countByAccountStatus(AccountStatus.ACTIVE),
+                                "inactive", userRepository.countByAccountStatus(AccountStatus.INACTIVE),
+                                "blocked", userRepository.countByAccountStatus(AccountStatus.BLOCKED));
         }
 
         @Override
@@ -245,6 +255,14 @@ public class UserManagementServiceImpl implements UserManagementService {
                 user.setAccountStatus(dto.getAccountStatus());
                 userRepository.save(user);
 
+                if (oldStatus != dto.getAccountStatus()) {
+                        if (dto.getAccountStatus() == AccountStatus.INACTIVE) {
+                                credential.setCredentialStatus(CredentialStatus.INACTIVE);
+                        } else if (dto.getAccountStatus() == AccountStatus.ACTIVE
+                                        && credential.getCredentialStatus() == CredentialStatus.INACTIVE) {
+                                credential.setCredentialStatus(CredentialStatus.ACTIVE);
+                        }
+                }
                 credential.setEmail(email);
                 credentialRepository.save(credential);
 
@@ -273,39 +291,20 @@ public class UserManagementServiceImpl implements UserManagementService {
 
         @Override
         @Transactional
-        public void deleteUser(UUID userId) {
+        public void deactivateUser(UUID userId) {
                 User user = userRepository.findById(userId)
                                 .orElseThrow(() -> new UserManagementException("Usuario no encontrado"));
 
-                if (user.getAccountStatus() == AccountStatus.ACTIVE) {
+                if (user.getAccountStatus() != AccountStatus.INACTIVE) {
                         user.setAccountStatus(AccountStatus.INACTIVE);
                         userRepository.save(user);
-                        credentialRepository.findByUser(user).ifPresent(credential -> {
-                                credential.setCredentialStatus(CredentialStatus.INACTIVE);
-                                credentialRepository.save(credential);
-                        });
-                        return;
                 }
 
-                acceptanceTermsRepository.findByUser(user)
-                                .ifPresent(acceptanceTermsRepository::delete);
-
-                List<PasswordRecovery> recoveries = passwordRecoveryRepository.findAllByUser_IdUser(userId);
-                passwordRecoveryRepository.deleteAll(recoveries);
-
-                List<UserSession> sessions = userSessionRepository.findByUser_IdUser(userId);
-                userSessionRepository.deleteAll(sessions);
-
-                userConfigurationRepository.findByUser_IdUser(userId)
-                                .ifPresent(userConfigurationRepository::delete);
-
-                userRoleRepository.findByUserId(userId)
-                                .ifPresent(userRoleRepository::delete);
-
                 credentialRepository.findByUser(user)
-                                .ifPresent(credentialRepository::delete);
-
-                userRepository.delete(user);
+                                .ifPresent(credential -> {
+                                        credential.setCredentialStatus(CredentialStatus.INACTIVE);
+                                        credentialRepository.save(credential);
+                                });
         }
 
         private UserDetailResponseDTO toDTO(User user) {

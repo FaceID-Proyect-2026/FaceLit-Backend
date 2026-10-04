@@ -185,7 +185,9 @@ public class InstructorServiceImpl implements InstructorService {
         instructor.setInstructorType(newType);
         instructorRepository.save(instructor);
 
-        List<UUID> ids = dto.getProgramIds() == null ? List.of() : dto.getProgramIds().stream().distinct().toList();
+        List<UUID> ids = newType == InstructorType.TRANSVERSAL || dto.getProgramIds() == null
+                ? List.of()
+                : dto.getProgramIds().stream().distinct().toList();
         if (newType == InstructorType.ESPECIFICO && ids.isEmpty()) {
             throw new AcademicException("Un instructor especifico debe indicar el programa al que pertenece.", HttpStatus.BAD_REQUEST);
         }
@@ -265,7 +267,7 @@ public class InstructorServiceImpl implements InstructorService {
     }
     @Override
     @Transactional
-    public void delete(UUID idInstructor) {
+    public InstructorResponseDTO deactivate(UUID idInstructor) {
         Instructor instructor = instructorRepository.findById(idInstructor)
                 .orElseThrow(() -> new AcademicException("Instructor no encontrado.", HttpStatus.NOT_FOUND));
 
@@ -277,18 +279,8 @@ public class InstructorServiceImpl implements InstructorService {
             }
             userRepository.save(user);
             recordChange(instructor, "instructor", AccountStatus.ACTIVE.name(), AccountStatus.INACTIVE.name(), ChangeAction.DEACTIVATE, "account_status", AccountStatus.INACTIVE.name());
-            return;
         }
-
-        if (instructorProgramRepository.countByInstructor_IdInstructor(idInstructor) > 0) {
-            notifyDeleteBlocked(instructor);
-            instructorProgramRepository.deleteAll(instructorProgramRepository.findAll().stream()
-                    .filter(ip -> ip.getInstructor().getIdInstructor().equals(idInstructor))
-                    .toList());
-        }
-
-        recordChange(instructor, "instructor", instructor.getInstructorType().name(), null, ChangeAction.DELETE, "instructor", instructor.getInstructorType().name());
-        instructorRepository.delete(instructor);
+        return toResponse(instructor);
     }
 
     @Override

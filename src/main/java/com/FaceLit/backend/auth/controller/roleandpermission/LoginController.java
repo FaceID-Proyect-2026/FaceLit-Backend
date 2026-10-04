@@ -1,6 +1,7 @@
 package com.FaceLit.backend.auth.controller.roleandpermission;
 
 import com.FaceLit.backend.auth.dto.request.roleandpermission.LoginRequestDTO;
+import com.FaceLit.backend.auth.dto.request.roleandpermission.PrivacyAcceptanceStatusRequestDTO;
 import com.FaceLit.backend.auth.dto.response.roleandpermission.LoginResponseDTO;
 import com.FaceLit.backend.auth.service.roleandpermission.LoginService;
 
@@ -29,5 +30,11 @@ public class LoginController {
     public ResponseEntity<LoginResponseDTO> login(@Valid @RequestBody LoginRequestDTO dto) {
         LoginResponseDTO response = loginService.login(dto);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/privacy-acceptance-status")
+    public ResponseEntity<Boolean> privacyAcceptanceStatus(
+            @Valid @RequestBody PrivacyAcceptanceStatusRequestDTO dto) {
+        return ResponseEntity.ok(loginService.hasAcceptedPrivacy(dto.getNumberDocument().trim()));
     }
 }

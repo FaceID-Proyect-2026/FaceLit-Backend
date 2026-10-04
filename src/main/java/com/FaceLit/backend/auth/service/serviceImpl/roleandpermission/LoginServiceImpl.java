@@ -5,16 +5,20 @@ import java.util.stream.Collectors;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.FaceLit.backend.auth.dto.request.roleandpermission.LoginRequestDTO;
 import com.FaceLit.backend.auth.dto.response.roleandpermission.LoginResponseDTO;
 import com.FaceLit.backend.auth.exception.LoginException;
+import com.FaceLit.backend.auth.model.legal.AcceptanceTerms;
 import com.FaceLit.backend.auth.model.security.Credential;
 import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
 import com.FaceLit.backend.auth.model.roleandpermission.UserRole;
 import com.FaceLit.backend.auth.model.roleandpermission.RolePermission;
+import com.FaceLit.backend.auth.repository.legal.AcceptanceTermsRepository;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
+import com.FaceLit.backend.auth.repository.security.UserSessionRepository;
 import com.FaceLit.backend.auth.repository.roleandpermission.RolePermissionRepository;
 import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.JwtService;
@@ -36,6 +40,8 @@ public class LoginServiceImpl implements LoginService {
     private final JwtService jwtService;
     private final UserSessionService userSessionService;
     private final NotificationService notificationService;
+    private final AcceptanceTermsRepository acceptanceTermsRepository;
+    private final UserSessionRepository userSessionRepository;
 
     public LoginServiceImpl(
             CredentialRepository credentialRepository,
@@ -44,7 +50,9 @@ public class LoginServiceImpl implements LoginService {
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             UserSessionService userSessionService,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            AcceptanceTermsRepository acceptanceTermsRepository,
+            UserSessionRepository userSessionRepository) {
         this.credentialRepository = credentialRepository;
         this.userRoleRepository = userRoleRepository;
         this.rolePermissionRepository = rolePermissionRepository;
@@ -52,9 +60,12 @@ public class LoginServiceImpl implements LoginService {
         this.jwtService = jwtService;
         this.userSessionService = userSessionService;
         this.notificationService = notificationService;
+        this.acceptanceTermsRepository = acceptanceTermsRepository;
+        this.userSessionRepository = userSessionRepository;
     }
 
     @Override
+    @Transactional
     public LoginResponseDTO login(LoginRequestDTO dto) {
 
         String identifier = dto.resolveIdentifier();
@@ -101,6 +112,11 @@ public class LoginServiceImpl implements LoginService {
             throw new LoginException("Usuario o contraseña incorrectos");
         }
 
+        boolean privacyAlreadyAccepted = acceptanceTermsRepository.existsByUserAndAcceptedTrue(user);
+        if (!privacyAlreadyAccepted && !dto.isPrivacyAccepted()) {
+            throw new LoginException("Debes aceptar el aviso de privacidad para continuar.");
+        }
+
         // 6. Resetear intentos fallidos — login exitoso
         credential.setFailedAttempts(0);
         credentialRepository.save(credential);
@@ -124,6 +140,14 @@ public class LoginServiceImpl implements LoginService {
                 .map(rp -> rp.getPermission().getNamePermission())
                 .collect(Collectors.toList());
 
+        if (!privacyAlreadyAccepted) {
+            AcceptanceTerms acceptance = acceptanceTermsRepository.findByUser(user)
+                    .orElseGet(AcceptanceTerms::new);
+            acceptance.setUser(user);
+            acceptance.setAccepted(true);
+            acceptanceTermsRepository.save(acceptance);
+        }
+
         // 11. Generar el JWT con userId, email, rol y permisos
         String token = jwtService.generateToken(user, roleName, permissions);
 
@@ -133,6 +157,22 @@ public class LoginServiceImpl implements LoginService {
 
         // 12. Devolver la respuesta con el token
         return LoginResponseDTO.success(token, roleName, permissions, user.getIdUser());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasAcceptedPrivacy(String documentNumber) {
+        String normalizedDocument = documentNumber == null ? "" : documentNumber.trim();
+        if (normalizedDocument.isBlank()) {
+            return false;
+        }
+
+        return credentialRepository.findByUser_DocumentNumber(normalizedDocument)
+                .map(Credential::getUser)
+                .map(user -> acceptanceTermsRepository.existsByUserAndAcceptedTrue(user)
+                        // Existing successful sessions predate server-side acceptance storage.
+                        || userSessionRepository.existsByUser_IdUser(user.getIdUser()))
+                .orElse(false);
     }
 
     private void notifyFailedLogin(User user, int failedAttempts) {

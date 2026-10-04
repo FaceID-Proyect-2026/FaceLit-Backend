@@ -4,6 +4,7 @@ import java.util.UUID;
 import java.util.List;
 import java.util.Optional;
 
+import com.FaceLit.backend.auth.model.enums.AccountStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -78,5 +79,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                 ORDER BY u.createdAt DESC
             """)
     List<UserListProjection> searchUserSummaries(@Param("query") String query);
+
+    long countByAccountStatus(AccountStatus accountStatus);
 
 }

@@ -1,6 +1,7 @@
 package com.FaceLit.backend.auth.service.serviceImpl.security;
 
 import jakarta.transaction.Transactional;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import com.FaceLit.backend.auth.dto.request.security.UserConfigurationRequestDTO;
@@ -46,13 +47,14 @@ public class UserConfigurationServiceImpl implements UserConfigurationService {
         // 1. Verificar que el usuario existe
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserConfigurationException(
-                        "Usuario no encontrado"));
+                        "Usuario no encontrado", HttpStatus.NOT_FOUND));
 
         // 2. Verificar que no tenga ya una configuracion
         // Solo se permite UNA configuracion por usuario
         if (userConfigurationRepository.existsByUser_IdUser(userId)) {
             throw new UserConfigurationException(
-                    "Ya tienes una configuracion creada. Usa la opcion de actualizar");
+                    "Ya tienes una configuracion creada. Usa la opcion de actualizar",
+                    HttpStatus.CONFLICT);
         }
 
         // 3. Crear la configuracion
@@ -82,7 +84,8 @@ public class UserConfigurationServiceImpl implements UserConfigurationService {
         UserConfiguration config = userConfigurationRepository
                 .findByUser_IdUser(userId)
                 .orElseThrow(() -> new UserConfigurationException(
-                        "No tienes una configuracion creada. Crea una primero"));
+                        "No tienes una configuracion creada. Crea una primero",
+                        HttpStatus.NOT_FOUND));
 
         // 2. Actualizar los campos
         config.setNotificationsActive(dto.isNotificationsActive());
@@ -104,7 +107,8 @@ public class UserConfigurationServiceImpl implements UserConfigurationService {
         UserConfiguration config = userConfigurationRepository
                 .findByUser_IdUser(userId)
                 .orElseThrow(() -> new UserConfigurationException(
-                        "No tienes una configuracion creada todavia"));
+                        "No tienes una configuracion creada todavia",
+                        HttpStatus.NOT_FOUND));
 
         return toDTO(config, null);
     }
