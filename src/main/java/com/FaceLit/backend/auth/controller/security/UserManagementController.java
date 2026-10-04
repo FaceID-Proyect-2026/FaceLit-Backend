@@ -41,7 +41,7 @@ public class UserManagementController {
 
     @GetMapping("/count")
     public ResponseEntity<Map<String, Long>> countUsers() {
-        return ResponseEntity.ok(Map.of("total", userManagementService.countUsers()));
+        return ResponseEntity.ok(userManagementService.getUserCounts());
     }
 
     // GET /api/admin/users/search?query=maria
@@ -78,10 +78,10 @@ public class UserManagementController {
     }
 
     // DELETE /api/admin/users/{userId}
-    // Si esta activo, lo desactiva. Si ya esta inactivo, lo elimina permanentemente.
+    // Desactiva la cuenta de forma idempotente sin eliminar sus datos.
     @DeleteMapping("/{userId}")
-    public ResponseEntity<Void> deleteUser(@PathVariable UUID userId) {
-        userManagementService.deleteUser(userId);
+    public ResponseEntity<Void> deactivateUser(@PathVariable UUID userId) {
+        userManagementService.deactivateUser(userId);
         return ResponseEntity.noContent().build();
     }
 

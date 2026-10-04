@@ -22,6 +22,9 @@ public class LoginRequestDTO {
     @NotBlank(message = "La contraseña es obligatoria")
     private String password;
 
+    // El backend registra este consentimiento únicamente cuando las credenciales son válidas.
+    private boolean privacyAccepted;
+
     public String resolveIdentifier() {
         if (numberDocument != null && !numberDocument.isBlank()) {
             return numberDocument.trim();

@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.FaceLit.backend.auth.exception.PasswordRecoveryException;
 import com.FaceLit.backend.auth.exception.UserManagementException;
+import com.FaceLit.backend.auth.exception.UserConfigurationException;
 import com.FaceLit.backend.auth.exception.ChangePasswordException;
 import com.FaceLit.backend.academic.exception.AcademicException;
 import com.FaceLit.backend.environment.exception.EnvironmentException;
@@ -74,6 +75,11 @@ public class GlobalExceptionHandler { // esta clase es para que capture errores 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", ex.getMessage()));
     }
 
+    @ExceptionHandler(UserConfigurationException.class)
+    public ResponseEntity<Map<String, String>> handleUserConfiguration(UserConfigurationException ex) {
+        return ResponseEntity.status(ex.getStatus()).body(Map.of("message", ex.getMessage()));
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, String>> handleDataIntegrity(DataIntegrityViolationException ex) {
         LOGGER.warn("Conflicto de integridad en base de datos", ex);
@@ -87,4 +93,3 @@ public class GlobalExceptionHandler { // esta clase es para que capture errores 
         return ResponseEntity.internalServerError().body(Map.of("message", "Error interno del servidor"));
     }
 }
-

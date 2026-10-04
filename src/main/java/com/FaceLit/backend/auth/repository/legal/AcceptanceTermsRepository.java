@@ -16,6 +16,8 @@ public interface AcceptanceTermsRepository extends JpaRepository<AcceptanceTerms
     // Se usa para no registrar duplicacion
     boolean existsByUser(User user);
 
+    boolean existsByUserAndAcceptedTrue(User user);
+
     // Busca la aceptación de términos del usuario, para poder eliminarla
     Optional<AcceptanceTerms> findByUser(User user);
 

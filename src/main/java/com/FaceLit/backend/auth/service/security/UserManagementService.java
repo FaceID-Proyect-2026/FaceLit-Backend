@@ -14,6 +14,8 @@ public interface UserManagementService {
 
     long countUsers();
 
+    java.util.Map<String, Long> getUserCounts();
+
     // Busca usuarios por nombre o correo (coincidencia parcial)
     List<UserDetailResponseDTO> searchUsers(String query);
 
@@ -26,7 +28,7 @@ public interface UserManagementService {
     // Editar nombre, apellido, estado y rol
     UserDetailResponseDTO updateUser(UUID userId, UpdateUserRequestDTO dto);
 
-    // Eliminar usuario — solo si no tiene dependencias activas
-    void deleteUser(UUID userId);
+    // Desactivar la cuenta sin eliminar los datos del usuario.
+    void deactivateUser(UUID userId);
 
 }

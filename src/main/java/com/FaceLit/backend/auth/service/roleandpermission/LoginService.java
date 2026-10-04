@@ -8,4 +8,6 @@ public interface LoginService {
     // Recibe las credenciales del usuario y devuelve el JWT con rol y permisos
     LoginResponseDTO login(LoginRequestDTO dto);
 
+    boolean hasAcceptedPrivacy(String documentNumber);
+
 }

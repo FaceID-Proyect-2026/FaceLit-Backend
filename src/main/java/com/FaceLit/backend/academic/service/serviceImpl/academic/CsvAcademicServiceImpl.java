@@ -152,11 +152,11 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
     @Override
     public byte[] template() {
         return (AppConstants.CSV_TEMPLATE_HEADER + "\n"
-                + "programa,,,,,ADSO,,\n"
+                + "programa,,Análisis y Desarrollo de Software,,,ADSO,,\n"
                 + "ficha,,,,,ADSO,2825551,\n"
                 + "aprendiz,100234,Juan,Perez,juan.perez@correo.com,,2825551,\n"
-                + "instructor,102938475610123,Laura,Gomez,laura.gomez@correo.com,ADSO,,especifico\n"
-                + "instructor,105060708012345,Carlos,Ruiz,carlos.ruiz@correo.com,,,transversal\n")
+                + "instructor,1029384756,Laura,Gomez,laura.gomez@correo.com,ADSO,,especifico\n"
+                + "instructor,1050607080,Carlos,Ruiz,carlos.ruiz@correo.com,,,transversal\n")
                 .getBytes(StandardCharsets.UTF_8);
     }
 
@@ -309,6 +309,38 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                         .add(error(first, "El tipo de instructor de la fila " + first.number + " no es válido."));
                 return;
             }
+            List<Program> instructorPrograms = new ArrayList<>();
+            boolean invalidProgramReference = false;
+            for (Row row : instructorRows) {
+                String programCode = row.value("programa_codigo").trim().toUpperCase(Locale.ROOT);
+                if (type == InstructorType.TRANSVERSAL) {
+                    if (!programCode.isBlank()) {
+                        result.getErroresDeReferencia().add(error(row,
+                                "Un instructor transversal no debe indicar programa_codigo en la fila "
+                                        + row.number + "."));
+                        invalidProgramReference = true;
+                    }
+                    continue;
+                }
+                Program program = programs.get(programCode);
+                if (program == null && !programCode.isBlank()) {
+                    program = programRepository.findByProgramCodeIgnoreCase(programCode).orElse(null);
+                }
+                if (program == null) {
+                    result.getErroresDeReferencia().add(error(row,
+                            "El programa_codigo de la fila " + row.number
+                                    + " es obligatorio para un instructor específico y debe existir."));
+                    invalidProgramReference = true;
+                    continue;
+                }
+                UUID resolvedProgramId = program.getIdProgram();
+                if (instructorPrograms.stream().noneMatch(item -> item.getIdProgram().equals(resolvedProgramId))) {
+                    instructorPrograms.add(program);
+                }
+            }
+            if (invalidProgramReference || (type == InstructorType.ESPECIFICO && instructorPrograms.isEmpty())) {
+                return;
+            }
             User user = findOrCreateUser(first, result);
             if (user == null) {
                 return;
@@ -319,9 +351,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                 InstructorRequestDTO dto = new InstructorRequestDTO();
                 dto.setIdUser(user.getIdUser());
                 dto.setInstructorType(type);
-                dto.setProgramIds(instructorRows.stream()
-                        .map(row -> programs.get(row.value("programa_codigo").toUpperCase(Locale.ROOT)))
-                        .filter(program -> program != null).map(Program::getIdProgram).distinct().toList());
+                dto.setProgramIds(instructorPrograms.stream().map(Program::getIdProgram).toList());
                 instructorService.create(dto);
                 instructorRepository.flush();
                 result.getCreados()
@@ -340,10 +370,8 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
             Set<UUID> existing = instructorProgramRepository.findByInstructor_IdInstructor(instructor.getIdInstructor()).stream()
                     .map(item -> item.getProgram().getIdProgram()).collect(Collectors.toSet());
             List<String> addedPrograms = new ArrayList<>();
-            for (Row row : instructorRows) {
-                Program program = programs.get(row.value("programa_codigo").toUpperCase(Locale.ROOT));
-                if (program != null
-                        && !existing.contains(program.getIdProgram())) {
+            for (Program program : instructorPrograms) {
+                if (!existing.contains(program.getIdProgram())) {
                     InstructorProgram relation = new InstructorProgram();
                     relation.setInstructor(instructor);
                     relation.setProgram(program);
@@ -550,7 +578,8 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         if (lines.isEmpty()) {
             throw new AcademicException("El archivo no contiene ninguna fila de datos para procesar.");
         }
-        List<String> headers = parseLine(lines.get(0)).stream().map(value -> value.trim().toLowerCase(Locale.ROOT))
+        List<String> headers = parseLine(lines.get(0).replaceFirst("^\\uFEFF", "")).stream()
+                .map(value -> value.trim().toLowerCase(Locale.ROOT))
                 .toList();
         if (!headers.contains(AppConstants.CSV_TYPE_COLUMN)) {
             throw new AcademicException("El archivo debe incluir la columna 'tipo'.");
@@ -589,7 +618,10 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         boolean quoted = false;
         for (int index = 0; index < line.length(); index++) {
             char current = line.charAt(index);
-            if (current == '"') {
+            if (current == '"' && quoted && index + 1 < line.length() && line.charAt(index + 1) == '"') {
+                value.append('"');
+                index++;
+            } else if (current == '"' && (quoted || value.length() == 0)) {
                 quoted = !quoted;
             } else if (current == ',' && !quoted) {
                 result.add(value.toString());
@@ -597,6 +629,9 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
             } else {
                 value.append(current);
             }
+        }
+        if (quoted) {
+            throw new AcademicException("Hay comillas sin cerrar en una fila del archivo CSV.");
         }
         result.add(value.toString());
         return result;

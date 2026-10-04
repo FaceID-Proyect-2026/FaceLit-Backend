@@ -11,7 +11,7 @@ public interface InstructorService {
     InstructorResponseDTO create(InstructorRequestDTO dto);
     InstructorResponseDTO update(UUID idInstructor, InstructorRequestDTO dto);
     InstructorResponseDTO reactivate(UUID idInstructor);
-    void delete(UUID idInstructor);
+    InstructorResponseDTO deactivate(UUID idInstructor);
     List<InstructorResponseDTO> findAll();
     InstructorResponseDTO findById(UUID idInstructor);
     InstructorResponseDTO findByUser(UUID idUser);

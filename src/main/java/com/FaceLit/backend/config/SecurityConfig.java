@@ -38,6 +38,8 @@ public class SecurityConfig {
 
                         // ─── PÚBLICOS — no necesitan token ───────────────────────
                         .requestMatchers("/api/auth/**").permitAll()
+                        // El token se valida como primer mensaje del canal WebSocket.
+                        .requestMatchers("/ws/realtime").permitAll()
 
                         // ─── SOLO COORDINADOR ────────────────────────
                         // Ver todos los usuarios, asignar roles, gestionar todo
