@@ -14,9 +14,14 @@ public class RecordEnvironmentResponseDTO {
     private final UUID idRecordEnvironment;
     private final UUID idEnvironment;
     private final String environmentName;
+    private final UUID idDevice;
+    private final String deviceCode;
     private final UUID idChip;
     private final String chipCode;
+    private final UUID idInstructorScheduled;
+    private final String instructorScheduledName;
     private final UUID idInstructorInCharge;
+    private final String instructorInChargeName;
     private final String instructorName;
     private final OffsetDateTime sessionStart;
     private final Integer registrationMinutes;
@@ -32,12 +37,23 @@ public class RecordEnvironmentResponseDTO {
         this.idRecordEnvironment = record.getIdRecordEnvironment();
         this.idEnvironment = record.getEnvironment().getIdEnvironment();
         this.environmentName = record.getEnvironment().getEnvironmentName();
+        this.idDevice = record.getDevice().getIdDevice();
+        this.deviceCode = record.getDevice().getDeviceCode();
         this.idChip = record.getChip().getIdChip();
         this.chipCode = record.getChip().getChipCode();
-        this.idInstructorInCharge = record.getInstructorInCharge().getIdInstructor();
-        this.instructorName = "%s %s".formatted(
-                record.getInstructorInCharge().getUser().getFirstName(),
-                record.getInstructorInCharge().getUser().getLastName()).trim();
+        this.idInstructorScheduled = record.getInstructorScheduled().getIdInstructor();
+        this.instructorScheduledName = "%s %s".formatted(
+                record.getInstructorScheduled().getUser().getFirstName(),
+                record.getInstructorScheduled().getUser().getLastName()).trim();
+        this.idInstructorInCharge = record.getInstructorInCharge() == null
+                ? null
+                : record.getInstructorInCharge().getIdInstructor();
+        this.instructorInChargeName = record.getInstructorInCharge() == null
+                ? null
+                : "%s %s".formatted(
+                        record.getInstructorInCharge().getUser().getFirstName(),
+                        record.getInstructorInCharge().getUser().getLastName()).trim();
+        this.instructorName = this.instructorScheduledName;
         this.sessionStart = record.getCreatedAt();
         this.registrationMinutes = record.getRegistrationMinutes();
         this.exitTime = record.getExitTime();

@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import com.FaceLit.backend.academic.model.academic.Chip;
 import com.FaceLit.backend.academic.model.academic.Instructor;
+import com.FaceLit.backend.facial.model.Device;
 import com.FaceLit.backend.shared.model.AuditBase;
 
 import jakarta.persistence.Column;
@@ -37,6 +38,10 @@ public class RecordEnvironment extends AuditBase {
     private Environment environment;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "id_device", nullable = false)
+    private Device device;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_chip", nullable = false)
     private Chip chip;
 
@@ -44,8 +49,8 @@ public class RecordEnvironment extends AuditBase {
     @JoinColumn(name = "id_instructor_scheduled", nullable = false)
     private Instructor instructorScheduled;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "id_instructor_in_charge", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_instructor_in_charge")
     private Instructor instructorInCharge;
 
     @Column(name = "registration_minutes", nullable = false)

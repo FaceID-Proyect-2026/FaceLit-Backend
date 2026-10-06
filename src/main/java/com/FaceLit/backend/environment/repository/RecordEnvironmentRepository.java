@@ -14,14 +14,27 @@ public interface RecordEnvironmentRepository extends JpaRepository<RecordEnviron
     @Query("""
             SELECT DISTINCT record.chip.idChip
             FROM RecordEnvironment record
-            WHERE record.instructorInCharge.idInstructor = :idInstructor
+            WHERE record.instructorScheduled.idInstructor = :idInstructor
+               OR record.instructorInCharge.idInstructor = :idInstructor
             """)
     List<UUID> findDistinctChipIdsByInstructor(@Param("idInstructor") UUID idInstructor);
 
-    @Query("""
-            SELECT DISTINCT record.instructorInCharge.user.idUser
-            FROM RecordEnvironment record
-            WHERE record.chip.idChip = :idChip
-            """)
+    @Query(value = """
+            SELECT DISTINCT instructor_user.id_user_app
+            FROM (
+                SELECT scheduled.id_user_app
+                FROM environment.record_environment record
+                JOIN academic.instructor scheduled
+                    ON scheduled.id_instructor = record.id_instructor_scheduled
+                WHERE record.id_chip = :idChip
+                UNION
+                SELECT in_charge.id_user_app
+                FROM environment.record_environment record
+                JOIN academic.instructor in_charge
+                    ON in_charge.id_instructor = record.id_instructor_in_charge
+                WHERE record.id_chip = :idChip
+                  AND record.id_instructor_in_charge IS NOT NULL
+            ) instructor_user
+            """, nativeQuery = true)
     List<UUID> findDistinctInstructorUserIdsByChip(@Param("idChip") UUID idChip);
 }

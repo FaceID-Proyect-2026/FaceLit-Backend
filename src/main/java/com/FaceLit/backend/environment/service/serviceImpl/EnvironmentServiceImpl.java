@@ -32,6 +32,8 @@ import com.FaceLit.backend.environment.model.enums.EnvironmentState;
 import com.FaceLit.backend.environment.repository.EnvironmentRepository;
 import com.FaceLit.backend.environment.repository.RecordEnvironmentRepository;
 import com.FaceLit.backend.environment.service.EnvironmentService;
+import com.FaceLit.backend.facial.model.Device;
+import com.FaceLit.backend.facial.repository.DeviceRepository;
 import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
 import com.FaceLit.backend.notification.service.NotificationService;
 
@@ -43,6 +45,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     private final InstructorRepository instructorRepository;
     private final InstructorProgramRepository instructorProgramRepository;
     private final ChipRepository chipRepository;
+    private final DeviceRepository deviceRepository;
     private final NotificationService notificationService;
 
     public EnvironmentServiceImpl(
@@ -51,12 +54,14 @@ public class EnvironmentServiceImpl implements EnvironmentService {
             InstructorRepository instructorRepository,
             InstructorProgramRepository instructorProgramRepository,
             ChipRepository chipRepository,
+            DeviceRepository deviceRepository,
             NotificationService notificationService) {
         this.environmentRepository = environmentRepository;
         this.recordEnvironmentRepository = recordEnvironmentRepository;
         this.instructorRepository = instructorRepository;
         this.instructorProgramRepository = instructorProgramRepository;
         this.chipRepository = chipRepository;
+        this.deviceRepository = deviceRepository;
         this.notificationService = notificationService;
     }
 
@@ -140,13 +145,16 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     public RecordEnvironmentResponseDTO createSession(RecordEnvironmentRequestDTO dto, UUID authenticatedUserId) {
         validateTimes(dto);
         Environment environment = findActiveEnvironment(dto.getIdEnvironment());
-        Instructor instructor = findInstructor(dto.getIdInstructorInCharge());
+        Device device = findOrCreateDevice(dto.getDeviceCode(), environment, authenticatedUserId);
+        Instructor scheduledInstructor = findInstructor(dto.getIdInstructorInCharge());
+        Instructor inChargeInstructor = resolveInstructorInCharge(scheduledInstructor, authenticatedUserId);
         Chip chip = findActiveChip(dto.getIdChip());
 
         RecordEnvironment record = new RecordEnvironment();
         record.setEnvironment(environment);
-        record.setInstructorScheduled(instructor);
-        record.setInstructorInCharge(instructor);
+        record.setDevice(device);
+        record.setInstructorScheduled(scheduledInstructor);
+        record.setInstructorInCharge(inChargeInstructor);
         record.setChip(chip);
         record.setRegistrationMinutes(dto.getRegistrationMinutes());
         record.setExitTime(dto.getExitTime());
@@ -167,8 +175,12 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         RecordEnvironment record = recordEnvironmentRepository.findById(idRecordEnvironment)
                 .orElseThrow(() -> new EnvironmentException("Sesión no encontrada.", HttpStatus.NOT_FOUND));
 
-        record.setEnvironment(findActiveEnvironment(dto.getIdEnvironment()));
-        record.setInstructorInCharge(findInstructor(dto.getIdInstructorInCharge()));
+        Environment environment = findActiveEnvironment(dto.getIdEnvironment());
+        record.setEnvironment(environment);
+        record.setDevice(findOrCreateDevice(dto.getDeviceCode(), environment, authenticatedUserId));
+        Instructor scheduledInstructor = findInstructor(dto.getIdInstructorInCharge());
+        record.setInstructorScheduled(scheduledInstructor);
+        record.setInstructorInCharge(resolveInstructorInCharge(scheduledInstructor, authenticatedUserId));
         record.setChip(findActiveChip(dto.getIdChip()));
         record.setRegistrationMinutes(dto.getRegistrationMinutes());
         record.setExitTime(dto.getExitTime());
@@ -217,6 +229,14 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                 .orElseThrow(() -> new EnvironmentException("Instructor no encontrado.", HttpStatus.NOT_FOUND));
     }
 
+    private Instructor resolveInstructorInCharge(Instructor scheduledInstructor, UUID authenticatedUserId) {
+        Instructor authenticatedInstructor = instructorRepository.findByUser_IdUser(authenticatedUserId)
+                .orElseThrow(() -> new EnvironmentException("Instructor no encontrado.", HttpStatus.NOT_FOUND));
+        return authenticatedInstructor.getIdInstructor().equals(scheduledInstructor.getIdInstructor())
+                ? null
+                : authenticatedInstructor;
+    }
+
     private Chip findActiveChip(UUID idChip) {
         Chip chip = chipRepository.findById(idChip)
                 .orElseThrow(() -> new EnvironmentException("La ficha no está activa.", HttpStatus.BAD_REQUEST));
@@ -224,6 +244,35 @@ public class EnvironmentServiceImpl implements EnvironmentService {
             throw new EnvironmentException("La ficha no está activa.", HttpStatus.BAD_REQUEST);
         }
         return chip;
+    }
+
+    private Device findOrCreateDevice(String rawDeviceCode, Environment environment, UUID authenticatedUserId) {
+        String deviceCode = rawDeviceCode == null ? "" : rawDeviceCode.trim();
+        if (deviceCode.isBlank() || deviceCode.length() > 50) {
+            throw new EnvironmentException("El dispositivo no es valido.", HttpStatus.BAD_REQUEST);
+        }
+        return deviceRepository.findByDeviceCode(deviceCode)
+                .map(device -> {
+                    if (!device.getEnvironment().getIdEnvironment().equals(environment.getIdEnvironment())) {
+                        device.setEnvironment(environment);
+                        device.setLocation(environment.getEnvironmentName());
+                        device.setUpdatedBy(authenticatedUserId.toString());
+                    }
+                    if (!"ACTIVE".equals(device.getStatus())) {
+                        device.setStatus("ACTIVE");
+                        device.setUpdatedBy(authenticatedUserId.toString());
+                    }
+                    return deviceRepository.save(device);
+                })
+                .orElseGet(() -> {
+                    Device device = new Device();
+                    device.setEnvironment(environment);
+                    device.setDeviceCode(deviceCode);
+                    device.setLocation(environment.getEnvironmentName());
+                    device.setStatus("ACTIVE");
+                    device.setCreatedBy(authenticatedUserId.toString());
+                    return deviceRepository.save(device);
+                });
     }
 
     private void validateTimes(RecordEnvironmentRequestDTO dto) {
@@ -244,9 +293,9 @@ public class EnvironmentServiceImpl implements EnvironmentService {
 
     private void notifySessionSubstitution(RecordEnvironment record, UUID authenticatedUserId) {
         Instructor configuredBy = instructorRepository.findByUser_IdUser(authenticatedUserId).orElse(null);
-        Instructor inCharge = record.getInstructorInCharge();
-        if (configuredBy == null || inCharge == null
-                || configuredBy.getIdInstructor().equals(inCharge.getIdInstructor())) {
+        Instructor scheduledInstructor = record.getInstructorScheduled();
+        if (configuredBy == null || scheduledInstructor == null
+                || configuredBy.getIdInstructor().equals(scheduledInstructor.getIdInstructor())) {
             return;
         }
 
@@ -258,7 +307,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
 
         try {
             notificationService.createForRecipient(new CreateNotificationRequestDTO(
-                    inCharge.getUser().getIdUser(),
+                    scheduledInstructor.getUser().getIdUser(),
                     "facial_session_substitution",
                     "Sesion de reconocimiento asignada",
                     fullName(configuredBy) + " abrio una sesion de reconocimiento facial y te dejo a ti como instructor a cargo - Ambiente "
@@ -272,7 +321,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                     configuredBy.getUser().getIdUser(),
                     "facial_session_substitution",
                     "Sesion de reconocimiento configurada",
-                    "Configuraste la sesion de reconocimiento facial dejando a " + fullName(inCharge)
+                    "Configuraste la sesion de reconocimiento facial dejando a " + fullName(scheduledInstructor)
                             + " como responsable - Ambiente " + environmentName + ", Ficha " + chipCode + ".",
                     record.getIdRecordEnvironment(),
                     "record_environment",
