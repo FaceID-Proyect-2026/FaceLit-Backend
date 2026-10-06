@@ -15,6 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 import com.FaceLit.backend.academic.dto.response.academic.CsvUploadResponseDTO;
 import com.FaceLit.backend.academic.repository.ApprenticeRepository;
 import com.FaceLit.backend.academic.repository.ChipRepository;
+import com.FaceLit.backend.academic.repository.InstructorChipRepository;
 import com.FaceLit.backend.academic.repository.InstructorProgramRepository;
 import com.FaceLit.backend.academic.repository.InstructorRepository;
 import com.FaceLit.backend.academic.repository.ProgramRepository;
@@ -57,6 +58,9 @@ class CsvAcademicServiceImplTest {
     private InstructorProgramRepository instructorProgramRepository;
 
     @Autowired
+    private InstructorChipRepository instructorChipRepository;
+
+    @Autowired
     private ApprenticeRepository apprenticeRepository;
 
     @Autowired
@@ -86,7 +90,7 @@ class CsvAcademicServiceImplTest {
             programa,,,,,ADSO,,
             ficha,,,,,ADSO,2825551,
             aprendiz,1002345678,Juan,Perez,juan.perez@correo.com,,2825551,
-            instructor,1029384756,Laura,Gomez,laura.gomez@correo.com,ADSO,,especifico
+            instructor,1029384756,Laura,Gomez,laura.gomez@correo.com,ADSO,2825551,especifico
             """;
 
         MockMultipartFile file = new MockMultipartFile(
@@ -110,6 +114,9 @@ class CsvAcademicServiceImplTest {
         assertThat(instructorProgramRepository.findByInstructor_IdInstructor(
                 instructorRepository.findByUser_IdUser(instructorUser.getIdUser()).orElseThrow().getIdInstructor()))
                 .anySatisfy(relation -> assertThat(relation.getProgram().getIdProgram()).isEqualTo(programId));
+        var instructor = instructorRepository.findByUser_IdUser(instructorUser.getIdUser()).orElseThrow();
+        assertThat(instructorChipRepository.findByInstructor_IdInstructorAndActiveTrue(instructor.getIdInstructor()))
+                .anySatisfy(relation -> assertThat(relation.getChip().getIdChip()).isEqualTo(apprenticeChip.getIdChip()));
         var apprenticeUser = userRepository.findByDocumentNumber("1002345678").orElseThrow();
         assertThat(apprenticeRepository.findByUser_IdUser(apprenticeUser.getIdUser()))
                 .isPresent();
@@ -194,7 +201,7 @@ class CsvAcademicServiceImplTest {
                 "programa,,Análisis y Desarrollo de Software,,,ADSO,,",
                 "ficha,,,,,ADSO,2825551,",
                 "aprendiz,100234,Juan,Perez,juan.perez@correo.com,,2825551,",
-                "instructor,1029384756,Laura,Gomez,laura.gomez@correo.com,ADSO,,especifico",
+                "instructor,1029384756,Laura,Gomez,laura.gomez@correo.com,ADSO,2825551,especifico",
                 "instructor,1050607080,Carlos,Ruiz,carlos.ruiz@correo.com,,,transversal");
     }
 

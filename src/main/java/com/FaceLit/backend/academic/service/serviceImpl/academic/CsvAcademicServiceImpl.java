@@ -35,6 +35,7 @@ import com.FaceLit.backend.academic.model.academic.ChangeHistory;
 import com.FaceLit.backend.academic.model.academic.Chip;
 import com.FaceLit.backend.academic.model.academic.CsvPendingTransfer;
 import com.FaceLit.backend.academic.model.academic.Instructor;
+import com.FaceLit.backend.academic.model.academic.InstructorChip;
 import com.FaceLit.backend.academic.model.academic.InstructorProgram;
 import com.FaceLit.backend.academic.model.academic.Program;
 import com.FaceLit.backend.academic.model.academic.UserChip;
@@ -46,6 +47,7 @@ import com.FaceLit.backend.academic.repository.ApprenticeRepository;
 import com.FaceLit.backend.academic.repository.ChangeHistoryRepository;
 import com.FaceLit.backend.academic.repository.ChipRepository;
 import com.FaceLit.backend.academic.repository.CsvPendingTransferRepository;
+import com.FaceLit.backend.academic.repository.InstructorChipRepository;
 import com.FaceLit.backend.academic.repository.InstructorProgramRepository;
 import com.FaceLit.backend.academic.repository.InstructorRepository;
 import com.FaceLit.backend.academic.repository.ProgramRepository;
@@ -99,6 +101,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
     private final ChipRepository chipRepository;
     private final InstructorRepository instructorRepository;
     private final InstructorProgramRepository instructorProgramRepository;
+    private final InstructorChipRepository instructorChipRepository;
     private final UserRepository userRepository;
     private final CredentialRepository credentialRepository;
     private final ApprenticeRepository apprenticeRepository;
@@ -120,6 +123,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
             ChipRepository chipRepository,
             InstructorRepository instructorRepository,
             InstructorProgramRepository instructorProgramRepository,
+            InstructorChipRepository instructorChipRepository,
             UserRepository userRepository,
             CredentialRepository credentialRepository,
             ApprenticeRepository apprenticeRepository,
@@ -138,6 +142,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         this.chipRepository = chipRepository;
         this.instructorRepository = instructorRepository;
         this.instructorProgramRepository = instructorProgramRepository;
+        this.instructorChipRepository = instructorChipRepository;
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
         this.apprenticeRepository = apprenticeRepository;
@@ -160,7 +165,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                 + "programa,,Análisis y Desarrollo de Software,,,ADSO,,\n"
                 + "ficha,,,,,ADSO,2825551,\n"
                 + "aprendiz,100234,Juan,Perez,juan.perez@correo.com,,2825551,\n"
-                + "instructor,1029384756,Laura,Gomez,laura.gomez@correo.com,ADSO,,especifico\n"
+                + "instructor,1029384756,Laura,Gomez,laura.gomez@correo.com,ADSO,2825551,especifico\n"
                 + "instructor,1050607080,Carlos,Ruiz,carlos.ruiz@correo.com,,,transversal\n")
                 .getBytes(StandardCharsets.UTF_8);
     }
@@ -177,7 +182,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                 .forEach(row -> processProgram(row, programs, result));
         rows.stream().filter(row -> row.value("tipo").equals("ficha"))
                 .forEach(row -> processChip(row, programs, chips, result));
-        processInstructors(rows, programs, result);
+        processInstructors(rows, programs, chips, result);
         rows.stream().filter(row -> row.value("tipo").equals("aprendiz"))
                 .forEach(row -> processApprentice(row, chips, result));
         notifyCsvUpload(result);
@@ -298,7 +303,8 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         chips.put(code, chip);
     }
 
-    private void processInstructors(List<Row> rows, Map<String, Program> programs, CsvUploadResponseDTO result) {
+    private void processInstructors(List<Row> rows, Map<String, Program> programs, Map<String, Chip> chips,
+            CsvUploadResponseDTO result) {
         Map<String, List<Row>> grouped = rows.stream().filter(row -> row.value("tipo").equals("instructor"))
                 .collect(Collectors.groupingBy(row -> row.value("documento"), HashMap::new, Collectors.toList()));
         grouped.forEach((document, instructorRows) -> {
@@ -317,15 +323,22 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                 return;
             }
             List<Program> instructorPrograms = new ArrayList<>();
+            List<Chip> instructorChips = new ArrayList<>();
             boolean invalidProgramReference = false;
+            boolean invalidChipReference = false;
             for (Row row : instructorRows) {
                 String programCode = row.value("programa_codigo").trim().toUpperCase(Locale.ROOT);
+                String chipCode = row.value("ficha_codigo").trim();
                 if (type == InstructorType.TRANSVERSAL) {
                     if (!programCode.isBlank()) {
                         result.getErroresDeReferencia().add(error(row,
                                 "Un instructor transversal no debe indicar programa_codigo en la fila "
                                         + row.number + "."));
                         invalidProgramReference = true;
+                    }
+                    if (!chipCode.isBlank()
+                            && resolveInstructorChip(row, chipCode, chips, instructorChips, result) == null) {
+                        invalidChipReference = true;
                     }
                     continue;
                 }
@@ -344,8 +357,20 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                 if (instructorPrograms.stream().noneMatch(item -> item.getIdProgram().equals(resolvedProgramId))) {
                     instructorPrograms.add(program);
                 }
+                Chip chip = resolveInstructorChip(row, chipCode, chips, instructorChips, result);
+                if (!chipCode.isBlank() && chip == null) {
+                    invalidChipReference = true;
+                    continue;
+                }
+                if (chip != null && !chip.getProgram().getIdProgram().equals(resolvedProgramId)) {
+                    result.getErroresDeReferencia().add(error(row,
+                            "La ficha '" + chipCode + "' indicada en la fila " + row.number
+                                    + " no pertenece al programa_codigo '" + programCode + "'."));
+                    invalidChipReference = true;
+                }
             }
-            if (invalidProgramReference || (type == InstructorType.ESPECIFICO && instructorPrograms.isEmpty())) {
+            if (invalidProgramReference || invalidChipReference
+                    || (type == InstructorType.ESPECIFICO && instructorPrograms.isEmpty())) {
                 return;
             }
             User user = findOrCreateUser(first, result);
@@ -361,6 +386,8 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                 dto.setProgramIds(instructorPrograms.stream().map(Program::getIdProgram).toList());
                 instructorService.create(dto);
                 instructorRepository.flush();
+                instructor = instructorRepository.findByUser_IdUser(user.getIdUser()).orElseThrow();
+                saveInstructorChips(instructor, instructorChips);
                 result.getCreados()
                         .add(new CsvUploadResponseDTO.CsvRowResult(first.number, "instructor", document + " creado"));
                 return;
@@ -387,10 +414,46 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                     addedPrograms.add(program.getProgramName() + " (" + program.getProgramCode() + ")");
                 }
             }
+            saveInstructorChips(instructor, instructorChips);
             notifyCsvInstructorPrograms(instructor, addedPrograms);
             result.getActualizados()
                     .add(new CsvUploadResponseDTO.CsvRowResult(first.number, "instructor", document + " actualizado"));
         });
+    }
+
+    private Chip resolveInstructorChip(Row row, String chipCode, Map<String, Chip> chips, List<Chip> instructorChips,
+            CsvUploadResponseDTO result) {
+        if (chipCode.isBlank()) {
+            return null;
+        }
+        Chip chip = chips.get(chipCode);
+        if (chip == null) {
+            chip = chipRepository.findByChipCode(chipCode).orElse(null);
+        }
+        if (chip == null) {
+            result.getErroresDeReferencia().add(error(row,
+                    "La ficha '" + chipCode + "' indicada en la fila " + row.number + " no existe."));
+            return null;
+        }
+        UUID resolvedChipId = chip.getIdChip();
+        if (instructorChips.stream().noneMatch(item -> item.getIdChip().equals(resolvedChipId))) {
+            instructorChips.add(chip);
+        }
+        return chip;
+    }
+
+    private void saveInstructorChips(Instructor instructor, List<Chip> chips) {
+        for (Chip chip : chips) {
+            if (instructorChipRepository.existsByInstructor_IdInstructorAndChip_IdChipAndActiveTrue(
+                    instructor.getIdInstructor(), chip.getIdChip())) {
+                continue;
+            }
+            InstructorChip relation = new InstructorChip();
+            relation.setInstructor(instructor);
+            relation.setChip(chip);
+            relation.setActive(true);
+            instructorChipRepository.save(relation);
+        }
     }
 
     private void processApprentice(Row row, Map<String, Chip> chips, CsvUploadResponseDTO result) {
