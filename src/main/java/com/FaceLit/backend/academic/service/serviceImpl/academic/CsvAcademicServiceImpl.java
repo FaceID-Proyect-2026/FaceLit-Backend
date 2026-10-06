@@ -30,6 +30,7 @@ import com.FaceLit.backend.academic.dto.response.academic.CsvUploadResponseDTO;
 import com.FaceLit.backend.academic.dto.response.academic.PendingTransferResponseDTO;
 import com.FaceLit.backend.academic.dto.response.academic.UserChipResponseDTO;
 import com.FaceLit.backend.academic.exception.AcademicException;
+import com.FaceLit.backend.academic.model.academic.Apprentice;
 import com.FaceLit.backend.academic.model.academic.ChangeHistory;
 import com.FaceLit.backend.academic.model.academic.Chip;
 import com.FaceLit.backend.academic.model.academic.CsvPendingTransfer;
@@ -41,6 +42,7 @@ import com.FaceLit.backend.academic.model.enums.AcademicState;
 import com.FaceLit.backend.academic.model.enums.ChangeAction;
 import com.FaceLit.backend.academic.model.enums.InstructorType;
 import com.FaceLit.backend.academic.model.enums.PendingTransferStatus;
+import com.FaceLit.backend.academic.repository.ApprenticeRepository;
 import com.FaceLit.backend.academic.repository.ChangeHistoryRepository;
 import com.FaceLit.backend.academic.repository.ChipRepository;
 import com.FaceLit.backend.academic.repository.CsvPendingTransferRepository;
@@ -99,6 +101,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
     private final InstructorProgramRepository instructorProgramRepository;
     private final UserRepository userRepository;
     private final CredentialRepository credentialRepository;
+    private final ApprenticeRepository apprenticeRepository;
     private final UserChipRepository userChipRepository;
     private final CsvPendingTransferRepository pendingTransferRepository;
     private final ChangeHistoryRepository changeHistoryRepository;
@@ -119,6 +122,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
             InstructorProgramRepository instructorProgramRepository,
             UserRepository userRepository,
             CredentialRepository credentialRepository,
+            ApprenticeRepository apprenticeRepository,
             UserChipRepository userChipRepository,
             CsvPendingTransferRepository pendingTransferRepository,
             ChangeHistoryRepository changeHistoryRepository,
@@ -136,6 +140,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         this.instructorProgramRepository = instructorProgramRepository;
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
+        this.apprenticeRepository = apprenticeRepository;
         this.userChipRepository = userChipRepository;
         this.pendingTransferRepository = pendingTransferRepository;
         this.changeHistoryRepository = changeHistoryRepository;
@@ -190,6 +195,8 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
     @Transactional
     public UserChipResponseDTO acceptPendingTransfer(UUID idPendingTransfer) {
         CsvPendingTransfer pending = getPending(idPendingTransfer);
+        apprenticeRepository.findByUser_IdUser(pending.getUser().getIdUser())
+                .orElseThrow(() -> new AcademicException("El aprendiz no existe.", HttpStatus.BAD_REQUEST));
         TransferChipRequestDTO dto = new TransferChipRequestDTO();
         dto.setIdNewChip(pending.getProposedChip().getIdChip());
         UserChipResponseDTO response = userChipService.transferChip(pending.getUser().getIdUser(), dto);
@@ -409,9 +416,8 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                 return;
             }
             assignRole(user, RoleName.APPRENTICE);
-            UserChipRequestDTO assignment = new UserChipRequestDTO();
-            assignment.setIdUser(user.getIdUser());
-            userChipService.assignInitialChip(chip.getIdChip(), assignment);
+            createApprentice(user);
+            assignInitialChip(user, chip);
             result.getCreados()
                     .add(new CsvUploadResponseDTO.CsvRowResult(row.number, "aprendiz", document + " creado"));
             return;
@@ -423,9 +429,26 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         }
         assignRole(user, RoleName.APPRENTICE);
         User resolvedUser = user;
-        UserChip current = userChipRepository.findByUser_IdUserAndState(resolvedUser.getIdUser(), AcademicState.ACTIVE)
+        Apprentice current = apprenticeRepository.findByUser_IdUser(resolvedUser.getIdUser())
                 .orElse(null);
-        if (current == null || current.getChip().getIdChip().equals(chip.getIdChip())) {
+        UserChip currentAssignment = userChipRepository.findByUser_IdUserAndState(resolvedUser.getIdUser(), AcademicState.ACTIVE)
+                .orElse(null);
+        if (current == null) {
+            createApprentice(user);
+            if (currentAssignment == null) {
+                assignInitialChip(user, chip);
+            }
+            result.getCreados()
+                    .add(new CsvUploadResponseDTO.CsvRowResult(row.number, "aprendiz", document + " creado"));
+            return;
+        }
+        if (currentAssignment == null) {
+            assignInitialChip(user, chip);
+            result.getActualizados()
+                    .add(new CsvUploadResponseDTO.CsvRowResult(row.number, "aprendiz", document + " actualizado"));
+            return;
+        }
+        if (currentAssignment.getChip().getIdChip().equals(chip.getIdChip())) {
             result.getActualizados()
                     .add(new CsvUploadResponseDTO.CsvRowResult(row.number, "aprendiz", document + " actualizado"));
             return;
@@ -438,15 +461,27 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                 });
         CsvPendingTransfer pending = new CsvPendingTransfer();
         pending.setUser(user);
-        pending.setCurrentChip(current.getChip());
+        pending.setCurrentChip(currentAssignment.getChip());
         pending.setProposedChip(chip);
         pending.setSourceRowNumber(row.number);
         pending.setStatus(PendingTransferStatus.PENDING);
         pending = pendingTransferRepository.save(pending);
         result.getTrasladosPendientes()
                 .add(new CsvUploadResponseDTO.CsvPendingTransferResult(pending.getIdPendingTransfer(), row.number,
-                        user.getFirstName() + " " + user.getLastName(), current.getChip().getChipCode(),
+                        user.getFirstName() + " " + user.getLastName(), currentAssignment.getChip().getChipCode(),
                         chip.getChipCode()));
+    }
+
+    private Apprentice createApprentice(User user) {
+        Apprentice apprentice = new Apprentice();
+        apprentice.setUser(user);
+        return apprenticeRepository.save(apprentice);
+    }
+
+    private void assignInitialChip(User user, Chip chip) {
+        UserChipRequestDTO assignment = new UserChipRequestDTO();
+        assignment.setIdUser(user.getIdUser());
+        userChipService.assignInitialChip(chip.getIdChip(), assignment);
     }
 
     private boolean canUseExistingUserAsApprentice(User user) {
@@ -542,7 +577,10 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
     private void recordCsvHistory(CsvPendingTransfer pending, ChangeAction action) {
         ChangeHistory history = new ChangeHistory();
         history.setEntityName("user_chip");
-        history.setEntityId(pending.getUser().getIdUser());
+        history.setEntityId(userChipRepository.findByUser_IdUserAndState(
+                pending.getUser().getIdUser(), AcademicState.ACTIVE)
+                .map(UserChip::getIdUserChip)
+                .orElse(pending.getUser().getIdUser()));
         history.setFieldName("chip");
         history.setOldValue(pending.getCurrentChip().getChipCode());
         history.setNewValue(pending.getProposedChip().getChipCode());

@@ -38,7 +38,7 @@ public class RecordEnvironmentResponseDTO {
         this.instructorName = "%s %s".formatted(
                 record.getInstructorInCharge().getUser().getFirstName(),
                 record.getInstructorInCharge().getUser().getLastName()).trim();
-        this.sessionStart = record.getSessionStart();
+        this.sessionStart = record.getCreatedAt();
         this.registrationMinutes = record.getRegistrationMinutes();
         this.exitTime = record.getExitTime();
         this.shutdownTime = record.getShutdownTime();

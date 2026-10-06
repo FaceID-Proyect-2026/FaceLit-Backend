@@ -1,7 +1,6 @@
 package com.FaceLit.backend.environment.model;
 
 import java.time.LocalTime;
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import com.FaceLit.backend.academic.model.academic.Chip;
@@ -42,11 +41,12 @@ public class RecordEnvironment extends AuditBase {
     private Chip chip;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "id_instructor_scheduled", nullable = false)
+    private Instructor instructorScheduled;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_instructor_in_charge", nullable = false)
     private Instructor instructorInCharge;
-
-    @Column(name = "session_start", nullable = false)
-    private OffsetDateTime sessionStart;
 
     @Column(name = "registration_minutes", nullable = false)
     private Integer registrationMinutes;

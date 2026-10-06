@@ -1,6 +1,5 @@
 package com.FaceLit.backend.environment.service.serviceImpl;
 
-import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -146,9 +145,9 @@ public class EnvironmentServiceImpl implements EnvironmentService {
 
         RecordEnvironment record = new RecordEnvironment();
         record.setEnvironment(environment);
+        record.setInstructorScheduled(instructor);
         record.setInstructorInCharge(instructor);
         record.setChip(chip);
-        record.setSessionStart(OffsetDateTime.now());
         record.setRegistrationMinutes(dto.getRegistrationMinutes());
         record.setExitTime(dto.getExitTime());
         record.setShutdownTime(dto.getShutdownTime());

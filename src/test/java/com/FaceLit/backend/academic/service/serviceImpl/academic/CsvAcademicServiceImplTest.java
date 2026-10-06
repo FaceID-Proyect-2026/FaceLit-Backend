@@ -13,6 +13,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.FaceLit.backend.academic.dto.response.academic.CsvUploadResponseDTO;
+import com.FaceLit.backend.academic.repository.ApprenticeRepository;
 import com.FaceLit.backend.academic.repository.ChipRepository;
 import com.FaceLit.backend.academic.repository.InstructorProgramRepository;
 import com.FaceLit.backend.academic.repository.InstructorRepository;
@@ -22,8 +23,12 @@ import com.FaceLit.backend.academic.model.academic.Program;
 import com.FaceLit.backend.academic.model.enums.AcademicState;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
+import com.FaceLit.backend.auth.model.enums.AccountStatus;
+import com.FaceLit.backend.auth.model.enums.CredentialStatus;
 import com.FaceLit.backend.auth.model.enums.RoleName;
 import com.FaceLit.backend.auth.model.roleandpermission.Role;
+import com.FaceLit.backend.auth.model.security.Credential;
+import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.auth.repository.roleandpermission.RoleRepository;
 
 @SpringBootTest
@@ -50,6 +55,9 @@ class CsvAcademicServiceImplTest {
 
     @Autowired
     private InstructorProgramRepository instructorProgramRepository;
+
+    @Autowired
+    private ApprenticeRepository apprenticeRepository;
 
     @Autowired
     private UserChipRepository userChipRepository;
@@ -95,14 +103,20 @@ class CsvAcademicServiceImplTest {
         assertThat(program.getCreatedAt()).isNotNull();
         assertThat(program.getUpdatedAt()).isNotNull();
         assertThat(program.getState()).isNotNull();
-        assertThat(chipRepository.findByChipCode("2825551")).isPresent();
+        var apprenticeChip = chipRepository.findByChipCode("2825551").orElseThrow();
         assertThat(userRepository.findByDocumentNumber("1002345678")).isPresent();
         var instructorUser = userRepository.findByDocumentNumber("1029384756").orElseThrow();
         assertThat(instructorRepository.findByUser_IdUser(instructorUser.getIdUser())).isPresent();
         assertThat(instructorProgramRepository.findByInstructor_IdInstructor(
                 instructorRepository.findByUser_IdUser(instructorUser.getIdUser()).orElseThrow().getIdInstructor()))
                 .anySatisfy(relation -> assertThat(relation.getProgram().getIdProgram()).isEqualTo(programId));
-        assertThat(userChipRepository.findAll()).hasSize(1);
+        var apprenticeUser = userRepository.findByDocumentNumber("1002345678").orElseThrow();
+        assertThat(apprenticeRepository.findByUser_IdUser(apprenticeUser.getIdUser()))
+                .isPresent();
+        assertThat(userChipRepository.findByUser_IdUserAndState(apprenticeUser.getIdUser(), AcademicState.ACTIVE))
+                .isPresent()
+                .get()
+                .satisfies(userChip -> assertThat(userChip.getChip().getIdChip()).isEqualTo(apprenticeChip.getIdChip()));
         assertThat(credentialRepository.findByUser_DocumentNumber("1002345678")).isPresent();
         assertThat(response.getContrasenasGeneradas())
                 .anySatisfy(item -> {
@@ -111,6 +125,47 @@ class CsvAcademicServiceImplTest {
                     assertThat(item.contrasenaTemporal()).hasSizeGreaterThanOrEqualTo(8);
                 });
         assertThat(response.getCreados()).hasSizeGreaterThanOrEqualTo(4);
+    }
+
+    @Test
+    void upload_shouldCreateApprenticeRowForExistingUserApp() throws Exception {
+        String suffix = String.valueOf(Math.abs(UUID.randomUUID().hashCode()));
+        suffix = (suffix + "0000000").substring(0, 7);
+        String document = "77" + suffix;
+        User existingUser = new User();
+        existingUser.setDocumentNumber(document);
+        existingUser.setFirstName("Ana");
+        existingUser.setLastName("Lopez");
+        existingUser.setAccountStatus(AccountStatus.ACTIVE);
+        existingUser = userRepository.save(existingUser);
+
+        Credential credential = new Credential();
+        credential.setUser(existingUser);
+        credential.setEmail("ana." + suffix.toLowerCase() + "@example.com");
+        credential.setPassword("encoded-password");
+        credential.setCredentialStatus(CredentialStatus.ACTIVE);
+        credential.setFailedAttempts(0);
+        credentialRepository.save(credential);
+
+        String programCode = "TST" + suffix.substring(0, 4);
+        String chipCode = "3" + suffix.substring(0, 6);
+        String csv = """
+                tipo,documento,nombre,apellido,correo,programa_codigo,ficha_codigo,instructor_tipo
+                programa,,Programa Test,,,%s,,
+                ficha,,,,,%s,%s,
+                aprendiz,%s,Ana,Lopez,ana.%s@example.com,,%s,
+                """.formatted(programCode, programCode, chipCode, document, suffix.toLowerCase(), chipCode);
+
+        CsvUploadResponseDTO response = csvAcademicService.upload(csvFile(csv));
+        var chip = chipRepository.findByChipCode(chipCode).orElseThrow();
+
+        assertThat(response.getErroresDeReferencia()).isEmpty();
+        assertThat(apprenticeRepository.findByUser_IdUser(existingUser.getIdUser()))
+                .isPresent();
+        assertThat(userChipRepository.findByUser_IdUserAndState(existingUser.getIdUser(), AcademicState.ACTIVE))
+                .isPresent()
+                .get()
+                .satisfies(userChip -> assertThat(userChip.getChip().getIdChip()).isEqualTo(chip.getIdChip()));
     }
 
     @Test
