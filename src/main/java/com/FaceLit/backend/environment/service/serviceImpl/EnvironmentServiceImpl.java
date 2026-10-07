@@ -281,15 +281,16 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         if (dto.getEntryTime() == null) {
             throw new EnvironmentException("La hora de entrada es obligatoria.", HttpStatus.BAD_REQUEST);
         }
-        boolean hasExit = dto.getExitTime() != null;
-        boolean hasShutdown = dto.getShutdownTime() != null;
-        if (hasExit != hasShutdown) {
-            throw new EnvironmentException("La hora de salida y la hora de apagado deben configurarse juntas.", HttpStatus.BAD_REQUEST);
+        if (dto.getExitTime() == null) {
+            throw new EnvironmentException("La hora de salida es obligatoria.", HttpStatus.BAD_REQUEST);
         }
-        if (hasExit && !dto.getExitTime().isAfter(dto.getEntryTime())) {
+        if (dto.getShutdownTime() == null) {
+            throw new EnvironmentException("La hora de apagado es obligatoria.", HttpStatus.BAD_REQUEST);
+        }
+        if (!dto.getExitTime().isAfter(dto.getEntryTime())) {
             throw new EnvironmentException("La hora de salida debe ser posterior a la hora de entrada.", HttpStatus.BAD_REQUEST);
         }
-        if (hasExit && !dto.getShutdownTime().isAfter(dto.getExitTime())) {
+        if (!dto.getShutdownTime().isAfter(dto.getExitTime())) {
             throw new EnvironmentException("La hora de apagado debe ser posterior a la hora de salida.", HttpStatus.BAD_REQUEST);
         }
     }

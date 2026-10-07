@@ -34,7 +34,9 @@ public class RecordEnvironmentRequestDTO {
     @NotNull(message = "La hora de entrada es obligatoria.")
     private OffsetDateTime entryTime;
 
+    @NotNull(message = "La hora de salida es obligatoria.")
     private OffsetDateTime exitTime;
 
+    @NotNull(message = "La hora de apagado es obligatoria.")
     private OffsetDateTime shutdownTime;
 }
