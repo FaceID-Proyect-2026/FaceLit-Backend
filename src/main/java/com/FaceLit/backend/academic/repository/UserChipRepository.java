@@ -14,6 +14,11 @@ public interface UserChipRepository extends JpaRepository<UserChip, UUID> {
 
     boolean existsByApprentice_User_IdUserAndState(UUID idUser, AcademicState state);
 
+    boolean existsByApprentice_IdApprenticeAndChip_IdChipAndState(
+            UUID idApprentice,
+            UUID idChip,
+            AcademicState state);
+
     long countByChip_IdChip(UUID idChip);
 
     long countByChip_IdChipAndState(UUID idChip, AcademicState state);
