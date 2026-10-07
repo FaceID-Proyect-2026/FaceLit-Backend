@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
 
 import com.FaceLit.backend.academic.model.academic.Apprentice;
 import com.FaceLit.backend.academic.model.enums.AcademicState;
@@ -97,12 +98,17 @@ public class FacialEventServiceImpl implements FacialEventService {
     @Override
     @Transactional
     public FacialEventResponseDTO registerEventFromImage(FacialAttendanceCaptureRequestDTO dto, UUID authenticatedUserId) {
-        VerificationResponse verification = verificationClient.verifySession(
-                dto.getIdRecordEnvironment(),
-                dto.getImageBase64());
+        VerificationResponse verification;
+        try {
+            verification = verificationClient.verifySession(
+                    dto.getIdRecordEnvironment(),
+                    dto.getImageBase64());
+        } catch (RestClientException ex) {
+            throw new FacialEventException("No fue posible verificar el rostro capturado.", HttpStatus.BAD_GATEWAY);
+        }
 
         if (verification == null || !verification.match() || verification.idApprentice() == null) {
-            throw new FacialEventException("Rostro no coincide con la ficha de esta sesión.", HttpStatus.BAD_REQUEST);
+            throw new FacialEventException("Rostro no reconocido para esta ficha", HttpStatus.BAD_REQUEST);
         }
 
         FacialEventRequestDTO event = new FacialEventRequestDTO();

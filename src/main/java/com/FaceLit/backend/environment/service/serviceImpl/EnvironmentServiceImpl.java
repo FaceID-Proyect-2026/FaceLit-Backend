@@ -20,6 +20,7 @@ import com.FaceLit.backend.academic.model.enums.InstructorType;
 import com.FaceLit.backend.academic.repository.ChipRepository;
 import com.FaceLit.backend.academic.repository.InstructorProgramRepository;
 import com.FaceLit.backend.academic.repository.InstructorRepository;
+import com.FaceLit.backend.academic.repository.UserChipRepository;
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
 import com.FaceLit.backend.environment.dto.request.EnvironmentRequestDTO;
 import com.FaceLit.backend.environment.dto.request.RecordEnvironmentRequestDTO;
@@ -45,6 +46,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     private final InstructorRepository instructorRepository;
     private final InstructorProgramRepository instructorProgramRepository;
     private final ChipRepository chipRepository;
+    private final UserChipRepository userChipRepository;
     private final DeviceRepository deviceRepository;
     private final NotificationService notificationService;
 
@@ -54,6 +56,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
             InstructorRepository instructorRepository,
             InstructorProgramRepository instructorProgramRepository,
             ChipRepository chipRepository,
+            UserChipRepository userChipRepository,
             DeviceRepository deviceRepository,
             NotificationService notificationService) {
         this.environmentRepository = environmentRepository;
@@ -61,6 +64,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         this.instructorRepository = instructorRepository;
         this.instructorProgramRepository = instructorProgramRepository;
         this.chipRepository = chipRepository;
+        this.userChipRepository = userChipRepository;
         this.deviceRepository = deviceRepository;
         this.notificationService = notificationService;
     }
@@ -145,10 +149,11 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     public RecordEnvironmentResponseDTO createSession(RecordEnvironmentRequestDTO dto, UUID authenticatedUserId) {
         validateTimes(dto);
         Environment environment = findActiveEnvironment(dto.getIdEnvironment());
-        Device device = findOrCreateDevice(dto.getDeviceCode(), environment, authenticatedUserId);
         Instructor scheduledInstructor = findInstructor(dto.getIdInstructorInCharge());
         Instructor inChargeInstructor = resolveInstructorInCharge(scheduledInstructor, authenticatedUserId);
         Chip chip = findActiveChip(dto.getIdChip());
+        validateChipHasRegisteredFaces(chip);
+        Device device = findOrCreateDevice(dto.getDeviceCode(), environment, authenticatedUserId);
 
         RecordEnvironment record = new RecordEnvironment();
         record.setEnvironment(environment);
@@ -246,6 +251,14 @@ public class EnvironmentServiceImpl implements EnvironmentService {
             throw new EnvironmentException("La ficha no está activa.", HttpStatus.BAD_REQUEST);
         }
         return chip;
+    }
+
+    private void validateChipHasRegisteredFaces(Chip chip) {
+        if (userChipRepository.countActiveRegisteredFacesByChip(chip.getIdChip()) == 0) {
+            throw new EnvironmentException(
+                    "Esta ficha aún no tiene rostros registrados",
+                    HttpStatus.BAD_REQUEST);
+        }
     }
 
     private Device findOrCreateDevice(String rawDeviceCode, Environment environment, UUID authenticatedUserId) {
