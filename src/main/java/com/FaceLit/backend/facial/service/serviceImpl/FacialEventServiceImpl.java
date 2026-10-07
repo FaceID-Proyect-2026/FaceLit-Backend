@@ -14,6 +14,9 @@ import com.FaceLit.backend.academic.repository.ApprenticeRepository;
 import com.FaceLit.backend.academic.repository.UserChipRepository;
 import com.FaceLit.backend.environment.model.RecordEnvironment;
 import com.FaceLit.backend.environment.repository.RecordEnvironmentRepository;
+import com.FaceLit.backend.facial.FacialEmbeddingVerificationClient;
+import com.FaceLit.backend.facial.FacialEmbeddingVerificationClient.VerificationResponse;
+import com.FaceLit.backend.facial.dto.request.FacialAttendanceCaptureRequestDTO;
 import com.FaceLit.backend.facial.dto.request.FacialEventRequestDTO;
 import com.FaceLit.backend.facial.dto.response.AttendanceStatusResponseDTO;
 import com.FaceLit.backend.facial.dto.response.FacialEventResponseDTO;
@@ -35,18 +38,21 @@ public class FacialEventServiceImpl implements FacialEventService {
     private final DeviceRepository deviceRepository;
     private final ApprenticeRepository apprenticeRepository;
     private final UserChipRepository userChipRepository;
+    private final FacialEmbeddingVerificationClient verificationClient;
 
     public FacialEventServiceImpl(
             FacialEventRepository facialEventRepository,
             RecordEnvironmentRepository recordEnvironmentRepository,
             DeviceRepository deviceRepository,
             ApprenticeRepository apprenticeRepository,
-            UserChipRepository userChipRepository) {
+            UserChipRepository userChipRepository,
+            FacialEmbeddingVerificationClient verificationClient) {
         this.facialEventRepository = facialEventRepository;
         this.recordEnvironmentRepository = recordEnvironmentRepository;
         this.deviceRepository = deviceRepository;
         this.apprenticeRepository = apprenticeRepository;
         this.userChipRepository = userChipRepository;
+        this.verificationClient = verificationClient;
     }
 
     @Override
@@ -86,6 +92,28 @@ public class FacialEventServiceImpl implements FacialEventService {
         event.setCreatedBy(authenticatedUserId.toString());
 
         return new FacialEventResponseDTO(facialEventRepository.save(event));
+    }
+
+    @Override
+    @Transactional
+    public FacialEventResponseDTO registerEventFromImage(FacialAttendanceCaptureRequestDTO dto, UUID authenticatedUserId) {
+        VerificationResponse verification = verificationClient.verifySession(
+                dto.getIdRecordEnvironment(),
+                dto.getImageBase64());
+
+        if (verification == null || !verification.match() || verification.idApprentice() == null) {
+            throw new FacialEventException("Rostro no coincide con la ficha de esta sesión.", HttpStatus.BAD_REQUEST);
+        }
+
+        FacialEventRequestDTO event = new FacialEventRequestDTO();
+        event.setIdRecordEnvironment(dto.getIdRecordEnvironment());
+        event.setIdDevice(dto.getIdDevice());
+        event.setIdApprentice(verification.idApprentice());
+        event.setRecognitionResult("MATCH");
+        event.setMatchScore(verification.similarity());
+        event.setOrigin(dto.getOrigin() == null || dto.getOrigin().isBlank() ? "MOBILE" : dto.getOrigin());
+
+        return registerEvent(event, authenticatedUserId);
     }
 
     @Override

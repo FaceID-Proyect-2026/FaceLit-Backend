@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.FaceLit.backend.facial.dto.request.FacialEventRequestDTO;
+import com.FaceLit.backend.facial.dto.request.FacialAttendanceCaptureRequestDTO;
 import com.FaceLit.backend.facial.dto.response.AttendanceStatusResponseDTO;
 import com.FaceLit.backend.facial.dto.response.FacialEventResponseDTO;
 import com.FaceLit.backend.facial.service.FacialEventService;
@@ -35,6 +36,13 @@ public class FacialEventController {
             @Valid @RequestBody FacialEventRequestDTO dto,
             @AuthenticationPrincipal Object principal) {
         return ResponseEntity.ok(facialEventService.registerEvent(dto, principalId(principal)));
+    }
+
+    @PostMapping("/from-image")
+    public ResponseEntity<FacialEventResponseDTO> registerEventFromImage(
+            @Valid @RequestBody FacialAttendanceCaptureRequestDTO dto,
+            @AuthenticationPrincipal Object principal) {
+        return ResponseEntity.ok(facialEventService.registerEventFromImage(dto, principalId(principal)));
     }
 
     @GetMapping("/attendance-status")

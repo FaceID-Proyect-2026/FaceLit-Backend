@@ -42,3 +42,8 @@ server:
 jwt:
   secret: ${JWT_SECRET}
   expiration: 28800000
+
+facial:
+  embedding:
+    url: ${FACIAL_EMBEDDING_URL:http://localhost:8090}
+    api-key: ${FACIAL_EMBEDDING_API_KEY:change-me}
