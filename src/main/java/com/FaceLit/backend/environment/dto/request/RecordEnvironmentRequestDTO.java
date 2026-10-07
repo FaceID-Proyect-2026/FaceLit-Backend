@@ -1,6 +1,6 @@
 package com.FaceLit.backend.environment.dto.request;
 
-import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import jakarta.validation.constraints.NotBlank;
@@ -31,7 +31,10 @@ public class RecordEnvironmentRequestDTO {
     @Positive(message = "El tiempo de registro debe ser mayor a cero.")
     private Integer registrationMinutes;
 
-    private LocalTime exitTime;
+    @NotNull(message = "La hora de entrada es obligatoria.")
+    private OffsetDateTime entryTime;
 
-    private LocalTime shutdownTime;
+    private OffsetDateTime exitTime;
+
+    private OffsetDateTime shutdownTime;
 }

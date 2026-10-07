@@ -156,6 +156,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         record.setInstructorScheduled(scheduledInstructor);
         record.setInstructorInCharge(inChargeInstructor);
         record.setChip(chip);
+        record.setEntryTime(dto.getEntryTime());
         record.setRegistrationMinutes(dto.getRegistrationMinutes());
         record.setExitTime(dto.getExitTime());
         record.setShutdownTime(dto.getShutdownTime());
@@ -182,6 +183,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         record.setInstructorScheduled(scheduledInstructor);
         record.setInstructorInCharge(resolveInstructorInCharge(scheduledInstructor, authenticatedUserId));
         record.setChip(findActiveChip(dto.getIdChip()));
+        record.setEntryTime(dto.getEntryTime());
         record.setRegistrationMinutes(dto.getRegistrationMinutes());
         record.setExitTime(dto.getExitTime());
         record.setShutdownTime(dto.getShutdownTime());
@@ -276,9 +278,18 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     }
 
     private void validateTimes(RecordEnvironmentRequestDTO dto) {
+        if (dto.getEntryTime() == null) {
+            throw new EnvironmentException("La hora de entrada es obligatoria.", HttpStatus.BAD_REQUEST);
+        }
         boolean hasExit = dto.getExitTime() != null;
         boolean hasShutdown = dto.getShutdownTime() != null;
-        if (hasExit != hasShutdown || (hasExit && !dto.getShutdownTime().isAfter(dto.getExitTime()))) {
+        if (hasExit != hasShutdown) {
+            throw new EnvironmentException("La hora de salida y la hora de apagado deben configurarse juntas.", HttpStatus.BAD_REQUEST);
+        }
+        if (hasExit && !dto.getExitTime().isAfter(dto.getEntryTime())) {
+            throw new EnvironmentException("La hora de salida debe ser posterior a la hora de entrada.", HttpStatus.BAD_REQUEST);
+        }
+        if (hasExit && !dto.getShutdownTime().isAfter(dto.getExitTime())) {
             throw new EnvironmentException("La hora de apagado debe ser posterior a la hora de salida.", HttpStatus.BAD_REQUEST);
         }
     }

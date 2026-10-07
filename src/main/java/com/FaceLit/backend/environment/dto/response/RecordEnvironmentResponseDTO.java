@@ -1,6 +1,5 @@
 package com.FaceLit.backend.environment.dto.response;
 
-import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -24,9 +23,10 @@ public class RecordEnvironmentResponseDTO {
     private final String instructorInChargeName;
     private final String instructorName;
     private final OffsetDateTime sessionStart;
+    private final OffsetDateTime entryTime;
     private final Integer registrationMinutes;
-    private final LocalTime exitTime;
-    private final LocalTime shutdownTime;
+    private final OffsetDateTime exitTime;
+    private final OffsetDateTime shutdownTime;
     private final Boolean active;
     private final String createdBy;
     private final String updatedBy;
@@ -54,7 +54,8 @@ public class RecordEnvironmentResponseDTO {
                         record.getInstructorInCharge().getUser().getFirstName(),
                         record.getInstructorInCharge().getUser().getLastName()).trim();
         this.instructorName = this.instructorScheduledName;
-        this.sessionStart = record.getCreatedAt();
+        this.sessionStart = record.getEntryTime();
+        this.entryTime = record.getEntryTime();
         this.registrationMinutes = record.getRegistrationMinutes();
         this.exitTime = record.getExitTime();
         this.shutdownTime = record.getShutdownTime();

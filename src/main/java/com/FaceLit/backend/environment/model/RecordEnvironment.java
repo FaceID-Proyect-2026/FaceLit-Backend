@@ -1,6 +1,6 @@
 package com.FaceLit.backend.environment.model;
 
-import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import com.FaceLit.backend.academic.model.academic.Chip;
@@ -53,14 +53,17 @@ public class RecordEnvironment extends AuditBase {
     @JoinColumn(name = "id_instructor_in_charge")
     private Instructor instructorInCharge;
 
+    @Column(name = "entry_time", nullable = false)
+    private OffsetDateTime entryTime;
+
     @Column(name = "registration_minutes", nullable = false)
     private Integer registrationMinutes;
 
     @Column(name = "exit_time")
-    private LocalTime exitTime;
+    private OffsetDateTime exitTime;
 
     @Column(name = "shutdown_time")
-    private LocalTime shutdownTime;
+    private OffsetDateTime shutdownTime;
 
     @Column(name = "exit_reminder_sent", nullable = false)
     private Boolean exitReminderSent;
