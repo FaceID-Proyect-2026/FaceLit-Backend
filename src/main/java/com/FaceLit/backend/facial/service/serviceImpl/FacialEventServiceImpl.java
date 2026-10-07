@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -86,6 +87,7 @@ public class FacialEventServiceImpl implements FacialEventService {
 
         OffsetDateTime eventDatetime = dto.getEventDatetime() == null ? OffsetDateTime.now() : dto.getEventDatetime();
         FacialEventType eventType = resolveEventType(eventDatetime, record);
+        validateUniqueAttendanceEvent(record.getIdRecordEnvironment(), apprentice.getIdApprentice(), eventType);
         AttendanceStatus attendanceStatus = resolveAttendanceStatus(eventType, eventDatetime, record, apprentice);
 
         FacialEvent event = new FacialEvent();
@@ -100,7 +102,11 @@ public class FacialEventServiceImpl implements FacialEventService {
         event.setOrigin(parseOrigin(dto.getOrigin()));
         event.setCreatedBy(authenticatedUserId.toString());
 
-        return new FacialEventResponseDTO(facialEventRepository.save(event));
+        try {
+            return new FacialEventResponseDTO(facialEventRepository.saveAndFlush(event));
+        } catch (DataIntegrityViolationException ex) {
+            throw new FacialEventException("La asistencia ya fue registrada anteriormente", HttpStatus.CONFLICT);
+        }
     }
 
     @Override
@@ -149,7 +155,7 @@ public class FacialEventServiceImpl implements FacialEventService {
         }
 
         AttendanceStatus status = facialEventRepository
-                .findFirstByRecordEnvironment_IdRecordEnvironmentAndApprentice_IdApprenticeAndEventTypeOrderByEventDatetimeAsc(
+                .findFirstByRecordEnvironment_IdRecordEnvironmentAndApprentice_IdApprenticeAndEventTypeAndDeletedAtIsNullOrderByEventDatetimeAsc(
                         idRecordEnvironment,
                         idApprentice,
                         FacialEventType.ENTRY)
@@ -184,12 +190,26 @@ public class FacialEventServiceImpl implements FacialEventService {
         }
 
         return facialEventRepository
-                .findFirstByRecordEnvironment_IdRecordEnvironmentAndApprentice_IdApprenticeAndEventTypeOrderByEventDatetimeAsc(
+                .findFirstByRecordEnvironment_IdRecordEnvironmentAndApprentice_IdApprenticeAndEventTypeAndDeletedAtIsNullOrderByEventDatetimeAsc(
                         record.getIdRecordEnvironment(),
                         apprentice.getIdApprentice(),
                         FacialEventType.ENTRY)
                 .map(FacialEvent::getAttendanceStatus)
                 .orElse(AttendanceStatus.ABSENT);
+    }
+
+    private void validateUniqueAttendanceEvent(
+            UUID idRecordEnvironment,
+            UUID idApprentice,
+            FacialEventType eventType) {
+        boolean alreadyRegistered = facialEventRepository
+                .existsByRecordEnvironment_IdRecordEnvironmentAndApprentice_IdApprenticeAndEventTypeAndDeletedAtIsNull(
+                        idRecordEnvironment,
+                        idApprentice,
+                        eventType);
+        if (alreadyRegistered) {
+            throw new FacialEventException("La asistencia ya fue registrada anteriormente", HttpStatus.CONFLICT);
+        }
     }
 
     private FacialEventOrigin parseOrigin(String rawOrigin) {
