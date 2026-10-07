@@ -120,7 +120,7 @@ class CsvAcademicServiceImplTest {
         var apprenticeUser = userRepository.findByDocumentNumber("1002345678").orElseThrow();
         assertThat(apprenticeRepository.findByUser_IdUser(apprenticeUser.getIdUser()))
                 .isPresent();
-        assertThat(userChipRepository.findByUser_IdUserAndState(apprenticeUser.getIdUser(), AcademicState.ACTIVE))
+        assertThat(userChipRepository.findByApprentice_User_IdUserAndState(apprenticeUser.getIdUser(), AcademicState.ACTIVE))
                 .isPresent()
                 .get()
                 .satisfies(userChip -> assertThat(userChip.getChip().getIdChip()).isEqualTo(apprenticeChip.getIdChip()));
@@ -169,7 +169,7 @@ class CsvAcademicServiceImplTest {
         assertThat(response.getErroresDeReferencia()).isEmpty();
         assertThat(apprenticeRepository.findByUser_IdUser(existingUser.getIdUser()))
                 .isPresent();
-        assertThat(userChipRepository.findByUser_IdUserAndState(existingUser.getIdUser(), AcademicState.ACTIVE))
+        assertThat(userChipRepository.findByApprentice_User_IdUserAndState(existingUser.getIdUser(), AcademicState.ACTIVE))
                 .isPresent()
                 .get()
                 .satisfies(userChip -> assertThat(userChip.getChip().getIdChip()).isEqualTo(chip.getIdChip()));

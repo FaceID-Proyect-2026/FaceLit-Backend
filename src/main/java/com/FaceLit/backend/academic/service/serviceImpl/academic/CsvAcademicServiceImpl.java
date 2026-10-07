@@ -494,7 +494,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         User resolvedUser = user;
         Apprentice current = apprenticeRepository.findByUser_IdUser(resolvedUser.getIdUser())
                 .orElse(null);
-        UserChip currentAssignment = userChipRepository.findByUser_IdUserAndState(resolvedUser.getIdUser(), AcademicState.ACTIVE)
+        UserChip currentAssignment = userChipRepository.findByApprentice_User_IdUserAndState(resolvedUser.getIdUser(), AcademicState.ACTIVE)
                 .orElse(null);
         if (current == null) {
             createApprentice(user);
@@ -639,8 +639,8 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
 
     private void recordCsvHistory(CsvPendingTransfer pending, ChangeAction action) {
         ChangeHistory history = new ChangeHistory();
-        history.setEntityName("user_chip");
-        history.setEntityId(userChipRepository.findByUser_IdUserAndState(
+        history.setEntityName("apprentice_chip");
+        history.setEntityId(userChipRepository.findByApprentice_User_IdUserAndState(
                 pending.getUser().getIdUser(), AcademicState.ACTIVE)
                 .map(UserChip::getIdUserChip)
                 .orElse(pending.getUser().getIdUser()));

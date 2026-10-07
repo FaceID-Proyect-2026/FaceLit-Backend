@@ -541,7 +541,7 @@ public class UserManagementServiceImpl implements UserManagementService {
         boolean hasSession = userSessionRepository.existsByUser_IdUser(user.getIdUser());
 
         Optional<UserChip> activeChip = userChipRepository
-                .findByUser_IdUserAndState(user.getIdUser(), UserChipStatus.ACTIVE);
+                .findByApprentice_User_IdUserAndState(user.getIdUser(), UserChipStatus.ACTIVE);
 
         String chipName = activeChip.map(uc -> uc.getChip().getChipName()).orElse(null);
         String chipCode = activeChip.map(uc -> uc.getChip().getChipCode()).orElse(null);
@@ -624,7 +624,7 @@ public class UserManagementServiceImpl implements UserManagementService {
                 .orElseThrow(() -> new UserManagementException("Usuario no encontrado"));
 
         boolean hasActiveChip = userChipRepository
-                .existsByUser_IdUserAndState(userId, UserChipStatus.ACTIVE);
+                .existsByApprentice_User_IdUserAndState(userId, UserChipStatus.ACTIVE);
         if (hasActiveChip) {
             throw new UserManagementException(
                     "No se puede eliminar porque está vinculado a una ficha activa. Desvincula primero al aprendiz.");

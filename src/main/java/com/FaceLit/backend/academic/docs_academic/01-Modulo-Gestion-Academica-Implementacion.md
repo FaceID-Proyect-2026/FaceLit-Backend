@@ -20,7 +20,7 @@ Actualmente están implementados los siguientes componentes:
 - Entidad `Chip` en `academic.chip`
 - Entidad `Instructor` en `academic.instructor`
 - Entidad `InstructorProgram` en `academic.instructor_program`
-- Entidad `UserChip` en `security.user_chip`
+- Entidad `UserChip` en `academic.apprentice_chip`
 - Entidad `ChangeHistory` en `academic.change_history`
 - Estados `ACTIVE` e `INACTIVE`
 - Tipos de instructor `ESPECIFICO` y `TRANSVERSAL`
@@ -90,9 +90,9 @@ Tabla: `academic.instructor_program`
 
 ### 3.5 Relación aprendiz-ficha
 
-Tabla: `security.user_chip`
+Tabla: `academic.apprentice_chip`
 
-- Un usuario puede tener solo una ficha activa a la vez.
+- Un aprendiz puede tener solo una ficha activa a la vez.
 - La relación no se elimina en el traslado: la fila antigua queda `INACTIVE` y se crea una nueva `ACTIVE`.
 - Esto permite mantener histórico de fichas del aprendiz.
 
@@ -104,7 +104,7 @@ Se registran cambios en:
 
 - `instructor`
 - `instructor_program`
-- `user_chip`
+- `apprentice_chip`
 - `chip`
 - `program`
 
@@ -139,7 +139,7 @@ Acciones registradas:
   - la ficha debe estar `ACTIVE`
   - el usuario debe existir
   - el usuario no puede tener otra ficha activa
-- Se crea una fila en `security.user_chip` con `state = ACTIVE` y `assignment_date = now`.
+- Se crea una fila en `academic.apprentice_chip` con `state = ACTIVE`; la fecha de asignación se toma de `created_at`.
 
 ### 4.3 Traslado de ficha
 

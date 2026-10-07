@@ -1,6 +1,5 @@
 package com.FaceLit.backend.academic.model.academic;
 
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import com.FaceLit.backend.academic.model.enums.AcademicState;
@@ -19,6 +18,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -27,28 +27,36 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-@Table(name = "user_chip", schema = "security", indexes = {
-        @Index(name = "idx_user_chip_chip", columnList = "id_chip")
+@Table(name = "apprentice_chip", schema = "academic", indexes = {
+        @Index(name = "idx_apprentice_chip_chip", columnList = "id_chip")
 })
 public class UserChip extends AuditBase {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "id_user_chip", nullable = false)
+    @Column(name = "id_apprentice_chip", nullable = false)
     private UUID idUserChip;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "id_user_app", nullable = false)
-    private User user;
+    @JoinColumn(name = "id_apprentice", nullable = false)
+    private Apprentice apprentice;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "id_chip", nullable = false)
     private Chip chip;
 
-    @Column(name = "assignment_date", nullable = false)
-    private OffsetDateTime assignmentDate;
+    @Transient
+    private java.time.OffsetDateTime assignmentDate;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "state", nullable = false, length = 20)
     private AcademicState state;
+
+    public User getUser() {
+        return apprentice != null ? apprentice.getUser() : null;
+    }
+
+    public java.time.OffsetDateTime getAssignmentDate() {
+        return assignmentDate != null ? assignmentDate : getCreatedAt();
+    }
 }

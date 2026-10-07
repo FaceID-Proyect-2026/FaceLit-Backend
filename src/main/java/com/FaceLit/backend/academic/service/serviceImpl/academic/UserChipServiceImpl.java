@@ -18,11 +18,13 @@ import com.FaceLit.backend.academic.dto.request.academic.TransferChipRequestDTO;
 import com.FaceLit.backend.academic.dto.request.academic.UserChipRequestDTO;
 import com.FaceLit.backend.academic.dto.response.academic.UserChipResponseDTO;
 import com.FaceLit.backend.academic.exception.AcademicException;
+import com.FaceLit.backend.academic.model.academic.Apprentice;
 import com.FaceLit.backend.academic.model.academic.ChangeHistory;
 import com.FaceLit.backend.academic.model.academic.Chip;
 import com.FaceLit.backend.academic.model.academic.UserChip;
 import com.FaceLit.backend.academic.model.enums.AcademicState;
 import com.FaceLit.backend.academic.model.enums.ChangeAction;
+import com.FaceLit.backend.academic.repository.ApprenticeRepository;
 import com.FaceLit.backend.academic.repository.ChangeHistoryRepository;
 import com.FaceLit.backend.academic.repository.ChipRepository;
 import com.FaceLit.backend.academic.repository.InstructorProgramRepository;
@@ -47,6 +49,7 @@ import com.FaceLit.backend.notification.service.NotificationService;
 public class UserChipServiceImpl implements UserChipService {
 
     private final UserChipRepository userChipRepository;
+    private final ApprenticeRepository apprenticeRepository;
     private final UserRepository userRepository;
     private final CredentialRepository credentialRepository;
     private final ChipRepository chipRepository;
@@ -60,6 +63,7 @@ public class UserChipServiceImpl implements UserChipService {
 
     public UserChipServiceImpl(
             UserChipRepository userChipRepository,
+            ApprenticeRepository apprenticeRepository,
             UserRepository userRepository,
             CredentialRepository credentialRepository,
             ChipRepository chipRepository,
@@ -71,6 +75,7 @@ public class UserChipServiceImpl implements UserChipService {
             InstructorProgramRepository instructorProgramRepository,
             NotificationService notificationService) {
         this.userChipRepository = userChipRepository;
+        this.apprenticeRepository = apprenticeRepository;
         this.userRepository = userRepository;
         this.credentialRepository = credentialRepository;
         this.chipRepository = chipRepository;
@@ -131,7 +136,9 @@ public class UserChipServiceImpl implements UserChipService {
 
         ensureExistingUserCanBeApprentice(user);
 
-        if (userChipRepository.existsByUser_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE)) {
+        Apprentice apprentice = findOrCreateApprentice(user);
+
+        if (userChipRepository.existsByApprentice_User_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE)) {
             throw new AcademicException("Este aprendiz ya tiene una ficha activa. Usa el traslado para cambiarlo de ficha.", HttpStatus.CONFLICT);
         }
 
@@ -140,13 +147,13 @@ public class UserChipServiceImpl implements UserChipService {
         adminRoleService.assignRole(user.getIdUser(), roleRequest);
 
         UserChip userChip = new UserChip();
-        userChip.setUser(user);
+        userChip.setApprentice(apprentice);
         userChip.setChip(chip);
         userChip.setState(AcademicState.ACTIVE);
         userChip.setAssignmentDate(OffsetDateTime.now());
         userChip = userChipRepository.saveAndFlush(userChip);
 
-        recordChange(userChip, "user_chip", null, chip.getChipCode(), ChangeAction.CREATE, "chip");
+        recordChange(userChip, "apprentice_chip", null, chip.getChipCode(), ChangeAction.CREATE, "chip");
         notifyApprenticeCreated(user, chip, userChip);
         return new UserChipResponseDTO(userChip, generatedPasswordHolder[0]);
     }
@@ -189,7 +196,7 @@ public class UserChipServiceImpl implements UserChipService {
         User user = userRepository.findById(idUser)
                 .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
 
-        UserChip chip = userChipRepository.findByUser_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE)
+        UserChip chip = userChipRepository.findByApprentice_User_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE)
                 .orElseThrow(() -> new AcademicException("El aprendiz no tiene una ficha activa para trasladar.", HttpStatus.BAD_REQUEST));
 
         return new UserChipResponseDTO(chip);
@@ -201,7 +208,7 @@ public class UserChipServiceImpl implements UserChipService {
         User user = userRepository.findById(idUser)
                 .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
 
-        return userChipRepository.findByUser_IdUser(user.getIdUser()).stream()
+        return userChipRepository.findByApprentice_User_IdUser(user.getIdUser()).stream()
                 .sorted(Comparator.comparing(UserChip::getAssignmentDate).reversed())
                 .map(UserChipResponseDTO::new)
                 .toList();
@@ -213,7 +220,7 @@ public class UserChipServiceImpl implements UserChipService {
         User user = userRepository.findById(idUser)
                 .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
 
-        Optional<UserChip> current = userChipRepository.findByUser_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE);
+        Optional<UserChip> current = userChipRepository.findByApprentice_User_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE);
 
         if (current.isEmpty()) {
             throw new AcademicException("El aprendiz no tiene una ficha activa para trasladar.", HttpStatus.BAD_REQUEST);
@@ -235,7 +242,7 @@ public class UserChipServiceImpl implements UserChipService {
                 .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
         Credential credential = credentialRepository.findByUser(user)
                 .orElseThrow(() -> new AcademicException("El aprendiz no tiene credencial asociada.", HttpStatus.CONFLICT));
-        UserChip activeChip = userChipRepository.findByUser_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE)
+        UserChip activeChip = userChipRepository.findByApprentice_User_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE)
                 .orElseThrow(() -> new AcademicException("El aprendiz no tiene una ficha activa.", HttpStatus.BAD_REQUEST));
 
         String document = dto.getDocumento() == null ? "" : dto.getDocumento().trim();
@@ -285,7 +292,7 @@ public class UserChipServiceImpl implements UserChipService {
         User user = userRepository.findById(idUser)
                 .orElseThrow(() -> new AcademicException("Usuario no encontrado.", HttpStatus.NOT_FOUND));
 
-        UserChip current = userChipRepository.findByUser_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE)
+        UserChip current = userChipRepository.findByApprentice_User_IdUserAndState(user.getIdUser(), AcademicState.ACTIVE)
                 .orElseThrow(() -> new AcademicException("El aprendiz no tiene una ficha activa para trasladar.", HttpStatus.BAD_REQUEST));
 
         Chip destination = chipRepository.findById(dto.getIdNewChip())
@@ -311,13 +318,13 @@ public class UserChipServiceImpl implements UserChipService {
         userChipRepository.saveAndFlush(current);
 
         UserChip newAssignment = new UserChip();
-        newAssignment.setUser(user);
+        newAssignment.setApprentice(current.getApprentice());
         newAssignment.setChip(destination);
         newAssignment.setState(AcademicState.ACTIVE);
         newAssignment.setAssignmentDate(OffsetDateTime.now());
         newAssignment = userChipRepository.saveAndFlush(newAssignment);
 
-        recordChange(newAssignment, "user_chip", previousCode, destination.getChipCode(), ChangeAction.UPDATE, "chip");
+        recordChange(newAssignment, "apprentice_chip", previousCode, destination.getChipCode(), ChangeAction.UPDATE, "chip");
         notifyTransfer(user, current.getChip(), destination, newAssignment);
         return new UserChipResponseDTO(newAssignment);
     }
@@ -333,10 +340,24 @@ public class UserChipServiceImpl implements UserChipService {
         });
     }
 
+    private Apprentice findOrCreateApprentice(User user) {
+        return apprenticeRepository.findByUser_IdUser(user.getIdUser())
+                .orElseGet(() -> {
+                    Apprentice apprentice = new Apprentice();
+                    apprentice.setUser(user);
+                    return apprenticeRepository.saveAndFlush(apprentice);
+                });
+    }
+
     private UserChip buildTransferTarget(User user, Chip chip) {
         UserChip temp = new UserChip();
         temp.setIdUserChip(UUID.randomUUID());
-        temp.setUser(user);
+        Apprentice apprentice = apprenticeRepository.findByUser_IdUser(user.getIdUser()).orElseGet(() -> {
+            Apprentice transientApprentice = new Apprentice();
+            transientApprentice.setUser(user);
+            return transientApprentice;
+        });
+        temp.setApprentice(apprentice);
         temp.setChip(chip);
         temp.setState(AcademicState.ACTIVE);
         temp.setAssignmentDate(OffsetDateTime.now());
@@ -380,7 +401,7 @@ public class UserChipServiceImpl implements UserChipService {
                     message,
                     null,
                     newAssignment.getIdUserChip(),
-                    "user_chip",
+                    "apprentice_chip",
                     null,
                     transferMetadata(user, previousChip, destination)));
 
@@ -391,7 +412,7 @@ public class UserChipServiceImpl implements UserChipService {
                     "Tu ficha fue cambiada de " + previousChip.getChipCode()
                             + " a " + destination.getChipCode() + ".",
                     newAssignment.getIdUserChip(),
-                    "user_chip",
+                    "apprentice_chip",
                     null,
                     transferMetadata(user, previousChip, destination)));
 
@@ -407,7 +428,7 @@ public class UserChipServiceImpl implements UserChipService {
                         "Cambio de ficha de aprendiz",
                         message,
                         newAssignment.getIdUserChip(),
-                        "user_chip",
+                        "apprentice_chip",
                         null,
                         transferMetadata(user, previousChip, destination)));
             }
@@ -433,9 +454,9 @@ public class UserChipServiceImpl implements UserChipService {
                     "Coordinacion creo tu usuario de aprendiz y te asigno a la ficha "
                             + chip.getChipCode() + ".",
                     userChip.getIdUserChip(),
-                    "user_chip",
+                    "apprentice_chip",
                     null,
-                    "{\"entityType\":\"user_chip\",\"entityId\":\"" + userChip.getIdUserChip()
+                    "{\"entityType\":\"apprentice_chip\",\"entityId\":\"" + userChip.getIdUserChip()
                             + "\",\"chip\":\"" + safe(chip.getChipCode()) + "\"}"));
         } catch (RuntimeException ignored) {
             // La asignacion academica no debe fallar por una notificacion informativa.
@@ -465,7 +486,7 @@ public class UserChipServiceImpl implements UserChipService {
                     "Tus datos fueron modificados",
                     "Coordinacion actualizo tus datos personales. " + String.join("; ", changes) + ".",
                     userChip.getIdUserChip(),
-                    "user_chip",
+                    "apprentice_chip",
                     null,
                     "{\"entityType\":\"apprentice\",\"entityId\":\"" + user.getIdUser() + "\"}"));
         } catch (RuntimeException ignored) {

@@ -322,7 +322,7 @@ public class UserManagementServiceImpl implements UserManagementService {
                                 ? "ACTIVE"
                                 : "INACTIVE";
 
-                Optional<UserChip> activeChip = userChipRepository.findByUser_IdUserAndState(
+                Optional<UserChip> activeChip = userChipRepository.findByApprentice_User_IdUserAndState(
                                 user.getIdUser(),
                                 AcademicState.ACTIVE);
 

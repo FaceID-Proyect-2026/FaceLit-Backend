@@ -12,18 +12,18 @@ import com.FaceLit.backend.academic.model.enums.AcademicState;
 
 public interface UserChipRepository extends JpaRepository<UserChip, UUID> {
 
-    boolean existsByUser_IdUserAndState(UUID idUser, AcademicState state);
+    boolean existsByApprentice_User_IdUserAndState(UUID idUser, AcademicState state);
 
     long countByChip_IdChip(UUID idChip);
 
     long countByChip_IdChipAndState(UUID idChip, AcademicState state);
 
-    Optional<UserChip> findByUser_IdUserAndState(UUID idUser, AcademicState state);
+    Optional<UserChip> findByApprentice_User_IdUserAndState(UUID idUser, AcademicState state);
 
     List<UserChip> findByChip_IdChip(UUID idChip);
 
-    @EntityGraph(attributePaths = {"user", "user.credential", "chip", "chip.program"})
+    @EntityGraph(attributePaths = {"apprentice", "apprentice.user", "apprentice.user.credential", "chip", "chip.program"})
     List<UserChip> findByChip_IdChipInAndState(List<UUID> idChips, AcademicState state);
 
-    List<UserChip> findByUser_IdUser(UUID idUser);
+    List<UserChip> findByApprentice_User_IdUser(UUID idUser);
 }

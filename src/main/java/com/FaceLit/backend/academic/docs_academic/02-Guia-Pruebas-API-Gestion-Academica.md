@@ -504,8 +504,8 @@ Debe observarse historial tipo:
 
 - `instructor` / `CREATE` / `instructor_type`
 - `instructor` / `UPDATE` / `instructor_program`
-- `user_chip` / `CREATE` / `chip`
-- `user_chip` / `UPDATE` / `chip`
+- `apprentice_chip` / `CREATE` / `chip`
+- `apprentice_chip` / `UPDATE` / `chip`
 
 ## 11. Verificación directa de datos
 
@@ -519,7 +519,7 @@ SELECT * FROM academic.instructor_program;
 ### Aprendices y fichas
 
 ```sql
-SELECT * FROM security.user_chip;
+SELECT * FROM academic.apprentice_chip;
 SELECT * FROM academic.chip;
 ```
 
