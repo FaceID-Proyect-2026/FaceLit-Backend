@@ -4,10 +4,13 @@ import java.time.OffsetDateTime;
 import java.util.Locale;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 import com.FaceLit.backend.academic.model.academic.Apprentice;
 import com.FaceLit.backend.academic.model.enums.AcademicState;
@@ -30,9 +33,14 @@ import com.FaceLit.backend.facial.model.enums.FacialEventType;
 import com.FaceLit.backend.facial.repository.DeviceRepository;
 import com.FaceLit.backend.facial.repository.FacialEventRepository;
 import com.FaceLit.backend.facial.service.FacialEventService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class FacialEventServiceImpl implements FacialEventService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(FacialEventServiceImpl.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final FacialEventRepository facialEventRepository;
     private final RecordEnvironmentRepository recordEnvironmentRepository;
@@ -103,7 +111,15 @@ public class FacialEventServiceImpl implements FacialEventService {
             verification = verificationClient.verifySession(
                     dto.getIdRecordEnvironment(),
                     dto.getImageBase64());
+        } catch (RestClientResponseException ex) {
+            String detail = extractVerificationServiceDetail(ex);
+            LOGGER.warn(
+                    "El microservicio facial rechazo la verificacion. status={}, body={}",
+                    ex.getStatusCode(),
+                    detail);
+            throw new FacialEventException(resolveVerificationServiceMessage(detail), HttpStatus.BAD_REQUEST);
         } catch (RestClientException ex) {
+            LOGGER.warn("No fue posible conectar con el microservicio facial para verificar el rostro.", ex);
             throw new FacialEventException("No fue posible verificar el rostro capturado.", HttpStatus.BAD_GATEWAY);
         }
 
@@ -182,5 +198,40 @@ public class FacialEventServiceImpl implements FacialEventService {
         } catch (RuntimeException ex) {
             throw new FacialEventException("El origen debe ser PC o MOBILE.", HttpStatus.BAD_REQUEST);
         }
+    }
+
+    private String extractVerificationServiceDetail(RestClientResponseException ex) {
+        String body = ex.getResponseBodyAsString();
+        if (body == null || body.isBlank()) {
+            return ex.getMessage();
+        }
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(body);
+            JsonNode detail = root.get("detail");
+            if (detail != null && detail.isTextual()) {
+                return detail.asText();
+            }
+        } catch (RuntimeException ignored) {
+            // Se deja caer al cuerpo crudo para que el log conserve la respuesta original.
+        }
+        return body;
+    }
+
+    private String resolveVerificationServiceMessage(String detail) {
+        if (detail == null || detail.isBlank()) {
+            return "No fue posible verificar el rostro capturado.";
+        }
+
+        String normalized = detail.toLowerCase(Locale.ROOT);
+        if (normalized.contains("no se detect")) {
+            return "No se detectó un rostro válido en la imagen.";
+        }
+        if (normalized.contains("mas de un rostro") || normalized.contains("más de un rostro")) {
+            return "La imagen contiene más de un rostro.";
+        }
+        if (normalized.contains("base64") || normalized.contains("leer la imagen") || normalized.contains("imagen es obligatoria")) {
+            return "No fue posible leer la imagen capturada.";
+        }
+        return "No fue posible verificar el rostro capturado.";
     }
 }
