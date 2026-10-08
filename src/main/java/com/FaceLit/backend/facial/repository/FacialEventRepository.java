@@ -40,10 +40,15 @@ public interface FacialEventRepository extends JpaRepository<FacialEvent, UUID> 
                 u.number_document AS "documentNumber",
                 env.environment_name AS "environmentName",
                 CONCAT(instructor_user.first_name, ' ', instructor_user.last_name) AS "instructorName",
-                COALESCE(TO_CHAR(fe.event_datetime AT TIME ZONE 'America/Bogota', 'HH24:MI'), '') AS "entryTime",
-                fe.attendance_status AS "attendanceStatus",
                 CASE
-                    WHEN fe.event_datetime IS NULL THEN 0
+                    WHEN fe.attendance_status = 'ABSENT' OR fe.event_datetime IS NULL THEN ''
+                    ELSE TO_CHAR(fe.event_datetime AT TIME ZONE 'America/Bogota', 'HH24:MI')
+                END AS "entryTime",
+                fe.attendance_status AS "attendanceStatus",
+                fe.id_facial_event AS "idFacialEvent",
+                fe.excuse AS "excuse",
+                CASE
+                    WHEN fe.attendance_status = 'ABSENT' OR fe.event_datetime IS NULL THEN 0
                     WHEN fe.event_datetime <= re.entry_time + (re.registration_minutes * INTERVAL '1 minute') THEN 0
                     ELSE FLOOR(EXTRACT(EPOCH FROM (fe.event_datetime - (re.entry_time + (re.registration_minutes * INTERVAL '1 minute')))) / 60)::INT
                 END AS "delayMinutes"

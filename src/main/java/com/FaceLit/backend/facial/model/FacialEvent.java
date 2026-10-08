@@ -70,4 +70,7 @@ public class FacialEvent extends AuditBase {
     @Enumerated(EnumType.STRING)
     @Column(name = "origin", nullable = false, length = 10)
     private FacialEventOrigin origin;
+
+    @Column(name = "excuse")
+    private Boolean excuse;
 }

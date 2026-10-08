@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.FaceLit.backend.facial.dto.request.FacialEventRequestDTO;
 import com.FaceLit.backend.facial.dto.request.FacialAttendanceCaptureRequestDTO;
+import com.FaceLit.backend.facial.dto.request.UpdateFacialEventExcuseRequestDTO;
 import com.FaceLit.backend.facial.dto.response.AttendanceMatrixResponseDTO;
 import com.FaceLit.backend.facial.dto.response.AttendanceStatusResponseDTO;
 import com.FaceLit.backend.facial.dto.response.FacialEventResponseDTO;
@@ -61,6 +63,13 @@ public class FacialEventController {
             @RequestParam LocalDate dateTo,
             @AuthenticationPrincipal Object principal) {
         return ResponseEntity.ok(facialEventService.getAttendanceMatrix(idChip, dateFrom, dateTo, principalId(principal)));
+    }
+
+    @PatchMapping("/excuse")
+    public ResponseEntity<FacialEventResponseDTO> updateExcuse(
+            @Valid @RequestBody UpdateFacialEventExcuseRequestDTO dto,
+            @AuthenticationPrincipal Object principal) {
+        return ResponseEntity.ok(facialEventService.updateExcuse(dto, principalId(principal)));
     }
 
     private UUID principalId(Object principal) {

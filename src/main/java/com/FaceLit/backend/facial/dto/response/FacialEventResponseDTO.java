@@ -24,6 +24,7 @@ public class FacialEventResponseDTO {
     private final AttendanceStatus attendanceStatus;
     private final BigDecimal matchScore;
     private final FacialEventOrigin origin;
+    private final Boolean excuse;
 
     public FacialEventResponseDTO(FacialEvent event) {
         this.idFacialEvent = event.getIdFacialEvent();
@@ -36,5 +37,6 @@ public class FacialEventResponseDTO {
         this.attendanceStatus = event.getAttendanceStatus();
         this.matchScore = event.getMatchScore();
         this.origin = event.getOrigin();
+        this.excuse = event.getExcuse();
     }
 }

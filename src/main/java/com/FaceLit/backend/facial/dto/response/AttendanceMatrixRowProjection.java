@@ -18,5 +18,7 @@ public interface AttendanceMatrixRowProjection {
     String getInstructorName();
     String getEntryTime();
     String getAttendanceStatus();
+    UUID getIdFacialEvent();
+    Boolean getExcuse();
     Integer getDelayMinutes();
 }

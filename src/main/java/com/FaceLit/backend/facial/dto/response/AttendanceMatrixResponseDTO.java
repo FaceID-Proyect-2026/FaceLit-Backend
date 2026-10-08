@@ -28,6 +28,7 @@ public record AttendanceMatrixResponseDTO(
     }
 
     public record AttendanceMatrixDayDTO(
+            UUID idFacialEvent,
             UUID idRecordEnvironment,
             LocalDate date,
             String status,
@@ -37,6 +38,7 @@ public record AttendanceMatrixResponseDTO(
             String instructorName,
             String fichaNumber,
             String programName,
-            Boolean exitRegistered) {
+            Boolean exitRegistered,
+            Boolean excuse) {
     }
 }

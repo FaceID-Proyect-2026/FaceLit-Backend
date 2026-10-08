@@ -31,6 +31,7 @@ import com.FaceLit.backend.facial.FacialEmbeddingVerificationClient;
 import com.FaceLit.backend.facial.FacialEmbeddingVerificationClient.VerificationResponse;
 import com.FaceLit.backend.facial.dto.request.FacialAttendanceCaptureRequestDTO;
 import com.FaceLit.backend.facial.dto.request.FacialEventRequestDTO;
+import com.FaceLit.backend.facial.dto.request.UpdateFacialEventExcuseRequestDTO;
 import com.FaceLit.backend.facial.dto.response.AttendanceMatrixResponseDTO;
 import com.FaceLit.backend.facial.dto.response.AttendanceStatusResponseDTO;
 import com.FaceLit.backend.facial.dto.response.FacialEventResponseDTO;
@@ -229,6 +230,7 @@ public class FacialEventServiceImpl implements FacialEventService {
                     ? "absent"
                     : row.attendanceStatus().toLowerCase(Locale.ROOT);
             learner.days.add(new AttendanceMatrixResponseDTO.AttendanceMatrixDayDTO(
+                    row.idFacialEvent(),
                     row.recordEnvironmentId(),
                     row.sessionDate(),
                     status,
@@ -238,7 +240,8 @@ public class FacialEventServiceImpl implements FacialEventService {
                     row.instructorName(),
                     row.chipCode(),
                     row.programName(),
-                    row.exitRegistered()));
+                    row.exitRegistered(),
+                    row.excuse()));
         }
 
         return new AttendanceMatrixResponseDTO(
@@ -248,6 +251,38 @@ public class FacialEventServiceImpl implements FacialEventService {
                 first.programName(),
                 new ArrayList<>(sessions.values()),
                 learners.values().stream().map(LearnerMatrixBuilder::toDto).toList());
+    }
+
+    @Override
+    @Transactional
+    public FacialEventResponseDTO updateExcuse(UpdateFacialEventExcuseRequestDTO dto, UUID authenticatedUserId) {
+        RecordEnvironment record = recordEnvironmentRepository.findById(dto.getIdRecordEnvironment())
+                .orElseThrow(() -> new FacialEventException("Sesión no encontrada.", HttpStatus.NOT_FOUND));
+        Apprentice apprentice = apprenticeRepository.findById(dto.getIdApprentice())
+                .orElseThrow(() -> new FacialEventException("Aprendiz no encontrado.", HttpStatus.NOT_FOUND));
+
+        if (!userChipRepository.existsByApprentice_IdApprenticeAndChip_IdChipAndState(
+                apprentice.getIdApprentice(),
+                record.getChip().getIdChip(),
+                AcademicState.ACTIVE)) {
+            throw new FacialEventException("El aprendiz no pertenece a la ficha activa de esta sesión.", HttpStatus.BAD_REQUEST);
+        }
+
+        FacialEvent event = facialEventRepository
+                .findFirstByRecordEnvironment_IdRecordEnvironmentAndApprentice_IdApprenticeAndEventTypeAndDeletedAtIsNullOrderByEventDatetimeAsc(
+                        record.getIdRecordEnvironment(),
+                        apprentice.getIdApprentice(),
+                        FacialEventType.ENTRY)
+                .orElseGet(() -> buildAbsentEvent(record, apprentice, authenticatedUserId));
+
+        if (event.getAttendanceStatus() != AttendanceStatus.ABSENT) {
+            throw new FacialEventException("Solo se puede registrar excusa para inasistencias.", HttpStatus.BAD_REQUEST);
+        }
+
+        event.setExcuse(dto.getExcuse());
+        event.setUpdatedBy(authenticatedUserId.toString());
+
+        return new FacialEventResponseDTO(facialEventRepository.saveAndFlush(event));
     }
 
     private List<AttendanceMatrixRow> findAttendanceMatrixRows(
@@ -292,8 +327,13 @@ public class FacialEventServiceImpl implements FacialEventService {
                     u.number_document,
                     env.environment_name,
                     CONCAT(instructor_user.first_name, ' ', instructor_user.last_name) AS instructor_name,
-                    COALESCE(TO_CHAR(fe.event_datetime AT TIME ZONE 'America/Bogota', 'HH24:MI'), '') AS entry_time,
+                    fe.id_facial_event,
+                    CASE
+                        WHEN fe.attendance_status = 'ABSENT' OR fe.event_datetime IS NULL THEN ''
+                        ELSE TO_CHAR(fe.event_datetime AT TIME ZONE 'America/Bogota', 'HH24:MI')
+                    END AS entry_time,
                     fe.attendance_status,
+                    fe.excuse,
                     CASE
                         WHEN fex.id_facial_event IS NOT NULL
                          AND fex.attendance_status IS NOT NULL
@@ -302,7 +342,7 @@ public class FacialEventServiceImpl implements FacialEventService {
                         ELSE FALSE
                     END AS exit_registered,
                     CASE
-                        WHEN fe.event_datetime IS NULL THEN 0
+                        WHEN fe.attendance_status = 'ABSENT' OR fe.event_datetime IS NULL THEN 0
                         WHEN fe.event_datetime <= re.entry_time + (re.registration_minutes * INTERVAL '1 minute') THEN 0
                         ELSE FLOOR(EXTRACT(EPOCH FROM (fe.event_datetime - (re.entry_time + (re.registration_minutes * INTERVAL '1 minute')))) / 60)::INT
                     END AS delay_minutes
@@ -361,10 +401,26 @@ public class FacialEventServiceImpl implements FacialEventService {
                 rs.getString("number_document"),
                 rs.getString("environment_name"),
                 rs.getString("instructor_name"),
+                rs.getObject("id_facial_event", UUID.class),
                 rs.getString("entry_time"),
                 rs.getString("attendance_status"),
+                rs.getObject("excuse", Boolean.class),
                 rs.getInt("delay_minutes"),
                 rs.getBoolean("exit_registered")));
+    }
+
+    private FacialEvent buildAbsentEvent(RecordEnvironment record, Apprentice apprentice, UUID authenticatedUserId) {
+        FacialEvent event = new FacialEvent();
+        event.setRecordEnvironment(record);
+        event.setDevice(record.getDevice());
+        event.setApprentice(apprentice);
+        event.setEventDatetime(record.getEntryTime());
+        event.setEventType(FacialEventType.ENTRY);
+        event.setRecognitionResult("ABSENT");
+        event.setAttendanceStatus(AttendanceStatus.ABSENT);
+        event.setOrigin(FacialEventOrigin.PC);
+        event.setCreatedBy(authenticatedUserId.toString());
+        return event;
     }
 
     private FacialEventType resolveEventType(OffsetDateTime eventDatetime, RecordEnvironment record) {
@@ -432,8 +488,10 @@ public class FacialEventServiceImpl implements FacialEventService {
             String documentNumber,
             String environmentName,
             String instructorName,
+            UUID idFacialEvent,
             String entryTime,
             String attendanceStatus,
+            Boolean excuse,
             Integer delayMinutes,
             Boolean exitRegistered) {
     }
