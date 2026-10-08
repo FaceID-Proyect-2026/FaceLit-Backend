@@ -1,5 +1,6 @@
 package com.FaceLit.backend.facial.controller;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.FaceLit.backend.facial.dto.request.FacialEventRequestDTO;
 import com.FaceLit.backend.facial.dto.request.FacialAttendanceCaptureRequestDTO;
+import com.FaceLit.backend.facial.dto.response.AttendanceMatrixResponseDTO;
 import com.FaceLit.backend.facial.dto.response.AttendanceStatusResponseDTO;
 import com.FaceLit.backend.facial.dto.response.FacialEventResponseDTO;
 import com.FaceLit.backend.facial.service.FacialEventService;
@@ -50,6 +52,15 @@ public class FacialEventController {
             @RequestParam UUID idRecordEnvironment,
             @RequestParam UUID idApprentice) {
         return ResponseEntity.ok(facialEventService.getAttendanceStatus(idRecordEnvironment, idApprentice));
+    }
+
+    @GetMapping("/attendance-matrix")
+    public ResponseEntity<AttendanceMatrixResponseDTO> getAttendanceMatrix(
+            @RequestParam UUID idChip,
+            @RequestParam LocalDate dateFrom,
+            @RequestParam LocalDate dateTo,
+            @AuthenticationPrincipal Object principal) {
+        return ResponseEntity.ok(facialEventService.getAttendanceMatrix(idChip, dateFrom, dateTo, principalId(principal)));
     }
 
     private UUID principalId(Object principal) {
