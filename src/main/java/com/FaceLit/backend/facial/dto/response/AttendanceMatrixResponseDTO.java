@@ -36,6 +36,7 @@ public record AttendanceMatrixResponseDTO(
             String environmentName,
             String instructorName,
             String fichaNumber,
-            String programName) {
+            String programName,
+            Boolean exitRegistered) {
     }
 }

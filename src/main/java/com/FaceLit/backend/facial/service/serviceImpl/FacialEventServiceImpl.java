@@ -236,7 +236,8 @@ public class FacialEventServiceImpl implements FacialEventService {
                     row.environmentName(),
                     row.instructorName(),
                     row.chipCode(),
-                    row.programName()));
+                    row.programName(),
+                    row.exitRegistered()));
         }
 
         return new AttendanceMatrixResponseDTO(
@@ -291,6 +292,13 @@ public class FacialEventServiceImpl implements FacialEventService {
                     COALESCE(TO_CHAR(fe.event_datetime AT TIME ZONE 'America/Bogota', 'HH24:MI'), '') AS entry_time,
                     fe.attendance_status,
                     CASE
+                        WHEN fex.id_facial_event IS NOT NULL
+                         AND fex.attendance_status IS NOT NULL
+                         AND fex.attendance_status <> 'ABSENT'
+                        THEN TRUE
+                        ELSE FALSE
+                    END AS exit_registered,
+                    CASE
                         WHEN fe.event_datetime IS NULL THEN 0
                         WHEN fe.event_datetime <= re.entry_time + (re.registration_minutes * INTERVAL '1 minute') THEN 0
                         ELSE FLOOR(EXTRACT(EPOCH FROM (fe.event_datetime - (re.entry_time + (re.registration_minutes * INTERVAL '1 minute')))) / 60)::INT
@@ -321,6 +329,11 @@ public class FacialEventServiceImpl implements FacialEventService {
                  AND fe.id_apprentice = a.id_apprentice
                  AND fe.event_type = 'ENTRY'
                  AND fe.deleted_at IS NULL
+                LEFT JOIN facialrecognition.facial_event fex
+                  ON fex.id_record_environment = re.id_record_environment
+                 AND fex.id_apprentice = a.id_apprentice
+                 AND fex.event_type = 'EXIT'
+                 AND fex.deleted_at IS NULL
                 ORDER BY re.entry_time ASC, u.last_name ASC, u.first_name ASC, u.number_document ASC
                 """;
 
@@ -346,7 +359,8 @@ public class FacialEventServiceImpl implements FacialEventService {
                 rs.getString("instructor_name"),
                 rs.getString("entry_time"),
                 rs.getString("attendance_status"),
-                rs.getInt("delay_minutes")));
+                rs.getInt("delay_minutes"),
+                rs.getBoolean("exit_registered")));
     }
 
     private FacialEventType resolveEventType(OffsetDateTime eventDatetime, RecordEnvironment record) {
@@ -416,7 +430,8 @@ public class FacialEventServiceImpl implements FacialEventService {
             String instructorName,
             String entryTime,
             String attendanceStatus,
-            Integer delayMinutes) {
+            Integer delayMinutes,
+            Boolean exitRegistered) {
     }
 
     private static final class LearnerMatrixBuilder {
