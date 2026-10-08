@@ -192,12 +192,13 @@ public class FacialEventServiceImpl implements FacialEventService {
             throw new FacialEventException("El rango de fechas no es válido.", HttpStatus.BAD_REQUEST);
         }
 
-        Instructor instructor = instructorRepository.findByUser_IdUser(authenticatedUserId)
-                .orElseThrow(() -> new FacialEventException("Instructor no encontrado.", HttpStatus.NOT_FOUND));
+        UUID idInstructor = instructorRepository.findByUser_IdUser(authenticatedUserId)
+                .map(Instructor::getIdInstructor)
+                .orElse(null);
 
         List<AttendanceMatrixRow> rows = findAttendanceMatrixRows(
                 idChip,
-                instructor.getIdInstructor(),
+                idInstructor,
                 dateFrom,
                 dateTo);
 
@@ -269,6 +270,8 @@ public class FacialEventServiceImpl implements FacialEventService {
                           AND re.deleted_at IS NULL
                           AND CAST(re.entry_time AT TIME ZONE 'America/Bogota' AS date) BETWEEN ? AND ?
                           AND (
+                                CAST(? AS uuid) IS NULL
+                             OR
                                 re.id_instructor_scheduled = ?
                              OR re.id_instructor_in_charge = ?
                           )
@@ -343,6 +346,7 @@ public class FacialEventServiceImpl implements FacialEventService {
             ps.setObject(3, dateTo);
             ps.setObject(4, idInstructor);
             ps.setObject(5, idInstructor);
+            ps.setObject(6, idInstructor);
         }, (rs, rowNum) -> new AttendanceMatrixRow(
                 rs.getObject("record_environment_id", UUID.class),
                 rs.getObject("session_date", LocalDate.class),
