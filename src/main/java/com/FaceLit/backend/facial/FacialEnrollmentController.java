@@ -6,6 +6,7 @@ import java.util.Base64;
 import javax.imageio.ImageIO;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -40,6 +41,7 @@ public class FacialEnrollmentController {
     }
 
     public record Challenge(UUID id, List<String> poses, Instant expiresAt) {}
+    public record RegistrationStatus(boolean registered, OffsetDateTime registrationDate) {}
     public record Sample(@NotNull String pose, double yaw, double real, double live,
                          @NotNull @Size(min = 1024, max = 1024) List<@NotNull Double> embedding,
                          long elapsedMs, long durationMs, int frames, int blinks, boolean smileTransition) {}
@@ -86,6 +88,11 @@ public class FacialEnrollmentController {
     @GetMapping("/me")
     public Map<String, Boolean> status(@AuthenticationPrincipal UUID userId) {
         return Map.of("registered", registered(userId), "padAvailable", pad.available());
+    }
+
+    @GetMapping("/registration-status")
+    public RegistrationStatus registrationStatus(@AuthenticationPrincipal UUID userId) {
+        return registrationStatusForFrontend(userId);
     }
 
     @PostMapping("/challenge")
@@ -155,6 +162,22 @@ public class FacialEnrollmentController {
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS (SELECT 1 FROM facialrecognition.user_face WHERE id_user_app = ? AND deleted_at IS NULL AND status = 'ACTIVE')",
             Boolean.class, userId));
+    }
+
+    private RegistrationStatus registrationStatusForFrontend(UUID userId) {
+        List<OffsetDateTime> dates = jdbc.queryForList("""
+            SELECT user_face.created_at AS registration_date
+            FROM academic.apprentice apprentice
+            JOIN facialrecognition.user_face user_face
+              ON user_face.id_apprentice = apprentice.id_apprentice
+             AND user_face.deleted_at IS NULL
+             AND user_face.status = 'ACTIVE'
+            WHERE apprentice.id_user_app = ?
+              AND apprentice.deleted_at IS NULL
+            ORDER BY user_face.created_at DESC
+            LIMIT 1
+            """, OffsetDateTime.class, userId);
+        return new RegistrationStatus(!dates.isEmpty(), dates.isEmpty() ? null : dates.get(0));
     }
 
     static void validateSamples(Challenge challenge, List<Sample> samples) {
