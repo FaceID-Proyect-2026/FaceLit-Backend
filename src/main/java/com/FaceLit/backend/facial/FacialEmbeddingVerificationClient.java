@@ -31,11 +31,11 @@ public class FacialEmbeddingVerificationClient {
                 .build();
     }
 
-    public VerificationResponse verifySession(UUID idRecordEnvironment, String imageBase64, List<String> imageFrames, String livenessChallenge) {
+    public VerificationResponse verifySession(UUID idRecordEnvironment, String imageBase64, List<String> imageFrames, String livenessChallenge, List<String> livenessChallenges) {
         return client.post()
                 .uri("/api/v1/facial-embeddings/verify-session")
                 .header("X-API-Key", apiKey)
-                .body(new VerificationRequest(idRecordEnvironment, imageBase64, imageFrames, livenessChallenge))
+                .body(new VerificationRequest(idRecordEnvironment, imageBase64, imageFrames, livenessChallenge, livenessChallenges))
                 .retrieve()
                 .body(VerificationResponse.class);
     }
@@ -44,7 +44,8 @@ public class FacialEmbeddingVerificationClient {
             @JsonProperty("record_environment_id") UUID recordEnvironmentId,
             @JsonProperty("image_base64") String imageBase64,
             @JsonProperty("image_frames") List<String> imageFrames,
-            @JsonProperty("liveness_challenge") String livenessChallenge) {
+            @JsonProperty("liveness_challenge") String livenessChallenge,
+            @JsonProperty("liveness_challenges") List<String> livenessChallenges) {
     }
 
     public record VerificationResponse(

@@ -20,10 +20,13 @@ public class FacialAttendanceCaptureRequestDTO {
 
     private String imageBase64;
 
-    @Size(min = 3, max = 6, message = "La validación de vida requiere entre 3 y 6 capturas.")
+    @Size(min = 3, max = 18, message = "La validación de vida requiere entre 3 y 18 capturas.")
     private List<String> imageFrames;
 
     private String livenessChallenge;
+
+    @Size(max = 3, message = "La secuencia de vida permite máximo 3 retos.")
+    private List<String> livenessChallenges;
 
     private String origin;
 }
