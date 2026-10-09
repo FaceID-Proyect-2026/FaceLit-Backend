@@ -135,7 +135,8 @@ public class FacialEventServiceImpl implements FacialEventService {
                     dto.getIdRecordEnvironment(),
                     dto.getImageBase64(),
                     dto.getImageFrames(),
-                    dto.getLivenessChallenge());
+                    dto.getLivenessChallenge(),
+                    dto.getLivenessChallenges());
         } catch (RestClientResponseException ex) {
             String detail = extractVerificationServiceDetail(ex);
             LOGGER.warn(
