@@ -133,7 +133,9 @@ public class FacialEventServiceImpl implements FacialEventService {
         try {
             verification = verificationClient.verifySession(
                     dto.getIdRecordEnvironment(),
-                    dto.getImageBase64());
+                    dto.getImageBase64(),
+                    dto.getImageFrames(),
+                    dto.getLivenessChallenge());
         } catch (RestClientResponseException ex) {
             String detail = extractVerificationServiceDetail(ex);
             LOGGER.warn(
@@ -146,7 +148,11 @@ public class FacialEventServiceImpl implements FacialEventService {
             throw new FacialEventException("No fue posible verificar el rostro capturado.", HttpStatus.BAD_GATEWAY);
         }
 
-        if (verification == null || !verification.match() || verification.idApprentice() == null) {
+        if (verification == null || !verification.live()) {
+            throw new FacialEventException(resolveLivenessFailureMessage(verification), HttpStatus.BAD_REQUEST);
+        }
+
+        if (!verification.match() || verification.idApprentice() == null) {
             throw new FacialEventException("Rostro no reconocido para esta ficha", HttpStatus.BAD_REQUEST);
         }
 
@@ -560,6 +566,31 @@ public class FacialEventServiceImpl implements FacialEventService {
         if (normalized.contains("base64") || normalized.contains("leer la imagen") || normalized.contains("imagen es obligatoria")) {
             return "No fue posible leer la imagen capturada.";
         }
+        if (normalized.contains("liveness") || normalized.contains("vida") || normalized.contains("frames")) {
+            return "No se pudo comprobar que la captura sea de una persona en vivo.";
+        }
         return "No fue posible verificar el rostro capturado.";
+    }
+
+    private String resolveLivenessFailureMessage(VerificationResponse verification) {
+        if (verification == null || verification.livenessReason() == null || verification.livenessReason().isBlank()) {
+            return "No se pudo comprobar que la captura sea de una persona en vivo.";
+        }
+
+        String reason = verification.livenessReason().trim();
+        String normalized = reason.toLowerCase(Locale.ROOT);
+        if (normalized.contains("misma persona")) {
+            return "La secuencia no parece corresponder a la misma persona. Intenta moverte más suave.";
+        }
+        if (normalized.contains("puntos faciales")) {
+            return "No se pudo medir bien el rostro. Centra la cara dentro del óvalo e intenta de nuevo.";
+        }
+        if (normalized.contains("movimiento facial")) {
+            return "No se detectó suficiente movimiento. Haz el reto más despacio y un poco más marcado.";
+        }
+        if (normalized.contains("secuencia")) {
+            return "La cámara no capturó suficientes imágenes para validar vida.";
+        }
+        return reason;
     }
 }

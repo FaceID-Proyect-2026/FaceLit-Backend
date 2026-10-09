@@ -2,6 +2,7 @@ package com.FaceLit.backend.facial;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -30,26 +31,30 @@ public class FacialEmbeddingVerificationClient {
                 .build();
     }
 
-    public VerificationResponse verifySession(UUID idRecordEnvironment, String imageBase64) {
+    public VerificationResponse verifySession(UUID idRecordEnvironment, String imageBase64, List<String> imageFrames, String livenessChallenge) {
         return client.post()
                 .uri("/api/v1/facial-embeddings/verify-session")
                 .header("X-API-Key", apiKey)
-                .body(new VerificationRequest(idRecordEnvironment, imageBase64))
+                .body(new VerificationRequest(idRecordEnvironment, imageBase64, imageFrames, livenessChallenge))
                 .retrieve()
                 .body(VerificationResponse.class);
     }
 
     record VerificationRequest(
             @JsonProperty("record_environment_id") UUID recordEnvironmentId,
-            @JsonProperty("image_base64") String imageBase64) {
+            @JsonProperty("image_base64") String imageBase64,
+            @JsonProperty("image_frames") List<String> imageFrames,
+            @JsonProperty("liveness_challenge") String livenessChallenge) {
     }
 
     public record VerificationResponse(
             boolean match,
+            boolean live,
             @JsonProperty("id_apprentice") UUID idApprentice,
             BigDecimal similarity,
             BigDecimal threshold,
             @JsonProperty("model_name") String modelName,
-            String reason) {
+            String reason,
+            @JsonProperty("liveness_reason") String livenessReason) {
     }
 }
