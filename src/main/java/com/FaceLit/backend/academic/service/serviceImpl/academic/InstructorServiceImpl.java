@@ -9,7 +9,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +35,7 @@ import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.AdminRoleService;
+import com.FaceLit.backend.auth.service.security.InitialCredentialService;
 import com.FaceLit.backend.environment.repository.RecordEnvironmentRepository;
 import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
 import com.FaceLit.backend.notification.dto.request.MonolithEventRequestDTO;
@@ -51,7 +51,7 @@ public class InstructorServiceImpl implements InstructorService {
     private final CredentialRepository credentialRepository;
     private final ChangeHistoryRepository changeHistoryRepository;
     private final RecordEnvironmentRepository recordEnvironmentRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final InitialCredentialService initialCredentialService;
     private final AdminRoleService adminRoleService;
     private final NotificationService notificationService;
 
@@ -63,7 +63,7 @@ public class InstructorServiceImpl implements InstructorService {
             CredentialRepository credentialRepository,
             ChangeHistoryRepository changeHistoryRepository,
             RecordEnvironmentRepository recordEnvironmentRepository,
-            PasswordEncoder passwordEncoder,
+            InitialCredentialService initialCredentialService,
             AdminRoleService adminRoleService,
             NotificationService notificationService) {
         this.instructorRepository = instructorRepository;
@@ -73,7 +73,7 @@ public class InstructorServiceImpl implements InstructorService {
         this.credentialRepository = credentialRepository;
         this.changeHistoryRepository = changeHistoryRepository;
         this.recordEnvironmentRepository = recordEnvironmentRepository;
-        this.passwordEncoder = passwordEncoder;
+        this.initialCredentialService = initialCredentialService;
         this.adminRoleService = adminRoleService;
         this.notificationService = notificationService;
     }
@@ -112,16 +112,24 @@ public class InstructorServiceImpl implements InstructorService {
         newUser.setAccountStatus(AccountStatus.ACTIVE);
         newUser = userRepository.saveAndFlush(newUser);
 
-        String password = generatePassword();
+        String password = initialCredentialService.generateInitialPassword();
         Credential credential = new Credential();
         credential.setUser(newUser);
         credential.setEmail(email);
-        credential.setPassword(passwordEncoder.encode(password));
+        initialCredentialService.encodeGeneratedPassword(credential, password);
         credential.setCredentialStatus(CredentialStatus.ACTIVE);
         credential.setFailedAttempts(0);
         credentialRepository.saveAndFlush(credential);
 
-        return createInstructorForUser(newUser, dto.getInstructorType(), dto.getProgramIds(), password);
+        InstructorResponseDTO response = createInstructorForUser(newUser, dto.getInstructorType(), dto.getProgramIds(), null);
+        initialCredentialService.sendWelcomeAfterCommit(
+                newUser,
+                credential,
+                RoleName.INSTRUCTOR,
+                password,
+                null,
+                String.join(", ", response.getProgramNames()));
+        return response;
     }
 
     @Override
@@ -214,6 +222,13 @@ public class InstructorServiceImpl implements InstructorService {
             recordChange(instructor, "instructor", oldType.name(), newType.name(), ChangeAction.UPDATE, "instructor_type", oldType.name() + " -> " + newType.name());
             notifyInstructor(instructor, "instructor_profile_updated", "Tus datos fueron modificados",
                     "Coordinacion actualizo tu tipo de instructor: " + oldType.name() + " -> " + newType.name() + ".");
+            notifyCoordinatorInstructorEvent(
+                    "academic_entity_updated",
+                    "Instructor actualizado",
+                    "Se actualizo el tipo del instructor " + instructorName(instructor)
+                            + ": " + oldType.name() + " -> " + newType.name() + ".",
+                    instructor,
+                    "updated");
         }
 
         String newProfile = user.getDocumentNumber() + " / " + user.getFirstName() + " " + user.getLastName()
@@ -226,6 +241,12 @@ public class InstructorServiceImpl implements InstructorService {
                             "nombre", values(oldFirstName, user.getFirstName()),
                             "apellido", values(oldLastName, user.getLastName()),
                             "correo", values(oldEmail, credential.getEmail()))));
+            notifyCoordinatorInstructorEvent(
+                    "academic_entity_updated",
+                    "Instructor actualizado",
+                    "Se actualizaron los datos personales del instructor " + instructorName(instructor) + ".",
+                    instructor,
+                    "updated");
         }
 
         List<UUID> newProgramIds = ids;
@@ -240,6 +261,13 @@ public class InstructorServiceImpl implements InstructorService {
             notifyInstructor(instructor, "instructor_assignment_updated", "Tu asignacion academica cambio",
                     "Coordinacion actualizo tus programas: " + listOrNone(oldProgramNames)
                             + " -> " + listOrNone(newProgramNames) + ".");
+            notifyCoordinatorInstructorEvent(
+                    "academic_entity_updated",
+                    "Asignacion de instructor actualizada",
+                    "Se actualizaron los programas del instructor " + instructorName(instructor)
+                            + ": " + listOrNone(oldProgramNames) + " -> " + listOrNone(newProgramNames) + ".",
+                    instructor,
+                    "updated");
         }
 
         return toResponse(instructor);
@@ -262,6 +290,13 @@ public class InstructorServiceImpl implements InstructorService {
         }
         userRepository.save(user);
         recordChange(instructor, "instructor", AccountStatus.INACTIVE.name(), AccountStatus.ACTIVE.name(), ChangeAction.REACTIVATE, "account_status", AccountStatus.ACTIVE.name());
+        notifyCoordinatorInstructorEvent(
+                "academic_entity_activated",
+                "Instructor activado",
+                "Se activo el instructor " + instructorName(instructor)
+                        + " con documento " + emptyAsNone(user.getDocumentNumber()) + ".",
+                instructor,
+                "activated");
 
         return toResponse(instructor);
     }
@@ -279,6 +314,7 @@ public class InstructorServiceImpl implements InstructorService {
             }
             userRepository.save(user);
             recordChange(instructor, "instructor", AccountStatus.ACTIVE.name(), AccountStatus.INACTIVE.name(), ChangeAction.DEACTIVATE, "account_status", AccountStatus.INACTIVE.name());
+            notifyInstructorDeactivated(instructor);
         }
         return toResponse(instructor);
     }
@@ -396,6 +432,16 @@ public class InstructorServiceImpl implements InstructorService {
                                 .map(ip -> ip.getProgram().getProgramName() + " (" + ip.getProgram().getProgramCode() + ")")
                                 .toList())
                         + ".");
+            notifyCoordinatorInstructorEvent(
+                    "academic_entity_created",
+                    "Instructor creado",
+                    "Se creo el instructor " + instructorName(instructor) + " con programas asignados: "
+                            + listOrNone(instructorProgramRepository.findByInstructor_IdInstructor(instructor.getIdInstructor()).stream()
+                                    .map(ip -> ip.getProgram().getProgramName() + " (" + ip.getProgram().getProgramCode() + ")")
+                                    .toList())
+                            + ".",
+                    instructor,
+                    "created");
             return toResponse(instructor, generatedPassword);
         }
 
@@ -406,6 +452,12 @@ public class InstructorServiceImpl implements InstructorService {
         recordChange(instructor, "instructor", null, "instructor_type", ChangeAction.CREATE, null, type.name());
         notifyInstructor(instructor, "user_account_created", "Tu usuario de instructor fue creado",
                 "Coordinacion creo tu usuario de instructor.");
+        notifyCoordinatorInstructorEvent(
+                "academic_entity_created",
+                "Instructor creado",
+                "Se creo el instructor " + instructorName(instructor) + ".",
+                instructor,
+                "created");
         return toResponse(instructor, generatedPassword);
     }
 
@@ -432,18 +484,6 @@ public class InstructorServiceImpl implements InstructorService {
 
     private String normalizeEmail(String email) {
         return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private String generatePassword() {
-        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@$!%*?";
-        StringBuilder password = new StringBuilder();
-        password.append((char) ('A' + (int) (Math.random() * 26)));
-        password.append((int) (Math.random() * 10));
-        password.append("@$!%*?".charAt((int) (Math.random() * 6)));
-        while (password.length() < 10) {
-            password.append(chars.charAt((int) (Math.random() * chars.length())));
-        }
-        return password.toString();
     }
 
     private void recordChange(Instructor instructor, String entityName, String oldValue, String newValue, ChangeAction action, String fieldName, String fieldValue) {
@@ -516,5 +556,62 @@ public class InstructorServiceImpl implements InstructorService {
         } catch (RuntimeException ignored) {
             // La eliminacion academica no debe fallar por notificaciones.
         }
+    }
+
+    private void notifyInstructorDeactivated(Instructor instructor) {
+        User user = instructor.getUser();
+        String fullName = ((user.getFirstName() == null ? "" : user.getFirstName()) + " "
+                + (user.getLastName() == null ? "" : user.getLastName())).trim();
+        try {
+            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                    "academic_entity_deactivated",
+                    "Instructor desactivado",
+                    "Se desactivo el instructor " + emptyAsNone(fullName)
+                            + " con documento " + emptyAsNone(user.getDocumentNumber()) + ".",
+                    null,
+                    instructor.getIdInstructor(),
+                    "instructor",
+                    null,
+                    "{\"entityType\":\"instructor\",\"entityId\":\"" + instructor.getIdInstructor()
+                            + "\",\"instructorName\":\"" + safe(fullName)
+                            + "\",\"document\":\"" + safe(user.getDocumentNumber()) + "\"}"));
+        } catch (RuntimeException ignored) {
+            // La desactivacion academica no debe fallar por notificaciones.
+        }
+    }
+
+    private void notifyCoordinatorInstructorEvent(
+            String type,
+            String title,
+            String message,
+            Instructor instructor,
+            String action) {
+        User user = instructor.getUser();
+        try {
+            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                    type,
+                    title,
+                    message,
+                    null,
+                    instructor.getIdInstructor(),
+                    "instructor",
+                    null,
+                    "{\"entityType\":\"instructor\",\"entityId\":\"" + instructor.getIdInstructor()
+                            + "\",\"action\":\"" + safe(action)
+                            + "\",\"instructorName\":\"" + safe(instructorName(instructor))
+                            + "\",\"document\":\"" + safe(user.getDocumentNumber()) + "\"}"));
+        } catch (RuntimeException ignored) {
+            // La actualizacion academica no debe fallar por notificaciones.
+        }
+    }
+
+    private String instructorName(Instructor instructor) {
+        User user = instructor.getUser();
+        return emptyAsNone(((user.getFirstName() == null ? "" : user.getFirstName()) + " "
+                + (user.getLastName() == null ? "" : user.getLastName())).trim());
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

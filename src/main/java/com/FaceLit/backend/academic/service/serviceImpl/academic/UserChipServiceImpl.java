@@ -10,7 +10,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +39,7 @@ import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.AdminRoleService;
+import com.FaceLit.backend.auth.service.security.InitialCredentialService;
 import com.FaceLit.backend.environment.repository.RecordEnvironmentRepository;
 import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
 import com.FaceLit.backend.notification.dto.request.MonolithEventRequestDTO;
@@ -54,7 +54,7 @@ public class UserChipServiceImpl implements UserChipService {
     private final CredentialRepository credentialRepository;
     private final ChipRepository chipRepository;
     private final ChangeHistoryRepository changeHistoryRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final InitialCredentialService initialCredentialService;
     private final AdminRoleService adminRoleService;
     private final UserRoleRepository userRoleRepository;
     private final RecordEnvironmentRepository recordEnvironmentRepository;
@@ -68,7 +68,7 @@ public class UserChipServiceImpl implements UserChipService {
             CredentialRepository credentialRepository,
             ChipRepository chipRepository,
             ChangeHistoryRepository changeHistoryRepository,
-            PasswordEncoder passwordEncoder,
+            InitialCredentialService initialCredentialService,
             AdminRoleService adminRoleService,
             UserRoleRepository userRoleRepository,
             RecordEnvironmentRepository recordEnvironmentRepository,
@@ -80,7 +80,7 @@ public class UserChipServiceImpl implements UserChipService {
         this.credentialRepository = credentialRepository;
         this.chipRepository = chipRepository;
         this.changeHistoryRepository = changeHistoryRepository;
-        this.passwordEncoder = passwordEncoder;
+        this.initialCredentialService = initialCredentialService;
         this.adminRoleService = adminRoleService;
         this.userRoleRepository = userRoleRepository;
         this.recordEnvironmentRepository = recordEnvironmentRepository;
@@ -99,6 +99,7 @@ public class UserChipServiceImpl implements UserChipService {
         }
 
         final String[] generatedPasswordHolder = {null};
+        final Credential[] generatedCredentialHolder = {null};
         User user;
         if (dto.getIdUser() != null) {
             user = userRepository.findById(dto.getIdUser())
@@ -121,15 +122,15 @@ public class UserChipServiceImpl implements UserChipService {
                 newUser.setAccountStatus(AccountStatus.ACTIVE);
                 newUser = userRepository.saveAndFlush(newUser);
 
-                String generatedPassword = generatePassword();
+                String generatedPassword = initialCredentialService.generateInitialPassword();
                 generatedPasswordHolder[0] = generatedPassword;
                 Credential credential = new Credential();
                 credential.setUser(newUser);
                 credential.setEmail(email);
-                credential.setPassword(passwordEncoder.encode(generatedPassword));
+                initialCredentialService.encodeGeneratedPassword(credential, generatedPassword);
                 credential.setCredentialStatus(CredentialStatus.ACTIVE);
                 credential.setFailedAttempts(0);
-                credentialRepository.saveAndFlush(credential);
+                generatedCredentialHolder[0] = credentialRepository.saveAndFlush(credential);
                 return newUser;
             });
         }
@@ -155,7 +156,16 @@ public class UserChipServiceImpl implements UserChipService {
 
         recordChange(userChip, "apprentice_chip", null, chip.getChipCode(), ChangeAction.CREATE, "chip");
         notifyApprenticeCreated(user, chip, userChip);
-        return new UserChipResponseDTO(userChip, generatedPasswordHolder[0]);
+        if (generatedPasswordHolder[0] != null && generatedCredentialHolder[0] != null) {
+            initialCredentialService.sendWelcomeAfterCommit(
+                    user,
+                    generatedCredentialHolder[0],
+                    RoleName.APPRENTICE,
+                    generatedPasswordHolder[0],
+                    chip.getChipCode(),
+                    chip.getProgram().getProgramName());
+        }
+        return new UserChipResponseDTO(userChip);
     }
 
     @Override
@@ -364,18 +374,6 @@ public class UserChipServiceImpl implements UserChipService {
         return temp;
     }
 
-    private String generatePassword() {
-        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@$!%*?";
-        StringBuilder password = new StringBuilder();
-        password.append((char) ('A' + (int) (Math.random() * 26)));
-        password.append((int) (Math.random() * 10));
-        password.append("@$!%*?".charAt((int) (Math.random() * 6)));
-        while (password.length() < 10) {
-            password.append(chars.charAt((int) (Math.random() * chars.length())));
-        }
-        return password.toString();
-    }
-
     private void recordChange(UserChip userChip, String entityName, String oldValue, String newValue, ChangeAction action, String fieldName) {
         ChangeHistory history = new ChangeHistory();
         history.setEntityName(entityName);
@@ -458,6 +456,20 @@ public class UserChipServiceImpl implements UserChipService {
                     null,
                     "{\"entityType\":\"apprentice_chip\",\"entityId\":\"" + userChip.getIdUserChip()
                             + "\",\"chip\":\"" + safe(chip.getChipCode()) + "\"}"));
+            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                    "academic_entity_created",
+                    "Aprendiz creado",
+                    "Se creo el aprendiz " + learnerName(user)
+                            + " con documento " + emptyAsNone(user.getDocumentNumber())
+                            + " y se asigno a la ficha " + chip.getChipCode() + ".",
+                    null,
+                    userChip.getIdUserChip(),
+                    "apprentice_chip",
+                    null,
+                    "{\"entityType\":\"learner\",\"entityId\":\"" + user.getIdUser()
+                            + "\",\"action\":\"created\",\"learnerName\":\"" + safe(learnerName(user))
+                            + "\",\"learnerDocument\":\"" + safe(user.getDocumentNumber())
+                            + "\",\"fichaNumber\":\"" + safe(chip.getChipCode()) + "\"}"));
         } catch (RuntimeException ignored) {
             // La asignacion academica no debe fallar por una notificacion informativa.
         }
@@ -489,6 +501,19 @@ public class UserChipServiceImpl implements UserChipService {
                     "apprentice_chip",
                     null,
                     "{\"entityType\":\"apprentice\",\"entityId\":\"" + user.getIdUser() + "\"}"));
+            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                    "academic_entity_updated",
+                    "Aprendiz actualizado",
+                    "Se actualizaron los datos del aprendiz " + learnerName(user)
+                            + " con documento " + emptyAsNone(user.getDocumentNumber())
+                            + ". Cambios: " + String.join("; ", changes) + ".",
+                    null,
+                    userChip.getIdUserChip(),
+                    "apprentice_chip",
+                    null,
+                    "{\"entityType\":\"learner\",\"entityId\":\"" + user.getIdUser()
+                            + "\",\"action\":\"updated\",\"learnerName\":\"" + safe(learnerName(user))
+                            + "\",\"learnerDocument\":\"" + safe(user.getDocumentNumber()) + "\"}"));
         } catch (RuntimeException ignored) {
             // La actualizacion academica no debe fallar por una notificacion informativa.
         }
@@ -511,6 +536,11 @@ public class UserChipServiceImpl implements UserChipService {
                 + "\",\"learnerDocument\":\"" + safe(user.getDocumentNumber())
                 + "\",\"fromFichaNumber\":\"" + safe(previousChip.getChipCode())
                 + "\",\"toFichaNumber\":\"" + safe(destination.getChipCode()) + "\"}";
+    }
+
+    private String learnerName(User user) {
+        return emptyAsNone(((user.getFirstName() == null ? "" : user.getFirstName()) + " "
+                + (user.getLastName() == null ? "" : user.getLastName())).trim());
     }
 
     private String safe(String value) {

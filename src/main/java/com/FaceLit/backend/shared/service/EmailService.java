@@ -9,7 +9,8 @@ public interface EmailService {
     void sendRecoveryCode(String toEmail, String code);
 
     void sendNotificationEmail(String toEmail, String subject, String body);
-    
+
+    void sendInitialCredentials(String toEmail, String subject, String body);
 
 
 }

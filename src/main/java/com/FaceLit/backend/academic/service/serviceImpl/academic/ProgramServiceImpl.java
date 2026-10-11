@@ -145,6 +145,11 @@ public class ProgramServiceImpl implements ProgramService {
         program.setDeactivationReason(null);
         program = programRepository.save(program);
         record(program, "program", AcademicState.INACTIVE.name(), AcademicState.ACTIVE.name(), ChangeAction.REACTIVATE);
+        notifyAcademicRemoval(
+                "academic_entity_activated",
+                "Programa activado",
+                "Se activo el programa " + program.getProgramName() + " (" + program.getProgramCode() + ").",
+                program);
         return new ProgramResponseDTO(program, chipRepository.findByProgram_IdProgram(program.getIdProgram()));
     }
 
@@ -164,11 +169,21 @@ public class ProgramServiceImpl implements ProgramService {
             program.setDeactivationReason(reason == null || reason.isBlank() ? null : reason.trim());
             program = programRepository.save(program);
             record(program, "program", AcademicState.ACTIVE.name(), AcademicState.INACTIVE.name(), ChangeAction.DEACTIVATE);
+            notifyAcademicRemoval(
+                    "academic_entity_deactivated",
+                    "Programa desactivado",
+                    "Se desactivo el programa " + program.getProgramName() + " (" + program.getProgramCode() + ").",
+                    program);
             return new ProgramResponseDTO(program);
         }
 
         record(program, "program", AcademicState.INACTIVE.name(), null, ChangeAction.DELETE);
         programRepository.delete(program);
+        notifyAcademicRemoval(
+                "academic_entity_deleted",
+                "Programa eliminado",
+                "Se elimino permanentemente el programa " + program.getProgramName() + " (" + program.getProgramCode() + ").",
+                program);
         return new ProgramResponseDTO(program, List.of());
     }
 
@@ -204,5 +219,27 @@ public class ProgramServiceImpl implements ProgramService {
         } catch (RuntimeException ignored) {
             // La regla academica debe responder aunque falle el registro de la notificacion.
         }
+    }
+
+    private void notifyAcademicRemoval(String type, String title, String message, Program program) {
+        try {
+            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                    type,
+                    title,
+                    message,
+                    null,
+                    program.getIdProgram(),
+                    "program",
+                    null,
+                    "{\"entityType\":\"program\",\"entityId\":\"" + program.getIdProgram()
+                            + "\",\"programName\":\"" + safe(program.getProgramName())
+                            + "\",\"programCode\":\"" + safe(program.getProgramCode()) + "\"}"));
+        } catch (RuntimeException ignored) {
+            // La regla academica debe responder aunque falle el registro de la notificacion.
+        }
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

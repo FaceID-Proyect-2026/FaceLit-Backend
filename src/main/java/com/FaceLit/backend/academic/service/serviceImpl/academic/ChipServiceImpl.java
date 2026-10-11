@@ -120,6 +120,12 @@ public class ChipServiceImpl implements ChipService {
         chip.setDeactivationReason(null);
         chip = chipRepository.save(chip);
         record(chip, AcademicState.INACTIVE.name(), AcademicState.ACTIVE.name(), ChangeAction.REACTIVATE);
+        notifyAcademicRemoval(
+                "academic_entity_activated",
+                "Ficha activada",
+                "Se activo la ficha " + chip.getChipCode()
+                        + " del programa " + chip.getProgram().getProgramName() + ".",
+                chip);
         return new ChipResponseDTO(chip);
     }
 
@@ -132,13 +138,25 @@ public class ChipServiceImpl implements ChipService {
             ChipResponseDTO response = new ChipResponseDTO(chip);
             record(chip, chip.getState().name(), null, ChangeAction.DELETE);
             chipRepository.delete(chip);
+            notifyAcademicRemoval(
+                    "academic_entity_deleted",
+                    "Ficha eliminada",
+                    "Se elimino permanentemente la ficha " + chip.getChipCode()
+                            + " del programa " + chip.getProgram().getProgramName() + ".",
+                    chip);
             return response;
         }
-        if (chip.getState() == AcademicState.ACTIVE && assignmentCount < 0) {
+        if (chip.getState() == AcademicState.ACTIVE && assignmentCount > 0) {
             chip.setState(AcademicState.INACTIVE);
             chip.setDeactivationReason(reason == null || reason.isBlank() ? null : reason.trim());
             chip = chipRepository.save(chip);
             record(chip, AcademicState.ACTIVE.name(), AcademicState.INACTIVE.name(), ChangeAction.DEACTIVATE);
+            notifyAcademicRemoval(
+                    "academic_entity_deactivated",
+                    "Ficha desactivada",
+                    "Se desactivo la ficha " + chip.getChipCode()
+                            + " del programa " + chip.getProgram().getProgramName() + ".",
+                    chip);
             return new ChipResponseDTO(chip);
         }
 
@@ -190,5 +208,27 @@ public class ChipServiceImpl implements ChipService {
         } catch (RuntimeException ignored) {
             // La respuesta academica no debe depender del registro de notificaciones.
         }
+    }
+
+    private void notifyAcademicRemoval(String type, String title, String message, Chip chip) {
+        try {
+            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                    type,
+                    title,
+                    message,
+                    null,
+                    chip.getIdChip(),
+                    "chip",
+                    null,
+                    "{\"entityType\":\"chip\",\"entityId\":\"" + chip.getIdChip()
+                            + "\",\"fichaNumber\":\"" + safe(chip.getChipCode())
+                            + "\",\"programName\":\"" + safe(chip.getProgram().getProgramName()) + "\"}"));
+        } catch (RuntimeException ignored) {
+            // La respuesta academica no debe depender del registro de notificaciones.
+        }
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

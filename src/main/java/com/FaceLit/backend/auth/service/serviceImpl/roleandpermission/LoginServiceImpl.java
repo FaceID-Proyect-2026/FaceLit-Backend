@@ -1,8 +1,10 @@
 package com.FaceLit.backend.auth.service.serviceImpl.roleandpermission;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +44,7 @@ public class LoginServiceImpl implements LoginService {
     private final NotificationService notificationService;
     private final AcceptanceTermsRepository acceptanceTermsRepository;
     private final UserSessionRepository userSessionRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     public LoginServiceImpl(
             CredentialRepository credentialRepository,
@@ -52,7 +55,8 @@ public class LoginServiceImpl implements LoginService {
             UserSessionService userSessionService,
             NotificationService notificationService,
             AcceptanceTermsRepository acceptanceTermsRepository,
-            UserSessionRepository userSessionRepository) {
+            UserSessionRepository userSessionRepository,
+            JdbcTemplate jdbcTemplate) {
         this.credentialRepository = credentialRepository;
         this.userRoleRepository = userRoleRepository;
         this.rolePermissionRepository = rolePermissionRepository;
@@ -62,6 +66,7 @@ public class LoginServiceImpl implements LoginService {
         this.notificationService = notificationService;
         this.acceptanceTermsRepository = acceptanceTermsRepository;
         this.userSessionRepository = userSessionRepository;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
@@ -148,6 +153,8 @@ public class LoginServiceImpl implements LoginService {
             acceptanceTermsRepository.save(acceptance);
         }
 
+        boolean firstAccessPasswordPrompt = consumeInitialPasswordPrompt(user);
+
         // 11. Generar el JWT con userId, email, rol y permisos
         String token = jwtService.generateToken(user, roleName, permissions);
 
@@ -156,7 +163,7 @@ public class LoginServiceImpl implements LoginService {
         userSessionService.registerSession(user);
 
         // 12. Devolver la respuesta con el token
-        return LoginResponseDTO.success(token, roleName, permissions, user.getIdUser());
+        return LoginResponseDTO.success(token, roleName, permissions, user.getIdUser(), firstAccessPasswordPrompt);
     }
 
     @Override
@@ -169,10 +176,45 @@ public class LoginServiceImpl implements LoginService {
 
         return credentialRepository.findByUser_DocumentNumber(normalizedDocument)
                 .map(Credential::getUser)
-                .map(user -> acceptanceTermsRepository.existsByUserAndAcceptedTrue(user)
-                        // Existing successful sessions predate server-side acceptance storage.
-                        || userSessionRepository.existsByUser_IdUser(user.getIdUser()))
+                .map(user -> acceptanceTermsRepository.existsByUserAndAcceptedTrue(user))
                 .orElse(false);
+    }
+
+    private boolean consumeInitialPasswordPrompt(User user) {
+        ensureInitialPasswordPromptColumn();
+
+        UUID userId = user.getIdUser();
+        boolean hadSuccessfulSessionBefore = userSessionRepository.existsByUser_IdUser(userId);
+        Boolean promptSeen = jdbcTemplate.queryForObject(
+                "SELECT initial_password_prompt_seen FROM security.user_app WHERE id_user_app = ?",
+                Boolean.class,
+                userId);
+
+        boolean shouldPrompt = !hadSuccessfulSessionBefore && !Boolean.TRUE.equals(promptSeen);
+        if (!Boolean.TRUE.equals(promptSeen)) {
+            jdbcTemplate.update(
+                    "UPDATE security.user_app SET initial_password_prompt_seen = TRUE WHERE id_user_app = ?",
+                    userId);
+        }
+
+        return shouldPrompt;
+    }
+
+    private void ensureInitialPasswordPromptColumn() {
+        jdbcTemplate.execute("""
+                ALTER TABLE security.user_app
+                    ADD COLUMN IF NOT EXISTS initial_password_prompt_seen BOOLEAN NOT NULL DEFAULT FALSE
+                """);
+        jdbcTemplate.update("""
+                UPDATE security.user_app u
+                SET initial_password_prompt_seen = TRUE
+                WHERE initial_password_prompt_seen = FALSE
+                  AND EXISTS (
+                      SELECT 1
+                      FROM security.user_session s
+                      WHERE s.id_user_app = u.id_user_app
+                  )
+                """);
     }
 
     private void notifyFailedLogin(User user, int failedAttempts) {
