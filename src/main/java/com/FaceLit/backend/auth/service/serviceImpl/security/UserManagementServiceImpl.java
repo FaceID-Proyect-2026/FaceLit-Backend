@@ -9,7 +9,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.FaceLit.backend.academic.model.academic.Chip;
@@ -41,8 +40,10 @@ import com.FaceLit.backend.auth.repository.security.UserConfigurationRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.repository.security.UserSessionRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.AdminRoleService;
+import com.FaceLit.backend.auth.service.security.InitialCredentialService;
 import com.FaceLit.backend.auth.service.security.UserManagementService;
 import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
+import com.FaceLit.backend.notification.dto.request.MonolithEventRequestDTO;
 import com.FaceLit.backend.notification.service.NotificationService;
 import com.FaceLit.backend.shared.constants.AppConstants;
 
@@ -63,7 +64,7 @@ public class UserManagementServiceImpl implements UserManagementService {
         private final AdminRoleService adminRoleService;
         private final AcceptanceTermsRepository acceptanceTermsRepository;
         private final PasswordRecoveryRepository passwordRecoveryRepository;
-        private final PasswordEncoder passwordEncoder;
+        private final InitialCredentialService initialCredentialService;
         private final NotificationService notificationService;
 
         public UserManagementServiceImpl(
@@ -79,7 +80,7 @@ public class UserManagementServiceImpl implements UserManagementService {
                         AdminRoleService adminRoleService,
                         AcceptanceTermsRepository acceptanceTermsRepository,
                         PasswordRecoveryRepository passwordRecoveryRepository,
-                        PasswordEncoder passwordEncoder,
+                        InitialCredentialService initialCredentialService,
                         NotificationService notificationService) {
                 this.userRepository = userRepository;
                 this.credentialRepository = credentialRepository;
@@ -93,7 +94,7 @@ public class UserManagementServiceImpl implements UserManagementService {
                 this.adminRoleService = adminRoleService;
                 this.acceptanceTermsRepository = acceptanceTermsRepository;
                 this.passwordRecoveryRepository = passwordRecoveryRepository;
-                this.passwordEncoder = passwordEncoder;
+                this.initialCredentialService = initialCredentialService;
                 this.notificationService = notificationService;
         }
 
@@ -187,7 +188,8 @@ public class UserManagementServiceImpl implements UserManagementService {
 
                 Credential credential = new Credential();
                 credential.setEmail(email);
-                credential.setPassword(passwordEncoder.encode(dto.getPassword()));
+                String initialPassword = initialCredentialService.generateInitialPassword();
+                initialCredentialService.encodeGeneratedPassword(credential, initialPassword);
                 credential.setCredentialStatus(CredentialStatus.ACTIVE);
                 credential.setFailedAttempts(0);
                 credential.setUser(user);
@@ -199,6 +201,16 @@ public class UserManagementServiceImpl implements UserManagementService {
                 notifyUser(user, "user_account_created", "Tu usuario fue creado",
                                 "Coordinacion creo tu usuario con rol " + dto.getRole().name() + ".",
                                 "{\"entityType\":\"user\",\"entityId\":\"" + user.getIdUser() + "\",\"action\":\"created\"}");
+                notifyCoordinatorUserEvent(
+                                "academic_entity_created",
+                                "Usuario creado",
+                                "Se creo el usuario " + fullName(user)
+                                                + " con documento " + emptyAsNone(user.getDocumentNumber())
+                                                + " y rol " + dto.getRole().name() + ".",
+                                user,
+                                "created",
+                                "user");
+                initialCredentialService.sendWelcomeAfterCommit(user, credential, dto.getRole(), initialPassword, null, null);
 
                 return new UserDetailResponseDTO(
                                 user.getIdUser(),
@@ -284,6 +296,22 @@ public class UserManagementServiceImpl implements UserManagementService {
                         notifyUser(user, "user_profile_updated", "Tus datos fueron modificados",
                                         "Coordinacion actualizo tus datos. " + String.join("; ", changes) + ".",
                                         "{\"entityType\":\"user\",\"entityId\":\"" + user.getIdUser() + "\",\"action\":\"updated\"}");
+                        notifyCoordinatorUserEvent(
+                                        "academic_entity_updated",
+                                        "Usuario actualizado",
+                                        "Se actualizo el usuario " + fullName(user)
+                                                        + " con documento " + emptyAsNone(user.getDocumentNumber())
+                                                        + ". Cambios: " + String.join("; ", changes) + ".",
+                                        user,
+                                        "updated",
+                                        "user");
+                }
+                if (oldStatus != dto.getAccountStatus()) {
+                        if (dto.getAccountStatus() == AccountStatus.ACTIVE) {
+                                notifyAcademicUserStatusChanged(user, dto.getRole().name(), true);
+                        } else if (dto.getAccountStatus() == AccountStatus.INACTIVE) {
+                                notifyAcademicUserStatusChanged(user, dto.getRole().name(), false);
+                        }
                 }
 
                 return toDTO(user);
@@ -294,10 +322,14 @@ public class UserManagementServiceImpl implements UserManagementService {
         public void deactivateUser(UUID userId) {
                 User user = userRepository.findById(userId)
                                 .orElseThrow(() -> new UserManagementException("Usuario no encontrado"));
+                String roleName = userRoleRepository.findByUserId(userId)
+                                .map(userRole -> userRole.getRole().getNameRole().name())
+                                .orElse("Sin rol");
 
                 if (user.getAccountStatus() != AccountStatus.INACTIVE) {
                         user.setAccountStatus(AccountStatus.INACTIVE);
                         userRepository.save(user);
+                        notifyAcademicUserStatusChanged(user, roleName, false);
                 }
 
                 credentialRepository.findByUser(user)
@@ -407,5 +439,75 @@ public class UserManagementServiceImpl implements UserManagementService {
                 } catch (RuntimeException ignored) {
                         // La gestion de usuario no debe fallar por una notificacion informativa.
                 }
+        }
+
+        private void notifyAcademicUserStatusChanged(User user, String roleName, boolean activated) {
+                boolean apprentice = "APPRENTICE".equals(roleName);
+                boolean instructor = "INSTRUCTOR".equals(roleName);
+                if (!apprentice && !instructor) {
+                        return;
+                }
+
+                String entityType = apprentice ? "learner" : "instructor";
+                String displayRole = apprentice ? "aprendiz" : "instructor";
+                String action = activated ? "activated" : "deactivated";
+                String fullName = ((user.getFirstName() == null ? "" : user.getFirstName()) + " "
+                                + (user.getLastName() == null ? "" : user.getLastName())).trim();
+
+                try {
+                        notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                                        activated ? "academic_entity_activated" : "academic_entity_deactivated",
+                                        activated
+                                                        ? (apprentice ? "Aprendiz activado" : "Instructor activado")
+                                                        : (apprentice ? "Aprendiz desactivado" : "Instructor desactivado"),
+                                        "Se " + (activated ? "activo" : "desactivo") + " el " + displayRole + " " + emptyAsNone(fullName)
+                                                        + " con documento " + emptyAsNone(user.getDocumentNumber()) + ".",
+                                        null,
+                                        user.getIdUser(),
+                                        entityType,
+                                        null,
+                                        "{\"entityType\":\"" + entityType
+                                                        + "\",\"entityId\":\"" + user.getIdUser()
+                                                        + "\",\"action\":\"" + action
+                                                        + "\",\"name\":\"" + safe(fullName)
+                                                        + "\",\"document\":\"" + safe(user.getDocumentNumber()) + "\"}"));
+                } catch (RuntimeException ignored) {
+                        // La gestion de usuario no debe fallar por una notificacion informativa.
+                }
+        }
+
+        private void notifyCoordinatorUserEvent(
+                        String type,
+                        String title,
+                        String message,
+                        User user,
+                        String action,
+                        String entityType) {
+                try {
+                        notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                                        type,
+                                        title,
+                                        message,
+                                        null,
+                                        user.getIdUser(),
+                                        entityType,
+                                        null,
+                                        "{\"entityType\":\"" + entityType
+                                                        + "\",\"entityId\":\"" + user.getIdUser()
+                                                        + "\",\"action\":\"" + safe(action)
+                                                        + "\",\"name\":\"" + safe(fullName(user))
+                                                        + "\",\"document\":\"" + safe(user.getDocumentNumber()) + "\"}"));
+                } catch (RuntimeException ignored) {
+                        // La gestion de usuario no debe fallar por una notificacion informativa.
+                }
+        }
+
+        private String fullName(User user) {
+                return emptyAsNone(((user.getFirstName() == null ? "" : user.getFirstName()) + " "
+                                + (user.getLastName() == null ? "" : user.getLastName())).trim());
+        }
+
+        private String safe(String value) {
+                return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
         }
 }

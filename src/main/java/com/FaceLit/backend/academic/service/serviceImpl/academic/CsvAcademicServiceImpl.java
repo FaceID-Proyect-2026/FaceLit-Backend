@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -17,7 +16,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -66,6 +64,7 @@ import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.AdminRoleService;
+import com.FaceLit.backend.auth.service.security.InitialCredentialService;
 import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
 import com.FaceLit.backend.notification.dto.request.MonolithEventRequestDTO;
 import com.FaceLit.backend.notification.service.NotificationService;
@@ -96,7 +95,6 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
     private static final Pattern CHIP_CODE = Pattern.compile("\\d{" + AppConstants.CHIP_CODE_LENGTH + "}");
     private static final Pattern NAME = Pattern.compile("[\\p{L}]+(?: [\\p{L}]+)*");
 
-    private static final SecureRandom RANDOM = new SecureRandom();
     private final ProgramRepository programRepository;
     private final ChipRepository chipRepository;
     private final InstructorRepository instructorRepository;
@@ -112,7 +110,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
     private final InstructorService instructorService;
     private final UserChipService userChipService;
 
-    private final PasswordEncoder passwordEncoder;
+    private final InitialCredentialService initialCredentialService;
     private final AdminRoleService adminRoleService;
     private final UserRoleRepository userRoleRepository;
     private final NotificationService notificationService;
@@ -133,7 +131,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
             ChipService chipService,
             InstructorService instructorService,
             UserChipService userChipService,
-            PasswordEncoder passwordEncoder,
+            InitialCredentialService initialCredentialService,
             AdminRoleService adminRoleService,
             UserRoleRepository userRoleRepository,
             NotificationService notificationService,
@@ -152,7 +150,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         this.chipService = chipService;
         this.instructorService = instructorService;
         this.userChipService = userChipService;
-        this.passwordEncoder = passwordEncoder;
+        this.initialCredentialService = initialCredentialService;
         this.adminRoleService = adminRoleService;
         this.userRoleRepository = userRoleRepository;
         this.notificationService = notificationService;
@@ -571,16 +569,16 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                             "El correo " + newEmail + " ya esta registrado en otro usuario. Corrige el correo o usa el documento correcto."));
                     return null;
                 }
-                String password = generatePassword();
+                String password = initialCredentialService.generateInitialPassword();
                 credential = new Credential();
                 credential.setUser(existing);
                 credential.setEmail(newEmail);
-                credential.setPassword(passwordEncoder.encode(password));
+                initialCredentialService.encodeGeneratedPassword(credential, password);
                 credential.setCredentialStatus(CredentialStatus.ACTIVE);
                 credential.setFailedAttempts(0);
                 credentialRepository.save(credential);
-                result.getContrasenasGeneradas()
-                        .add(new CsvUploadResponseDTO.GeneratedPassword(existing.getDocumentNumber(), password));
+                initialCredentialService.sendWelcomeAfterCommit(existing, credential, roleForRow(row), password,
+                        confirmedChipCode(row), confirmedProgramName(row));
             } else if (!oldEmail.equalsIgnoreCase(newEmail)) {
                 UUID existingUserId = existing.getIdUser();
                 credentialRepository.findByEmailIgnoreCase(newEmail)
@@ -609,16 +607,16 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         user.setLastName(row.value("apellido"));
         user.setAccountStatus(AccountStatus.ACTIVE);
         user = userRepository.save(user);
-        String password = generatePassword();
+        String password = initialCredentialService.generateInitialPassword();
         Credential credential = new Credential();
         credential.setUser(user);
         credential.setEmail(email);
-        credential.setPassword(passwordEncoder.encode(password));
+        initialCredentialService.encodeGeneratedPassword(credential, password);
         credential.setCredentialStatus(CredentialStatus.ACTIVE);
         credential.setFailedAttempts(0);
         credentialRepository.save(credential);
-        result.getContrasenasGeneradas()
-                .add(new CsvUploadResponseDTO.GeneratedPassword(user.getDocumentNumber(), password));
+        initialCredentialService.sendWelcomeAfterCommit(user, credential, roleForRow(row), password,
+                confirmedChipCode(row), confirmedProgramName(row));
         return user;
     }
 
@@ -626,6 +624,35 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         AssignRoleRequestDTO request = new AssignRoleRequestDTO();
         request.setRole(role);
         adminRoleService.assignRole(user.getIdUser(), request);
+    }
+
+    private RoleName roleForRow(Row row) {
+        return row.value("tipo").equals("instructor") ? RoleName.INSTRUCTOR : RoleName.APPRENTICE;
+    }
+
+    private String confirmedChipCode(Row row) {
+        return row.value("tipo").equals("aprendiz") ? valueOrNull(row.value("ficha_codigo")) : null;
+    }
+
+    private String confirmedProgramName(Row row) {
+        String programCode = row.value("programa_codigo");
+        if (!programCode.isBlank()) {
+            return programRepository.findByProgramCodeIgnoreCase(programCode)
+                    .map(Program::getProgramName)
+                    .orElse(null);
+        }
+        String chipCode = row.value("ficha_codigo");
+        if (!chipCode.isBlank()) {
+            return chipRepository.findByChipCode(chipCode)
+                    .map(Chip::getProgram)
+                    .map(Program::getProgramName)
+                    .orElse(null);
+        }
+        return null;
+    }
+
+    private String valueOrNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     private CsvPendingTransfer getPending(UUID id) {
@@ -740,18 +767,6 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
 
     private CsvUploadResponseDTO.CsvRowError error(Row row, String message) {
         return new CsvUploadResponseDTO.CsvRowError(row.number, row.value("tipo"), message, null, null);
-    }
-
-    private String generatePassword() {
-        String alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@$!%*?";
-        StringBuilder password = new StringBuilder();
-        password.append((char) ('A' + RANDOM.nextInt(26)));
-        password.append(RANDOM.nextInt(10));
-        password.append("@$!%*?".charAt(RANDOM.nextInt(6)));
-        while (password.length() < 10) {
-            password.append(alphabet.charAt(RANDOM.nextInt(alphabet.length())));
-        }
-        return password.toString();
     }
 
     private void notifyCsvUpload(CsvUploadResponseDTO result) {

@@ -14,7 +14,6 @@ public class CsvUploadResponseDTO {
     private final List<CsvRowError> inconsistenciasBloqueadas = new ArrayList<>();
     private final List<CsvRowError> erroresDeReferencia = new ArrayList<>();
     private final List<CsvPendingTransferResult> trasladosPendientes = new ArrayList<>();
-    private final List<GeneratedPassword> contrasenasGeneradas = new ArrayList<>();
 
     public record CsvRowResult(int fila, String tipo, String detalle) {
     }
@@ -26,6 +25,4 @@ public class CsvUploadResponseDTO {
             String fichaActual, String fichaPropuesta) {
     }
 
-    public record GeneratedPassword(String documento, String contrasenaTemporal) {
-    }
 }

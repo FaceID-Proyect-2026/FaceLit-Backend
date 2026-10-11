@@ -34,9 +34,6 @@ public class CreateManagedUserRequestDTO {
     @Size(max = 255, message = "El correo no puede superar 255 caracteres")
     private String email;
 
-    @NotBlank(message = "La contraseña es obligatoria")
-    private String password;
-
     @NotNull(message = "El rol es obligatorio")
     private RoleName role;
 }

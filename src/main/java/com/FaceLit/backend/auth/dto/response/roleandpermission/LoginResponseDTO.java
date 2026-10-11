@@ -28,9 +28,11 @@ public class LoginResponseDTO {
     // Ejemplo: "Inicio de sesión exitoso"
     private String message;
 
+    private boolean firstAccessPasswordPrompt;
+
     // Factory Method: crea la variante de respuesta correspondiente a un login exitoso.
-    public static LoginResponseDTO success(String token, String role, List<String> permissions, UUID userId) {
-        return new LoginResponseDTO(token, role, permissions, userId, "Inicio de sesión exitoso");
+    public static LoginResponseDTO success(String token, String role, List<String> permissions, UUID userId, boolean firstAccessPasswordPrompt) {
+        return new LoginResponseDTO(token, role, permissions, userId, "Inicio de sesión exitoso", firstAccessPasswordPrompt);
     }
 
 }
