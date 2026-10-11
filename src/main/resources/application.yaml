@@ -47,6 +47,3 @@ facial:
   embedding:
     url: ${FACIAL_EMBEDDING_URL:http://localhost:8090}
     api-key: ${FACIAL_EMBEDDING_API_KEY:change-me}
-
-facelit:
-  access-url: ${FACELIT_ACCESS_URL:http://localhost:8081}
