@@ -17,6 +17,8 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.FaceLit.backend.notification.service.NotificationService;
+
 class FacialEnrollmentControllerTest {
     private String photo() throws Exception {
         var output = new java.io.ByteArrayOutputStream();
@@ -54,7 +56,8 @@ class FacialEnrollmentControllerTest {
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     private final TransactionTemplate tx = mock(TransactionTemplate.class);
     private final PadVerifier pad = mock(PadVerifier.class);
-    private final FacialEnrollmentController controller = new FacialEnrollmentController(jdbc, tx, pad);
+    private final NotificationService notificationService = mock(NotificationService.class);
+    private final FacialEnrollmentController controller = new FacialEnrollmentController(jdbc, tx, pad, notificationService);
     private final UUID user = UUID.randomUUID();
 
     private List<FacialEnrollmentController.Sample> samples(FacialEnrollmentController.Challenge challenge) {

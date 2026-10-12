@@ -12,6 +12,8 @@ import com.FaceLit.backend.auth.model.security.Credential;
 import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.auth.repository.security.UserRepository;
 import com.FaceLit.backend.auth.service.security.ChangePasswordService;
+import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
+import com.FaceLit.backend.notification.service.NotificationService;
 
 import jakarta.transaction.Transactional;
 
@@ -20,10 +22,15 @@ public class ChangePasswordServiceImpl implements ChangePasswordService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final NotificationService notificationService;
 
-    public ChangePasswordServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public ChangePasswordServiceImpl(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            NotificationService notificationService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -43,6 +50,23 @@ public class ChangePasswordServiceImpl implements ChangePasswordService {
         credential.setPassword(passwordEncoder.encode(dto.getNewPassword()));
         credential.setFailedAttempts(0);
         credential.setLockedUntil(null);
+        notifyPasswordChanged(user);
         return PasswordRecoveryResponseDTO.passwordReset();
+    }
+
+    private void notifyPasswordChanged(User user) {
+        try {
+            notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                    user.getIdUser(),
+                    "password_changed",
+                    "Tu contrasena fue modificada",
+                    "Tu contrasena de FaceLit fue modificada correctamente. Si no reconoces este cambio, contacta a coordinacion.",
+                    user.getIdUser(),
+                    "user",
+                    null,
+                    "{\"entityType\":\"user\",\"entityId\":\"" + user.getIdUser() + "\",\"action\":\"password_changed\"}"));
+        } catch (RuntimeException ignored) {
+            // El cambio de contrasena no debe fallar por una notificacion informativa.
+        }
     }
 }

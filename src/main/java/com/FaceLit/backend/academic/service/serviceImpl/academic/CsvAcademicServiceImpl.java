@@ -577,6 +577,12 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                 credential.setCredentialStatus(CredentialStatus.ACTIVE);
                 credential.setFailedAttempts(0);
                 credentialRepository.save(credential);
+                result.getContrasenasGeneradas().add(new CsvUploadResponseDTO.CsvGeneratedPasswordResult(
+                        row.number,
+                        row.value("tipo"),
+                        existing.getDocumentNumber(),
+                        credential.getEmail(),
+                        password));
                 initialCredentialService.sendWelcomeAfterCommit(existing, credential, roleForRow(row), password,
                         confirmedChipCode(row), confirmedProgramName(row));
             } else if (!oldEmail.equalsIgnoreCase(newEmail)) {
@@ -615,6 +621,12 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
         credential.setCredentialStatus(CredentialStatus.ACTIVE);
         credential.setFailedAttempts(0);
         credentialRepository.save(credential);
+        result.getContrasenasGeneradas().add(new CsvUploadResponseDTO.CsvGeneratedPasswordResult(
+                row.number,
+                row.value("tipo"),
+                user.getDocumentNumber(),
+                credential.getEmail(),
+                password));
         initialCredentialService.sendWelcomeAfterCommit(user, credential, roleForRow(row), password,
                 confirmedChipCode(row), confirmedProgramName(row));
         return user;

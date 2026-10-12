@@ -45,5 +45,8 @@ public interface UserChipRepository extends JpaRepository<UserChip, UUID> {
     @EntityGraph(attributePaths = {"apprentice", "apprentice.user", "apprentice.user.credential", "chip", "chip.program"})
     List<UserChip> findByChip_IdChipInAndState(List<UUID> idChips, AcademicState state);
 
+    @EntityGraph(attributePaths = {"apprentice", "apprentice.user", "chip", "chip.program"})
+    List<UserChip> findByChip_IdChipAndState(UUID idChip, AcademicState state);
+
     List<UserChip> findByApprentice_User_IdUser(UUID idUser);
 }

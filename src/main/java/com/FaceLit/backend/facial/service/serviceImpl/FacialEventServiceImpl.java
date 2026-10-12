@@ -44,6 +44,8 @@ import com.FaceLit.backend.facial.model.enums.FacialEventType;
 import com.FaceLit.backend.facial.repository.DeviceRepository;
 import com.FaceLit.backend.facial.repository.FacialEventRepository;
 import com.FaceLit.backend.facial.service.FacialEventService;
+import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
+import com.FaceLit.backend.notification.service.NotificationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -62,6 +64,7 @@ public class FacialEventServiceImpl implements FacialEventService {
     private final InstructorRepository instructorRepository;
     private final FacialEmbeddingVerificationClient verificationClient;
     private final JdbcTemplate jdbcTemplate;
+    private final NotificationService notificationService;
 
     public FacialEventServiceImpl(
             FacialEventRepository facialEventRepository,
@@ -71,7 +74,8 @@ public class FacialEventServiceImpl implements FacialEventService {
             UserChipRepository userChipRepository,
             InstructorRepository instructorRepository,
             FacialEmbeddingVerificationClient verificationClient,
-            JdbcTemplate jdbcTemplate) {
+            JdbcTemplate jdbcTemplate,
+            NotificationService notificationService) {
         this.facialEventRepository = facialEventRepository;
         this.recordEnvironmentRepository = recordEnvironmentRepository;
         this.deviceRepository = deviceRepository;
@@ -80,6 +84,7 @@ public class FacialEventServiceImpl implements FacialEventService {
         this.instructorRepository = instructorRepository;
         this.verificationClient = verificationClient;
         this.jdbcTemplate = jdbcTemplate;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -120,7 +125,9 @@ public class FacialEventServiceImpl implements FacialEventService {
         event.setCreatedBy(authenticatedUserId.toString());
 
         try {
-            return new FacialEventResponseDTO(facialEventRepository.saveAndFlush(event));
+            FacialEvent saved = facialEventRepository.saveAndFlush(event);
+            notifyAttendanceEvent(saved);
+            return new FacialEventResponseDTO(saved);
         } catch (DataIntegrityViolationException ex) {
             throw new FacialEventException("La asistencia ya fue registrada anteriormente", HttpStatus.CONFLICT);
         }
@@ -281,6 +288,8 @@ public class FacialEventServiceImpl implements FacialEventService {
                         apprentice.getIdApprentice(),
                         FacialEventType.ENTRY)
                 .orElseGet(() -> buildAbsentEvent(record, apprentice, authenticatedUserId));
+        boolean newAbsentEvent = event.getIdFacialEvent() == null;
+        Boolean previousExcuse = event.getExcuse();
 
         if (event.getAttendanceStatus() != AttendanceStatus.ABSENT) {
             throw new FacialEventException("Solo se puede registrar excusa para inasistencias.", HttpStatus.BAD_REQUEST);
@@ -289,7 +298,122 @@ public class FacialEventServiceImpl implements FacialEventService {
         event.setExcuse(dto.getExcuse());
         event.setUpdatedBy(authenticatedUserId.toString());
 
-        return new FacialEventResponseDTO(facialEventRepository.saveAndFlush(event));
+        FacialEvent saved = facialEventRepository.saveAndFlush(event);
+        notifyExcuseOrAbsence(saved, newAbsentEvent, previousExcuse);
+        return new FacialEventResponseDTO(saved);
+    }
+
+    private void notifyAttendanceEvent(FacialEvent event) {
+        if (event.getEventType() == FacialEventType.ENTRY && event.getAttendanceStatus() == AttendanceStatus.LATE) {
+            createNotification(
+                    event.getApprentice().getUser().getIdUser(),
+                    "attendance_late",
+                    "Retraso registrado",
+                    "Tu asistencia fue registrada como tardia para la sesion de la ficha "
+                            + event.getRecordEnvironment().getChip().getChipCode() + ".",
+                    event,
+                    metadataFor(event, "late"));
+            return;
+        }
+
+        if (event.getEventType() == FacialEventType.EXIT
+                && event.getRecordEnvironment().getExitTime() != null
+                && event.getEventDatetime().isBefore(event.getRecordEnvironment().getExitTime())) {
+            Instructor instructor = responsibleInstructor(event.getRecordEnvironment());
+            createNotification(
+                    instructor.getUser().getIdUser(),
+                    "attendance_early_exit",
+                    "Salida anticipada",
+                    fullName(event.getApprentice().getUser().getFirstName(), event.getApprentice().getUser().getLastName())
+                            + " registro salida antes de la hora configurada para la ficha "
+                            + event.getRecordEnvironment().getChip().getChipCode() + ".",
+                    event,
+                    metadataFor(event, "early_exit"));
+        }
+    }
+
+    private void notifyExcuseOrAbsence(FacialEvent event, boolean newAbsentEvent, Boolean previousExcuse) {
+        boolean excuseRegistered = Boolean.TRUE.equals(event.getExcuse()) && !Boolean.TRUE.equals(previousExcuse);
+        if (excuseRegistered) {
+            String learnerName = fullName(event.getApprentice().getUser().getFirstName(), event.getApprentice().getUser().getLastName());
+            String message = "Se registro una excusa para la inasistencia de " + learnerName
+                    + " en la ficha " + event.getRecordEnvironment().getChip().getChipCode() + ".";
+            createNotification(
+                    event.getApprentice().getUser().getIdUser(),
+                    "attendance_excuse_registered",
+                    "Excusa registrada",
+                    "Se registro una excusa para tu inasistencia en la ficha "
+                            + event.getRecordEnvironment().getChip().getChipCode() + ".",
+                    event,
+                    metadataFor(event, "excuse_registered"));
+            createNotification(
+                    responsibleInstructor(event.getRecordEnvironment()).getUser().getIdUser(),
+                    "attendance_excuse_registered",
+                    "Excusa registrada",
+                    message,
+                    event,
+                    metadataFor(event, "excuse_registered"));
+            return;
+        }
+
+        if (newAbsentEvent && event.getAttendanceStatus() == AttendanceStatus.ABSENT) {
+            createNotification(
+                    event.getApprentice().getUser().getIdUser(),
+                    "attendance_absent",
+                    "Inasistencia registrada",
+                    "Se registro una inasistencia para tu sesion de la ficha "
+                            + event.getRecordEnvironment().getChip().getChipCode() + ".",
+                    event,
+                    metadataFor(event, "absent"));
+        }
+    }
+
+    private void createNotification(
+            UUID recipientUserId,
+            String type,
+            String title,
+            String message,
+            FacialEvent event,
+            String metadataJson) {
+        try {
+            notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                    recipientUserId,
+                    type,
+                    title,
+                    message,
+                    event.getRecordEnvironment().getIdRecordEnvironment(),
+                    "record_environment",
+                    event.getIdFacialEvent(),
+                    metadataJson));
+        } catch (RuntimeException ex) {
+            LOGGER.warn("No fue posible crear la notificacion {} para el usuario {}.", type, recipientUserId, ex);
+        }
+    }
+
+    private Instructor responsibleInstructor(RecordEnvironment record) {
+        return record.getInstructorInCharge() != null
+                ? record.getInstructorInCharge()
+                : record.getInstructorScheduled();
+    }
+
+    private String metadataFor(FacialEvent event, String reason) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("reason", reason);
+        metadata.put("idRecordEnvironment", event.getRecordEnvironment().getIdRecordEnvironment());
+        metadata.put("idFacialEvent", event.getIdFacialEvent());
+        metadata.put("idApprentice", event.getApprentice().getIdApprentice());
+        metadata.put("chipCode", event.getRecordEnvironment().getChip().getChipCode());
+        metadata.put("attendanceStatus", event.getAttendanceStatus().name());
+        metadata.put("eventType", event.getEventType().name());
+        metadata.put("eventDatetime", event.getEventDatetime().toString());
+        try {
+            return OBJECT_MAPPER.writeValueAsString(metadata);
+        } catch (JsonProcessingException ex) {
+            LOGGER.warn("No fue posible serializar metadata de notificacion para evento facial {}.",
+                    event.getIdFacialEvent(),
+                    ex);
+            return null;
+        }
     }
 
     private List<AttendanceMatrixRow> findAttendanceMatrixRows(

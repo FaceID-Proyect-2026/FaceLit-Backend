@@ -310,6 +310,7 @@ public class UserManagementServiceImpl implements UserManagementService {
                         if (dto.getAccountStatus() == AccountStatus.ACTIVE) {
                                 notifyAcademicUserStatusChanged(user, dto.getRole().name(), true);
                         } else if (dto.getAccountStatus() == AccountStatus.INACTIVE) {
+                                notifyAccountStatusChanged(user, "desactivada");
                                 notifyAcademicUserStatusChanged(user, dto.getRole().name(), false);
                         }
                 }
@@ -329,6 +330,7 @@ public class UserManagementServiceImpl implements UserManagementService {
                 if (user.getAccountStatus() != AccountStatus.INACTIVE) {
                         user.setAccountStatus(AccountStatus.INACTIVE);
                         userRepository.save(user);
+                        notifyAccountStatusChanged(user, "desactivada");
                         notifyAcademicUserStatusChanged(user, roleName, false);
                 }
 
@@ -471,6 +473,24 @@ public class UserManagementServiceImpl implements UserManagementService {
                                                         + "\",\"action\":\"" + action
                                                         + "\",\"name\":\"" + safe(fullName)
                                                         + "\",\"document\":\"" + safe(user.getDocumentNumber()) + "\"}"));
+                } catch (RuntimeException ignored) {
+                        // La gestion de usuario no debe fallar por una notificacion informativa.
+                }
+        }
+
+        private void notifyAccountStatusChanged(User user, String statusLabel) {
+                try {
+                        notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                                        user.getIdUser(),
+                                        "account_status_changed",
+                                        "Aviso sobre el estado de tu cuenta",
+                                        "Tu cuenta de FaceLit fue " + statusLabel
+                                                        + ". Si necesitas aclarar esta restriccion, contacta a coordinacion.",
+                                        user.getIdUser(),
+                                        "user",
+                                        null,
+                                        "{\"entityType\":\"user\",\"entityId\":\"" + user.getIdUser()
+                                                        + "\",\"status\":\"" + safe(statusLabel) + "\"}"));
                 } catch (RuntimeException ignored) {
                         // La gestion de usuario no debe fallar por una notificacion informativa.
                 }

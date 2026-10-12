@@ -1,9 +1,11 @@
 package com.FaceLit.backend.environment.service.serviceImpl;
 
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -15,6 +17,7 @@ import com.FaceLit.backend.academic.dto.response.academic.InstructorResponseDTO;
 import com.FaceLit.backend.academic.model.academic.Chip;
 import com.FaceLit.backend.academic.model.academic.Instructor;
 import com.FaceLit.backend.academic.model.academic.InstructorProgram;
+import com.FaceLit.backend.academic.model.academic.UserChip;
 import com.FaceLit.backend.academic.model.enums.AcademicState;
 import com.FaceLit.backend.academic.model.enums.InstructorType;
 import com.FaceLit.backend.academic.repository.ChipRepository;
@@ -148,6 +151,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     @Transactional
     public RecordEnvironmentResponseDTO createSession(RecordEnvironmentRequestDTO dto, UUID authenticatedUserId) {
         validateTimes(dto);
+
         Environment environment = findActiveEnvironment(dto.getIdEnvironment());
         Instructor scheduledInstructor = findInstructor(dto.getIdInstructorInCharge());
         Instructor inChargeInstructor = resolveInstructorInCharge(scheduledInstructor, authenticatedUserId);
@@ -170,6 +174,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         record.setCreatedBy(authenticatedUserId.toString());
 
         record = recordEnvironmentRepository.save(record);
+        notifySessionAssigned(record);
         notifySessionSubstitution(record, authenticatedUserId);
         return new RecordEnvironmentResponseDTO(record);
     }
@@ -180,6 +185,8 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         validateTimes(dto);
         RecordEnvironment record = recordEnvironmentRepository.findById(idRecordEnvironment)
                 .orElseThrow(() -> new EnvironmentException("Sesión no encontrada.", HttpStatus.NOT_FOUND));
+
+        SessionSnapshot previous = SessionSnapshot.from(record);
 
         Environment environment = findActiveEnvironment(dto.getIdEnvironment());
         record.setEnvironment(environment);
@@ -194,7 +201,9 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         record.setShutdownTime(dto.getShutdownTime());
         record.setUpdatedBy(authenticatedUserId.toString());
 
-        return new RecordEnvironmentResponseDTO(recordEnvironmentRepository.save(record));
+        RecordEnvironment saved = recordEnvironmentRepository.save(record);
+        notifySessionUpdated(saved, previous);
+        return new RecordEnvironmentResponseDTO(saved);
     }
 
     private List<Instructor> findEligibleForSpecificInstructor(Instructor instructor) {
@@ -357,7 +366,131 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         }
     }
 
+    private void notifySessionAssigned(RecordEnvironment record) {
+        Instructor responsible = responsibleInstructor(record);
+        try {
+            notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                    responsible.getUser().getIdUser(),
+                    "session_assigned",
+                    "Nueva sesion asignada",
+                    "Tienes una nueva sesion asignada: ficha " + record.getChip().getChipCode()
+                            + ", ambiente " + record.getEnvironment().getEnvironmentName()
+                            + ", inicio " + record.getEntryTime()
+                            + ", salida " + record.getExitTime() + ".",
+                    record.getIdRecordEnvironment(),
+                    "record_environment",
+                    null,
+                    sessionMetadata(record, "assigned")));
+        } catch (RuntimeException ignored) {
+            // La configuracion de la sesion no debe fallar por notificaciones informativas.
+        }
+    }
+
+    private void notifySessionUpdated(RecordEnvironment record, SessionSnapshot previous) {
+        List<String> changes = previous.describeChanges(record);
+        if (changes.isEmpty()) {
+            return;
+        }
+
+        Set<UUID> recipients = new HashSet<>();
+        recipients.add(responsibleInstructor(record).getUser().getIdUser());
+        if (previous.responsibleUserId() != null) {
+            recipients.add(previous.responsibleUserId());
+        }
+        userChipRepository.findByChip_IdChipAndState(record.getChip().getIdChip(), AcademicState.ACTIVE)
+                .stream()
+                .map(UserChip::getApprentice)
+                .map(apprentice -> apprentice.getUser().getIdUser())
+                .forEach(recipients::add);
+
+        String message = "La sesion de la ficha " + record.getChip().getChipCode()
+                + " fue actualizada. Cambios: " + String.join("; ", changes) + ".";
+        String metadata = sessionMetadata(record, "updated");
+        for (UUID recipientId : recipients) {
+            try {
+                notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                        recipientId,
+                        "session_updated",
+                        "Sesion actualizada",
+                        message,
+                        record.getIdRecordEnvironment(),
+                        "record_environment",
+                        null,
+                        metadata));
+            } catch (RuntimeException ignored) {
+                // La actualizacion de la sesion no debe fallar por notificaciones informativas.
+            }
+        }
+    }
+
+    private Instructor responsibleInstructor(RecordEnvironment record) {
+        return record.getInstructorInCharge() != null ? record.getInstructorInCharge() : record.getInstructorScheduled();
+    }
+
+    private String sessionMetadata(RecordEnvironment record, String action) {
+        return "{\"entityType\":\"record_environment\",\"entityId\":\"" + record.getIdRecordEnvironment()
+                + "\",\"action\":\"" + safe(action)
+                + "\",\"environment\":\"" + safe(record.getEnvironment().getEnvironmentName())
+                + "\",\"chip\":\"" + safe(record.getChip().getChipCode())
+                + "\",\"entryTime\":\"" + record.getEntryTime()
+                + "\",\"exitTime\":\"" + record.getExitTime() + "\"}";
+    }
+
     private String safe(String value) {
         return value == null ? "" : value.replace("\"", "\\\"");
+    }
+
+    private record SessionSnapshot(
+            UUID environmentId,
+            String environmentName,
+            UUID chipId,
+            String chipCode,
+            UUID responsibleInstructorId,
+            UUID responsibleUserId,
+            java.time.OffsetDateTime entryTime,
+            java.time.OffsetDateTime exitTime,
+            java.time.OffsetDateTime shutdownTime) {
+
+        private static SessionSnapshot from(RecordEnvironment record) {
+            Instructor responsible = record.getInstructorInCharge() != null
+                    ? record.getInstructorInCharge()
+                    : record.getInstructorScheduled();
+            return new SessionSnapshot(
+                    record.getEnvironment().getIdEnvironment(),
+                    record.getEnvironment().getEnvironmentName(),
+                    record.getChip().getIdChip(),
+                    record.getChip().getChipCode(),
+                    responsible.getIdInstructor(),
+                    responsible.getUser().getIdUser(),
+                    record.getEntryTime(),
+                    record.getExitTime(),
+                    record.getShutdownTime());
+        }
+
+        private List<String> describeChanges(RecordEnvironment record) {
+            java.util.ArrayList<String> changes = new java.util.ArrayList<>();
+            add(changes, "ambiente", environmentId, record.getEnvironment().getIdEnvironment(), environmentName,
+                    record.getEnvironment().getEnvironmentName());
+            add(changes, "ficha", chipId, record.getChip().getIdChip(), chipCode, record.getChip().getChipCode());
+            Instructor responsible = record.getInstructorInCharge() != null
+                    ? record.getInstructorInCharge()
+                    : record.getInstructorScheduled();
+            add(changes, "responsable", responsibleInstructorId, responsible.getIdInstructor(), "anterior",
+                    instructorName(responsible));
+            add(changes, "entrada", entryTime, record.getEntryTime(), entryTime, record.getEntryTime());
+            add(changes, "salida", exitTime, record.getExitTime(), exitTime, record.getExitTime());
+            add(changes, "apagado", shutdownTime, record.getShutdownTime(), shutdownTime, record.getShutdownTime());
+            return changes;
+        }
+
+        private void add(List<String> changes, String field, Object oldValue, Object newValue, Object oldLabel, Object newLabel) {
+            if (!java.util.Objects.equals(oldValue, newValue)) {
+                changes.add(field + ": " + oldLabel + " -> " + newLabel);
+            }
+        }
+
+        private static String instructorName(Instructor instructor) {
+            return "%s %s".formatted(instructor.getUser().getFirstName(), instructor.getUser().getLastName()).trim();
+        }
     }
 }

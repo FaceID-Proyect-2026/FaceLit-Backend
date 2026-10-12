@@ -20,6 +20,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
+import com.FaceLit.backend.notification.service.NotificationService;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -31,13 +34,19 @@ public class FacialEnrollmentController {
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transactions;
     private final PadVerifier pad;
+    private final NotificationService notificationService;
     private final SecureRandom random = new SecureRandom();
     private final Map<UUID, Challenge> challenges = new ConcurrentHashMap<>();
 
-    public FacialEnrollmentController(JdbcTemplate jdbc, TransactionTemplate transactions, PadVerifier pad) {
+    public FacialEnrollmentController(
+            JdbcTemplate jdbc,
+            TransactionTemplate transactions,
+            PadVerifier pad,
+            NotificationService notificationService) {
         this.jdbc = jdbc;
         this.transactions = transactions;
         this.pad = pad;
+        this.notificationService = notificationService;
     }
 
     public record Challenge(UUID id, List<String> poses, Instant expiresAt) {}
@@ -132,6 +141,7 @@ public class FacialEnrollmentController {
         template.putInt(0x464c4831);
         request.samples().stream().filter(sample -> List.of("center", "left", "right").contains(sample.pose()))
             .forEach(sample -> sample.embedding().forEach(value -> template.putFloat(value.floatValue())));
+        final boolean[] updatedExisting = {false};
         transactions.executeWithoutResult(tx -> {
             // Serialize concurrent registrations for this user using the existing user row.
             jdbc.queryForObject("SELECT id_user_app FROM security.user_app WHERE id_user_app = ? FOR UPDATE", UUID.class, userId);
@@ -149,13 +159,34 @@ public class FacialEnrollmentController {
                 double similarity = dot / Math.sqrt(a * b);
                 if (!Double.isFinite(similarity) || similarity < 0.45) invalid();
                 jdbc.update("UPDATE facialrecognition.user_face SET profile_photo = ? WHERE id_user_app = ? AND deleted_at IS NULL AND status = 'ACTIVE'", photo, userId);
+                updatedExisting[0] = true;
                 return;
             }
             jdbc.update("INSERT INTO facialrecognition.user_face (id_user_app, biometric_vector, status, created_by) VALUES (?, ?, 'ACTIVE', ?)",
                 userId, template.array(), userId.toString());
             if (photo != null) jdbc.update("UPDATE facialrecognition.user_face SET profile_photo = ? WHERE id_user_app = ? AND deleted_at IS NULL AND status = 'ACTIVE'", photo, userId);
         });
+        notifyFacialRegistrationCompleted(userId, updatedExisting[0]);
         return Map.of("registered", true);
+    }
+
+    private void notifyFacialRegistrationCompleted(UUID userId, boolean updated) {
+        try {
+            notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                userId,
+                "facial_registration_completed",
+                updated ? "Tu registro facial fue actualizado" : "Tu registro facial fue completado",
+                updated
+                    ? "Tu foto de perfil facial fue actualizada correctamente."
+                    : "Tu registro facial fue completado correctamente.",
+                userId,
+                "user_face",
+                null,
+                "{\"entityType\":\"user_face\",\"entityId\":\"" + userId + "\",\"action\":\""
+                    + (updated ? "updated" : "completed") + "\"}"));
+        } catch (RuntimeException ignored) {
+            // El registro facial no debe fallar por una notificacion informativa.
+        }
     }
 
     private boolean registered(UUID userId) {
