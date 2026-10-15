@@ -1,6 +1,7 @@
 package com.FaceLit.backend.environment.controller;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.http.CacheControl;
@@ -66,6 +67,15 @@ public class EnvironmentController {
             @Valid @RequestBody RecordEnvironmentRequestDTO dto,
             @AuthenticationPrincipal Object principal) {
         return ResponseEntity.ok(environmentService.createSession(dto, principalId(principal)));
+    }
+
+    @GetMapping("/sessions/active")
+    public ResponseEntity<RecordEnvironmentResponseDTO> findCurrentActiveSession(
+            @AuthenticationPrincipal Object principal) {
+        Optional<RecordEnvironmentResponseDTO> session = environmentService
+                .findCurrentActiveSession(principalId(principal));
+        return session.map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     @PutMapping("/sessions/{idRecordEnvironment}")
