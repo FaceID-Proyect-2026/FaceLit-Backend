@@ -1,6 +1,7 @@
 package com.FaceLit.backend.environment.service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.FaceLit.backend.academic.dto.response.academic.ChipResponseDTO;
@@ -21,6 +22,8 @@ public interface EnvironmentService {
     List<ChipResponseDTO> findChipsForInstructor(UUID idInstructor);
 
     RecordEnvironmentResponseDTO createSession(RecordEnvironmentRequestDTO dto, UUID authenticatedUserId);
+
+    Optional<RecordEnvironmentResponseDTO> findCurrentActiveSession(UUID authenticatedUserId);
 
     RecordEnvironmentResponseDTO updateSession(UUID idRecordEnvironment, RecordEnvironmentRequestDTO dto, UUID authenticatedUserId);
 }

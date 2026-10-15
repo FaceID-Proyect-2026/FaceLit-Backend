@@ -168,6 +168,14 @@ public class LoginServiceImpl implements LoginService {
 
     @Override
     @Transactional(readOnly = true)
+    public boolean verifyPassword(UUID userId, String password) {
+        return credentialRepository.findByUser_IdUser(userId)
+                .map(credential -> passwordEncoder.matches(password, credential.getPassword()))
+                .orElse(false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean hasAcceptedPrivacy(String documentNumber) {
         String normalizedDocument = documentNumber == null ? "" : documentNumber.trim();
         if (normalizedDocument.isBlank()) {

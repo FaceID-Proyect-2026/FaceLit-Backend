@@ -5,12 +5,15 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.time.OffsetDateTime;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import com.FaceLit.backend.academic.dto.response.academic.ChipResponseDTO;
 import com.FaceLit.backend.academic.dto.response.academic.InstructorResponseDTO;
@@ -181,6 +184,20 @@ public class EnvironmentServiceImpl implements EnvironmentService {
 
     @Override
     @Transactional
+    public Optional<RecordEnvironmentResponseDTO> findCurrentActiveSession(UUID authenticatedUserId) {
+        recordEnvironmentRepository.deactivateExpiredSessions(OffsetDateTime.now());
+        return recordEnvironmentRepository.findCurrentActiveSessionByInstructor(authenticatedUserId)
+                .map(RecordEnvironmentResponseDTO::new);
+    }
+
+    @Scheduled(fixedDelay = 30_000)
+    @Transactional
+    public void deactivateExpiredSessions() {
+        recordEnvironmentRepository.deactivateExpiredSessions(OffsetDateTime.now());
+    }
+
+    @Override
+    @Transactional
     public RecordEnvironmentResponseDTO updateSession(UUID idRecordEnvironment, RecordEnvironmentRequestDTO dto, UUID authenticatedUserId) {
         validateTimes(dto);
         RecordEnvironment record = recordEnvironmentRepository.findById(idRecordEnvironment)
@@ -314,6 +331,13 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         }
         if (!dto.getShutdownTime().isAfter(dto.getExitTime())) {
             throw new EnvironmentException("La hora de apagado debe ser posterior a la hora de salida.", HttpStatus.BAD_REQUEST);
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        if (!dto.getExitTime().isAfter(now)) {
+            throw new EnvironmentException("No se puede guardar una sección con la hora de salida en el pasado.", HttpStatus.BAD_REQUEST);
+        }
+        if (!dto.getShutdownTime().isAfter(now)) {
+            throw new EnvironmentException("No se puede guardar una sección con la hora de apagado en el pasado.", HttpStatus.BAD_REQUEST);
         }
     }
 
