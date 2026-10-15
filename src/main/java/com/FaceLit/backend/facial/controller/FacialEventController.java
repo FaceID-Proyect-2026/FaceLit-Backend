@@ -49,6 +49,14 @@ public class FacialEventController {
         return ResponseEntity.ok(facialEventService.registerEventFromImage(dto, principalId(principal)));
     }
 
+    @PostMapping("/initialize-absences")
+    public ResponseEntity<Void> initializeSessionAbsences(
+            @RequestParam UUID idRecordEnvironment,
+            @AuthenticationPrincipal Object principal) {
+        facialEventService.initializeSessionAbsences(idRecordEnvironment, principalId(principal));
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/attendance-status")
     public ResponseEntity<AttendanceStatusResponseDTO> getAttendanceStatus(
             @RequestParam UUID idRecordEnvironment,

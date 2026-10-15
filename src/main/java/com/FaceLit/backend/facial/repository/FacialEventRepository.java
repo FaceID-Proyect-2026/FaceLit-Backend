@@ -46,7 +46,7 @@ public interface FacialEventRepository extends JpaRepository<FacialEvent, UUID> 
                 END AS "entryTime",
                 fe.attendance_status AS "attendanceStatus",
                 fe.id_facial_event AS "idFacialEvent",
-                fe.excuse AS "excuse",
+                COALESCE(fe.excuse, FALSE) AS "excuse",
                 CASE
                     WHEN fe.attendance_status = 'ABSENT' OR fe.event_datetime IS NULL THEN 0
                     WHEN fe.event_datetime <= re.entry_time + (re.registration_minutes * INTERVAL '1 minute') THEN 0

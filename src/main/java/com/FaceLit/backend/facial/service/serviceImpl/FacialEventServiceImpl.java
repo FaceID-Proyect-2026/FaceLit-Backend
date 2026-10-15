@@ -109,13 +109,22 @@ public class FacialEventServiceImpl implements FacialEventService {
 
         OffsetDateTime eventDatetime = dto.getEventDatetime() == null ? OffsetDateTime.now() : dto.getEventDatetime();
         FacialEventType eventType = resolveEventType(eventDatetime, record);
-        validateUniqueAttendanceEvent(record.getIdRecordEnvironment(), apprentice.getIdApprentice(), eventType);
         AttendanceStatus attendanceStatus = resolveAttendanceStatus(eventType, eventDatetime, record, apprentice);
 
-        FacialEvent event = new FacialEvent();
-        event.setRecordEnvironment(record);
-        event.setDevice(device);
-        event.setApprentice(apprentice);
+        FacialEvent event = facialEventRepository
+                .findFirstByRecordEnvironment_IdRecordEnvironmentAndApprentice_IdApprenticeAndEventTypeAndDeletedAtIsNullOrderByEventDatetimeAsc(
+                        record.getIdRecordEnvironment(), apprentice.getIdApprentice(), eventType)
+                .orElse(null);
+
+        if (event != null && event.getAttendanceStatus() != AttendanceStatus.ABSENT) {
+            throw new FacialEventException("La asistencia ya fue registrada anteriormente", HttpStatus.CONFLICT);
+        }
+        if (event == null) {
+            event = new FacialEvent();
+            event.setRecordEnvironment(record);
+            event.setDevice(device);
+            event.setApprentice(apprentice);
+        }
         event.setEventDatetime(eventDatetime);
         event.setEventType(eventType);
         event.setRecognitionResult(dto.getRecognitionResult().trim());
@@ -123,6 +132,7 @@ public class FacialEventServiceImpl implements FacialEventService {
         event.setMatchScore(dto.getMatchScore());
         event.setOrigin(parseOrigin(dto.getOrigin()));
         event.setCreatedBy(authenticatedUserId.toString());
+        event.setExcuse(null);
 
         try {
             FacialEvent saved = facialEventRepository.saveAndFlush(event);
@@ -131,6 +141,42 @@ public class FacialEventServiceImpl implements FacialEventService {
         } catch (DataIntegrityViolationException ex) {
             throw new FacialEventException("La asistencia ya fue registrada anteriormente", HttpStatus.CONFLICT);
         }
+    }
+
+    @Override
+    @Transactional
+    public void initializeSessionAbsences(UUID idRecordEnvironment, UUID authenticatedUserId) {
+        RecordEnvironment record = recordEnvironmentRepository.findById(idRecordEnvironment)
+                .orElseThrow(() -> new FacialEventException("Sesión no encontrada.", HttpStatus.NOT_FOUND));
+
+        String sql = """
+                INSERT INTO facialrecognition.facial_event (
+                    id_record_environment, id_device, id_apprentice, event_datetime,
+                    event_type, recognition_result, attendance_status, origin, excuse, created_by
+                )
+                SELECT re.id_record_environment, re.id_device, ac.id_apprentice, re.entry_time,
+                       'ENTRY', 'ABSENT', 'ABSENT', 'PC', FALSE, ?
+                FROM environment.record_environment re
+                JOIN academic.apprentice_chip ac
+                  ON ac.id_chip = re.id_chip
+                 AND ac.state = 'ACTIVE'
+                 AND ac.deleted_at IS NULL
+                JOIN academic.apprentice a
+                  ON a.id_apprentice = ac.id_apprentice
+                 AND a.deleted_at IS NULL
+                WHERE re.id_record_environment = ?
+                  AND re.deleted_at IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM facialrecognition.facial_event fe
+                      WHERE fe.id_record_environment = re.id_record_environment
+                        AND fe.id_apprentice = ac.id_apprentice
+                        AND fe.event_type = 'ENTRY'
+                        AND fe.deleted_at IS NULL
+                  )
+                """;
+
+        jdbcTemplate.update(sql, authenticatedUserId.toString(), record.getIdRecordEnvironment());
     }
 
     @Override
@@ -464,7 +510,7 @@ public class FacialEventServiceImpl implements FacialEventService {
                         ELSE TO_CHAR(fe.event_datetime AT TIME ZONE 'America/Bogota', 'HH24:MI')
                     END AS entry_time,
                     fe.attendance_status,
-                    fe.excuse,
+                    COALESCE(fe.excuse, FALSE) AS excuse,
                     CASE
                         WHEN fex.id_facial_event IS NOT NULL
                          AND fex.attendance_status IS NOT NULL
@@ -550,6 +596,7 @@ public class FacialEventServiceImpl implements FacialEventService {
         event.setRecognitionResult("ABSENT");
         event.setAttendanceStatus(AttendanceStatus.ABSENT);
         event.setOrigin(FacialEventOrigin.PC);
+        event.setExcuse(false);
         event.setCreatedBy(authenticatedUserId.toString());
         return event;
     }
