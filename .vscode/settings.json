@@ -1,4 +1,6 @@
 {
-    "java.dependency.packagePresentation": "hierarchical",
-    "java.compile.nullAnalysis.mode": "automatic"
+    "java.dependency.packagePresentation":  "hierarchical",
+    "java.compile.nullAnalysis.mode":  "automatic",
+    "java.jdt.ls.lombokSupport.enabled":  true,
+    "java.configuration.maven.userSettings":  "C:/Users/USUARIO/Downloads/matematicas/main/OneDrive/Desktop/FaceLit/FaceLit-Backend/.mvn/local-settings.xml"
 }
