@@ -24,7 +24,8 @@ public class EmailLog {
     public enum SendStatus {
         PENDING,
         SENT,
-        FAILED
+        FAILED,
+        CANCELLED
     }
 
     @Id
@@ -52,6 +53,8 @@ public class EmailLog {
         sendStatus = SendStatus.SENT;
         sentAt = OffsetDateTime.now();
     }
+
+    public void registerCancelled() { sendStatus = SendStatus.CANCELLED; }
 
     public void registerAttemptFailed() {
         attempts = attempts == null ? 1 : attempts + 1;

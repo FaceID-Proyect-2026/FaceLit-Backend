@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.transaction.support.TransactionTemplate;
+import com.FaceLit.backend.environment.service.ExitReminderService;
 
 @Service
 public class EmailDispatchServiceImpl {
@@ -28,23 +30,35 @@ public class EmailDispatchServiceImpl {
     private final NotificationRepository notificationRepository;
     private final CredentialRepository credentialRepository;
     private final EmailService emailService;
+    private final ExitReminderService exitReminders;
+    private final TransactionTemplate transactions;
 
     public EmailDispatchServiceImpl(
             EmailLogRepository emailLogRepository,
             NotificationRepository notificationRepository,
             CredentialRepository credentialRepository,
-            EmailService emailService) {
+            EmailService emailService, ExitReminderService exitReminders, TransactionTemplate transactions) {
         this.emailLogRepository = emailLogRepository;
         this.notificationRepository = notificationRepository;
         this.credentialRepository = credentialRepository;
         this.emailService = emailService;
+        this.exitReminders = exitReminders;
+        this.transactions = transactions;
     }
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onEmailDispatchRequested(EmailDispatchRequested event) {
-        sendAndLog(event.idNotification());
+        dispatch(event.idNotification());
     }
+
+    @Scheduled(fixedDelay = 15_000)
+    public void retryExitReminders() {
+        emailLogRepository.findExitRemindersToRetry(List.of(EmailLog.SendStatus.PENDING, EmailLog.SendStatus.FAILED))
+                .forEach(this::retryIfUnderLimit);
+    }
+
+    private void dispatch(UUID id) { transactions.executeWithoutResult(tx -> sendAndLog(id)); }
 
     @Scheduled(fixedDelay = 5 * 60 * 1000)
     public void retryPendingEmails() {
@@ -58,14 +72,22 @@ public class EmailDispatchServiceImpl {
         if (emailLog.getAttempts() != null && emailLog.getAttempts() >= MAX_ATTEMPTS) {
             return;
         }
-        sendAndLog(emailLog.getIdNotification());
+        dispatch(emailLog.getIdNotification());
     }
 
     @Transactional
     void sendAndLog(UUID idNotification) {
         Notification notification = notificationRepository.findById(idNotification).orElse(null);
-        EmailLog emailLog = emailLogRepository.findByIdNotification(idNotification).orElse(null);
-        if (notification == null || emailLog == null || emailLog.getSendStatus() == EmailLog.SendStatus.SENT) {
+        EmailLog emailLog = emailLogRepository.lockByNotification(idNotification).orElse(null);
+        if (notification == null || emailLog == null || emailLog.getSendStatus() == EmailLog.SendStatus.SENT
+                || emailLog.getSendStatus() == EmailLog.SendStatus.CANCELLED
+                || (emailLog.getAttempts() != null && emailLog.getAttempts() >= MAX_ATTEMPTS)) {
+            return;
+        }
+        if ("attendance_exit_reminder".equals(notification.getType())
+                && !exitReminders.stillRelevant(notification, java.time.OffsetDateTime.now())) {
+            emailLog.registerCancelled();
+            emailLogRepository.save(emailLog);
             return;
         }
 

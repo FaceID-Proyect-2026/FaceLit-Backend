@@ -25,7 +25,7 @@ public class NotificationCatalog {
             Map.entry("attendance_no_exit", new NotificationDefinition("ASISTENCIA", APP, "Salida no registrada")),
             Map.entry("attendance_wrong_env", new NotificationDefinition("ASISTENCIA", APP_EMAIL, "Registro en sesion no correspondiente")),
             Map.entry("attendance_excuse_registered", new NotificationDefinition("ASISTENCIA", APP_EMAIL, "Excusa registrada")),
-            Map.entry("attendance_exit_reminder", new NotificationDefinition("ASISTENCIA", APP_EMAIL, "Recordatorio de salida")),
+            Map.entry("attendance_exit_reminder", new NotificationDefinition("ASISTENCIA", "EMAIL", "Recordatorio de salida")),
             Map.entry("attendance_session_summary", new NotificationDefinition("ASISTENCIA", APP_EMAIL, "Resumen de asistencia")),
             Map.entry("session_assigned", new NotificationDefinition("ASISTENCIA", APP_EMAIL, "Nueva sesion asignada")),
             Map.entry("session_updated", new NotificationDefinition("ASISTENCIA", APP_EMAIL, "Sesion actualizada")),
@@ -50,7 +50,7 @@ public class NotificationCatalog {
             Map.entry("apprentice_transfer_applied", new NotificationDefinition("TRASLADO", APP_EMAIL, "Cambio de ficha registrado")),
             Map.entry("security_multiple_failures", new NotificationDefinition("SEGURIDAD", APP_EMAIL, "Multiples intentos fallidos")),
             Map.entry("security_account_locked", new NotificationDefinition("SEGURIDAD", APP_EMAIL, "Cuenta bloqueada")),
-            Map.entry("facial_reregister_request", new NotificationDefinition("RECONOCIMIENTO_FACIAL", APP, "Solicitud de re-registro facial"))
+            Map.entry("facial_reregister_request", new NotificationDefinition("RECONOCIMIENTO_FACIAL", APP_EMAIL, "Solicitud de re-registro facial"))
     );
 
     public NotificationDefinition require(String type) {

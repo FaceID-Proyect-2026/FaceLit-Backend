@@ -5,6 +5,7 @@ import com.FaceLit.backend.notification.dto.request.FacialDecisionRequestDTO;
 import com.FaceLit.backend.notification.dto.request.MonolithEventRequestDTO;
 import com.FaceLit.backend.notification.dto.response.NotificationResponseDTO;
 import com.FaceLit.backend.notification.service.NotificationService;
+import com.FaceLit.backend.facial.FaceResetService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -23,11 +24,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/notifications")
 public class NotificationController {
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(NotificationController.class);
 
     private final NotificationService notificationService;
+    private final FaceResetService faceResetService;
 
-    public NotificationController(NotificationService notificationService) {
+    public NotificationController(NotificationService notificationService, FaceResetService faceResetService) {
         this.notificationService = notificationService;
+        this.faceResetService = faceResetService;
     }
 
     @GetMapping
@@ -67,10 +71,13 @@ public class NotificationController {
             @Valid @RequestBody FacialDecisionRequestDTO request,
             Authentication authentication) {
         requireCoordinator(authentication);
-        notificationService.markRead(currentUserId(authentication), id);
-        // Hook futuro: llamar al micro PATCH /api/faces/reset-requests/{requestId}
-        // con la decision aceptada/rechazada cuando ese servicio exista.
+        faceResetService.resolve(id, currentUserId(authentication), request.decision());
         return ResponseEntity.ok(Map.of("status", "registered", "decision", request.decision()));
+    }
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> error(org.springframework.web.server.ResponseStatusException ex) {
+        return ResponseEntity.status(ex.getStatusCode()).body(Map.of("message", ex.getReason()));
     }
 
     private UUID currentUserId(Authentication authentication) {
@@ -83,7 +90,9 @@ public class NotificationController {
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch("ROLE_COORDINATOR"::equals);
         if (!coordinator) {
-            throw new IllegalArgumentException("Solo Coordinador puede crear eventos globales");
+            LOG.warn("Operación de coordinador denegada. actor={}", authentication.getName());
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN,
+                    "Solo Coordinador puede resolver solicitudes faciales o crear eventos globales");
         }
     }
 }
