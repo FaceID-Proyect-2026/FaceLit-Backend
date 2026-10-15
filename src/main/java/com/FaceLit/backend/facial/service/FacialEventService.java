@@ -16,6 +16,8 @@ public interface FacialEventService {
 
     FacialEventResponseDTO registerEventFromImage(FacialAttendanceCaptureRequestDTO dto, UUID authenticatedUserId);
 
+    void initializeSessionAbsences(UUID idRecordEnvironment, UUID authenticatedUserId);
+
     AttendanceStatusResponseDTO getAttendanceStatus(UUID idRecordEnvironment, UUID idApprentice);
 
     AttendanceMatrixResponseDTO getAttendanceMatrix(UUID idChip, LocalDate dateFrom, LocalDate dateTo, UUID authenticatedUserId);
