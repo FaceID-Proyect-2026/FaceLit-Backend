@@ -204,6 +204,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                 .orElseThrow(() -> new EnvironmentException("Sesión no encontrada.", HttpStatus.NOT_FOUND));
 
         SessionSnapshot previous = SessionSnapshot.from(record);
+        if (previous.exitTime() == null || !previous.exitTime().isEqual(dto.getExitTime())) record.setExitReminderSent(false);
 
         Environment environment = findActiveEnvironment(dto.getIdEnvironment());
         record.setEnvironment(environment);

@@ -46,6 +46,8 @@ public class NotificationServiceImpl implements NotificationService {
     public List<NotificationResponseDTO> findForUser(UUID userId) {
         return notificationRepository.findByIdUserAppOrderByCreatedAtDesc(userId)
                 .stream()
+                .filter(notification -> !"EMAIL".equals(notification.getChannel())
+                        && !"attendance_exit_reminder".equals(notification.getType()))
                 .map(this::toResponse)
                 .toList();
     }
@@ -65,7 +67,9 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional
     @Override
     public List<NotificationResponseDTO> markAllRead(UUID userId) {
-        List<Notification> notifications = notificationRepository.findByIdUserAppOrderByCreatedAtDesc(userId);
+        List<Notification> notifications = notificationRepository.findByIdUserAppOrderByCreatedAtDesc(userId).stream()
+                .filter(notification -> !"EMAIL".equals(notification.getChannel())
+                        && !"attendance_exit_reminder".equals(notification.getType())).toList();
         notifications.forEach(Notification::markRead);
         return notificationRepository.saveAll(notifications).stream().map(this::toResponse).toList();
     }
@@ -138,7 +142,7 @@ public class NotificationServiceImpl implements NotificationService {
         notification.setMetadataJson(metadataJson);
 
         Notification saved = notificationRepository.save(notification);
-        if ("APP_EMAIL".equals(definition.channel())) {
+        if ("APP_EMAIL".equals(definition.channel()) || "EMAIL".equals(definition.channel())) {
             EmailLog emailLog = new EmailLog();
             emailLog.setIdNotification(saved.getIdNotification());
             emailLogRepository.save(emailLog);

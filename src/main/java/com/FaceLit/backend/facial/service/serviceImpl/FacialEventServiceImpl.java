@@ -2,6 +2,8 @@ package com.FaceLit.backend.facial.service.serviceImpl;
 
 import java.time.OffsetDateTime;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -55,6 +57,9 @@ public class FacialEventServiceImpl implements FacialEventService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FacialEventServiceImpl.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final ZoneId SESSION_ZONE = ZoneId.of("America/Bogota");
+    private static final DateTimeFormatter SESSION_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter SESSION_TIME = DateTimeFormatter.ofPattern("HH:mm");
 
     private final FacialEventRepository facialEventRepository;
     private final RecordEnvironmentRepository recordEnvironmentRepository;
@@ -381,15 +386,12 @@ public class FacialEventServiceImpl implements FacialEventService {
     private void notifyExcuseOrAbsence(FacialEvent event, boolean newAbsentEvent, Boolean previousExcuse) {
         boolean excuseRegistered = Boolean.TRUE.equals(event.getExcuse()) && !Boolean.TRUE.equals(previousExcuse);
         if (excuseRegistered) {
-            String learnerName = fullName(event.getApprentice().getUser().getFirstName(), event.getApprentice().getUser().getLastName());
-            String message = "Se registro una excusa para la inasistencia de " + learnerName
-                    + " en la ficha " + event.getRecordEnvironment().getChip().getChipCode() + ".";
+            String message = "Se registró una excusa para la inasistencia.\n" + attendanceContext(event);
             createNotification(
                     event.getApprentice().getUser().getIdUser(),
                     "attendance_excuse_registered",
                     "Excusa registrada",
-                    "Se registro una excusa para tu inasistencia en la ficha "
-                            + event.getRecordEnvironment().getChip().getChipCode() + ".",
+                    message,
                     event,
                     metadataFor(event, "excuse_registered"));
             createNotification(
@@ -407,11 +409,23 @@ public class FacialEventServiceImpl implements FacialEventService {
                     event.getApprentice().getUser().getIdUser(),
                     "attendance_absent",
                     "Inasistencia registrada",
-                    "Se registro una inasistencia para tu sesion de la ficha "
-                            + event.getRecordEnvironment().getChip().getChipCode() + ".",
+                    "Se registró una inasistencia.\n" + attendanceContext(event),
                     event,
                     metadataFor(event, "absent"));
         }
+    }
+
+    private String attendanceContext(FacialEvent event) {
+        RecordEnvironment record = event.getRecordEnvironment();
+        var learner = event.getApprentice().getUser();
+        var instructor = responsibleInstructor(record).getUser();
+        var sessionStart = record.getEntryTime().atZoneSameInstant(SESSION_ZONE);
+        return "Aprendiz: " + fullName(learner.getFirstName(), learner.getLastName())
+                + "\nFecha de la sesión (inasistencia): " + sessionStart.format(SESSION_DATE)
+                + "\nHora de inicio: " + sessionStart.format(SESSION_TIME) + " (hora de Colombia)"
+                + "\nFicha: " + record.getChip().getChipCode()
+                + "\nInstructor responsable de la sesión: "
+                + fullName(instructor.getFirstName(), instructor.getLastName()) + ".";
     }
 
     private void createNotification(
@@ -449,6 +463,15 @@ public class FacialEventServiceImpl implements FacialEventService {
         metadata.put("idFacialEvent", event.getIdFacialEvent());
         metadata.put("idApprentice", event.getApprentice().getIdApprentice());
         metadata.put("chipCode", event.getRecordEnvironment().getChip().getChipCode());
+        var learner = event.getApprentice().getUser();
+        Instructor instructor = responsibleInstructor(event.getRecordEnvironment());
+        var sessionStart = event.getRecordEnvironment().getEntryTime().atZoneSameInstant(SESSION_ZONE);
+        metadata.put("learnerName", fullName(learner.getFirstName(), learner.getLastName()));
+        metadata.put("sessionDate", sessionStart.toLocalDate().toString());
+        metadata.put("sessionStart", sessionStart.toOffsetDateTime().toString());
+        metadata.put("sessionTimezone", SESSION_ZONE.getId());
+        metadata.put("idInstructor", instructor.getIdInstructor());
+        metadata.put("instructorName", fullName(instructor.getUser().getFirstName(), instructor.getUser().getLastName()));
         metadata.put("attendanceStatus", event.getAttendanceStatus().name());
         metadata.put("eventType", event.getEventType().name());
         metadata.put("eventDatetime", event.getEventDatetime().toString());

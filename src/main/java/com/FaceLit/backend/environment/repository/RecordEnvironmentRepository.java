@@ -13,6 +13,12 @@ import org.springframework.data.repository.query.Param;
 import com.FaceLit.backend.environment.model.RecordEnvironment;
 
 public interface RecordEnvironmentRepository extends JpaRepository<RecordEnvironment, UUID> {
+    @Query("select r.idRecordEnvironment from RecordEnvironment r where r.active = true and r.deletedAt is null and r.exitTime > :now and r.exitTime <= :limit")
+    List<UUID> findExitReminderCandidates(@Param("now") OffsetDateTime now, @Param("limit") OffsetDateTime limit);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from RecordEnvironment r where r.idRecordEnvironment = :id")
+    Optional<RecordEnvironment> lockForExitReminder(@Param("id") UUID id);
 
     @Modifying
     @Query("""

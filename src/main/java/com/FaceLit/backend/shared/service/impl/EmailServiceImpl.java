@@ -124,7 +124,9 @@ public class EmailServiceImpl implements EmailService {
 
     private String buildNotificationEmail(String subject, String body) {
         String safeSubject = escapeHtml(subject == null || subject.isBlank() ? "Notificacion FaceLit" : subject);
-        String safeBody = escapeHtml(body == null ? "" : body).replace("\n", "<br>");
+        String safeBody = escapeHtml(body == null ? "" : body)
+                .replaceAll("(https?://[^\\s<]+)", "<a href=\"$1\" style=\"color:#0f6d3b;word-break:break-all;\">$1</a>")
+                .replace("\n", "<br>");
         boolean transfer = safeSubject.toLowerCase().contains("ficha") || safeSubject.toLowerCase().contains("traslado")
                 || safeBody.toLowerCase().contains("traslad");
         String badge = transfer ? "Traslado academico" : "Notificacion";

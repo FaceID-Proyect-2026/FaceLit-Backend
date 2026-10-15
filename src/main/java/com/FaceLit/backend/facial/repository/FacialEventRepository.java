@@ -14,6 +14,16 @@ import com.FaceLit.backend.facial.model.FacialEvent;
 import com.FaceLit.backend.facial.model.enums.FacialEventType;
 
 public interface FacialEventRepository extends JpaRepository<FacialEvent, UUID> {
+    @Query("""
+            select distinct e.apprentice.user.idUser from FacialEvent e
+            where e.recordEnvironment.idRecordEnvironment = :id and e.deletedAt is null
+              and e.apprentice.deletedAt is null and e.apprentice.user.deletedAt is null
+              and e.eventType = com.FaceLit.backend.facial.model.enums.FacialEventType.ENTRY
+              and e.attendanceStatus in (com.FaceLit.backend.facial.model.enums.AttendanceStatus.PUNCTUAL,
+                                        com.FaceLit.backend.facial.model.enums.AttendanceStatus.LATE)
+              and e.eventDatetime <= :now
+            """)
+    List<UUID> findExitReminderAttendees(@Param("id") UUID id, @Param("now") java.time.OffsetDateTime now);
 
     Optional<FacialEvent> findFirstByRecordEnvironment_IdRecordEnvironmentAndApprentice_IdApprenticeAndEventTypeAndDeletedAtIsNullOrderByEventDatetimeAsc(
             UUID idRecordEnvironment,

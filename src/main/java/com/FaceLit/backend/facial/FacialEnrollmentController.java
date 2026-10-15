@@ -197,7 +197,7 @@ public class FacialEnrollmentController {
 
     private RegistrationStatus registrationStatusForFrontend(UUID userId) {
         List<OffsetDateTime> dates = jdbc.queryForList("""
-            SELECT user_face.created_at AS registration_date
+            SELECT COALESCE(user_face.updated_at, user_face.created_at) AS registration_date
             FROM academic.apprentice apprentice
             JOIN facialrecognition.user_face user_face
               ON user_face.id_apprentice = apprentice.id_apprentice
@@ -205,7 +205,7 @@ public class FacialEnrollmentController {
              AND user_face.status = 'ACTIVE'
             WHERE apprentice.id_user_app = ?
               AND apprentice.deleted_at IS NULL
-            ORDER BY user_face.created_at DESC
+            ORDER BY COALESCE(user_face.updated_at, user_face.created_at) DESC
             LIMIT 1
             """, OffsetDateTime.class, userId);
         return new RegistrationStatus(!dates.isEmpty(), dates.isEmpty() ? null : dates.get(0));
