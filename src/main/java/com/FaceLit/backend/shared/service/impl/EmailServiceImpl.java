@@ -2,89 +2,35 @@ package com.FaceLit.backend.shared.service.impl;
 
 import org.springframework.stereotype.Service;
 import com.FaceLit.backend.shared.service.EmailService;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.core.io.ClassPathResource;
 
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
-
-@Service // Marca esta clase como un servicio de Spring.
-// Spring la detecta automáticamente y permite usarla en otras clases.
+@Service
 public class EmailServiceImpl implements EmailService {
+    private final ResendEmailTransport transport;
 
-    // JavaMailSender es la herramienta que usa Spring
-    // para enviar correos electrónicos.
-
-    // private → solo se puede usar dentro de esta clase
-    // final → el valor no cambiará después de asignarse
-    private final JavaMailSender mailSender;
-
-    // Constructor de la clase.
-    // Spring envía automáticamente el JavaMailSender
-    // para poder usar el servicio de correos.
-    public EmailServiceImpl(JavaMailSender mailSender) {
-
-        // this.mailSender → variable de la clase
-        // mailSender → valor recibido en el constructor
-        // Aquí se guarda la herramienta de envío de correos.
-        this.mailSender = mailSender;
+    public EmailServiceImpl(ResendEmailTransport transport) {
+        this.transport = transport;
     }
 
     @Override
     public void sendRecoveryCode(String toEmail, String code) {
-        String subject = "FaceLit - Codigo de recuperacion de contrasena";
-        String html = buildRecoveryCodeEmail(code);
-
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setTo(toEmail);
-            helper.setSubject(subject);
-            helper.setText(
-                    "Hola,\n\n" +
-                            "Recibimos una solicitud para restablecer tu contrasena.\n" +
-                            "Tu codigo de recuperacion es: " + code + "\n\n" +
-                            "Este codigo expira en 5 minutos.\n" +
-                            "Si no solicitaste este cambio, ignora este mensaje.\n\n" +
-                            "FaceLit",
-                    html);
-            helper.addInline("facelitLogo", new ClassPathResource("static/email/facelit-logo.png"), "image/png");
-            mailSender.send(message);
-        } catch (MessagingException exception) {
-            throw new IllegalStateException("No fue posible construir el correo de recuperacion de contrasena", exception);
-        }
+        transport.send(toEmail, "FaceLit - Codigo de recuperacion de contrasena",
+                "Hola,\n\n" +
+                "Recibimos una solicitud para restablecer tu contrasena.\n" +
+                "Tu codigo de recuperacion es: " + code + "\n\n" +
+                "Este codigo expira en 5 minutos.\n" +
+                "Si no solicitaste este cambio, ignora este mensaje.\n\nFaceLit",
+                buildRecoveryCodeEmail(code));
     }
 
     @Override
     public void sendNotificationEmail(String toEmail, String subject, String body) {
-        String html = buildNotificationEmail(subject, body);
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setTo(toEmail);
-            helper.setSubject(subject);
-            helper.setText(body, html);
-            helper.addInline("facelitLogo", new ClassPathResource("static/email/facelit-logo.png"), "image/png");
-            mailSender.send(message);
-        } catch (MessagingException exception) {
-            throw new IllegalStateException("No fue posible construir el correo de notificacion", exception);
-        }
+        transport.send(toEmail, subject, body, buildNotificationEmail(subject, body));
     }
 
     @Override
     public void sendInitialCredentials(String toEmail, String subject, String body) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setTo(toEmail);
-            helper.setSubject(subject);
-            helper.setText("Tu cuenta en FaceLit fue creada. Abre este mensaje en un cliente compatible con HTML para ver tus credenciales.", body);
-            helper.addInline("facelitLogo", new ClassPathResource("static/email/facelit-logo.png"), "image/png");
-            mailSender.send(message);
-        } catch (MessagingException exception) {
-            throw new IllegalStateException("No fue posible construir el correo de credenciales iniciales", exception);
-        }
+        transport.send(toEmail, subject,
+                "Tu cuenta en FaceLit fue creada. Abre este mensaje en un cliente compatible con HTML para ver tus credenciales.", body);
     }
 
     private String buildRecoveryCodeEmail(String code) {

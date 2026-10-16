@@ -19,18 +19,6 @@ spring:
   liquibase:
     enabled: false
 
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-
   servlet:
     multipart:
       max-file-size: 20MB
@@ -50,3 +38,8 @@ facial:
 
 facelit:
   access-url: ${FACELIT_ACCESS_URL:http://localhost:8081}
+
+  email:
+    api-key: ${RESEND_API_KEY:}
+    from: ${FACELIT_EMAIL_FROM:}
+    from-name: ${FACELIT_EMAIL_FROM_NAME:FaceLit}
