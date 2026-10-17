@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -160,6 +161,27 @@ class FacialEnrollmentControllerTest {
         when(jdbc.queryForObject(anyString(), eq(Boolean.class), eq(user))).thenReturn(true);
         assertThrows(ResponseStatusException.class, () -> controller.challenge(user));
         verifyNoInteractions(tx);
+    }
+
+    @Test void rejectsFaceAlreadyRegisteredInAnotherAccount() {
+        when(jdbc.queryForObject(anyString(), eq(Boolean.class), eq(user))).thenReturn(false);
+        doAnswer(call -> {
+            Consumer<TransactionStatus> action = call.getArgument(0);
+            action.accept(mock(TransactionStatus.class)); return null;
+        }).when(tx).executeWithoutResult(any());
+
+        var stored = java.nio.ByteBuffer.allocate(20484).putInt(0x464c4831);
+        for (int i = 0; i < 5120; i++) stored.putFloat(0.1f);
+        when(jdbc.queryForList(anyString(), eq(user)))
+            .thenReturn(List.of(Map.of("biometric_vector", stored.array())));
+
+        var challenge = controller.challenge(user, true);
+        var request = enrollment(challenge, samples(challenge), null);
+        var error = assertThrows(ResponseStatusException.class, () -> controller.enroll(user, request));
+
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, error.getStatusCode());
+        assertEquals("este rostro ya fue registrado anteriormente en otra cuenta", error.getReason());
+        verify(jdbc, never()).update(contains("INSERT"), eq(user), any(byte[].class), anyString());
     }
 
     @Test void padFailureBlocksBothEnrollmentAndPhotoUpdates() throws Exception {

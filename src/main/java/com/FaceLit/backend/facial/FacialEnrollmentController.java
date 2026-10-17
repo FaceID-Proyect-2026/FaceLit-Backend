@@ -31,6 +31,7 @@ import jakarta.validation.constraints.Size;
 @RestController
 @RequestMapping("/api/facial")
 public class FacialEnrollmentController {
+    private static final double DUPLICATE_FACE_THRESHOLD = 0.65;
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transactions;
     private final PadVerifier pad;
@@ -143,8 +144,14 @@ public class FacialEnrollmentController {
             .forEach(sample -> sample.embedding().forEach(value -> template.putFloat(value.floatValue())));
         final boolean[] updatedExisting = {false};
         transactions.executeWithoutResult(tx -> {
+            // Serialize registrations globally so two different accounts
+            // cannot pass the similarity check at the same time.
+            jdbc.queryForObject(
+                "SELECT pg_advisory_xact_lock(hashtext('facialrecognition.user_face.registration'))",
+                Long.class);
             // Serialize concurrent registrations for this user using the existing user row.
             jdbc.queryForObject("SELECT id_user_app FROM security.user_app WHERE id_user_app = ? FOR UPDATE", UUID.class, userId);
+            ensureUniqueFace(userId, request.samples().get(0).embedding());
             if (registered(userId)) {
                 if (photo == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "Rostro ya registrado");
                 byte[] stored = jdbc.queryForObject("SELECT biometric_vector FROM facialrecognition.user_face WHERE id_user_app = ? AND deleted_at IS NULL AND status = 'ACTIVE' ORDER BY registration_date DESC LIMIT 1", byte[].class, userId);
@@ -168,6 +175,43 @@ public class FacialEnrollmentController {
         });
         notifyFacialRegistrationCompleted(userId, updatedExisting[0]);
         return Map.of("registered", true);
+    }
+
+    private void ensureUniqueFace(UUID userId, List<Double> embedding) {
+        List<Map<String, Object>> candidates = jdbc.queryForList("""
+            SELECT biometric_vector
+            FROM facialrecognition.user_face
+            WHERE id_user_app <> ?
+              AND deleted_at IS NULL
+              AND status = 'ACTIVE'
+            """, userId);
+
+        for (Map<String, Object> candidate : candidates) {
+            Object raw = candidate.get("biometric_vector");
+            if (!(raw instanceof byte[] stored)) continue;
+            double similarity = similarityAgainstTemplate(stored, embedding);
+            if (Double.isFinite(similarity) && similarity >= DUPLICATE_FACE_THRESHOLD) {
+                throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "este rostro ya fue registrado anteriormente en otra cuenta");
+            }
+        }
+    }
+
+    private static double similarityAgainstTemplate(byte[] stored, List<Double> embedding) {
+        if (stored.length < 4 + 1024 * Float.BYTES) return Double.NaN;
+        ByteBuffer buffer = ByteBuffer.wrap(stored);
+        if (buffer.getInt() != 0x464c4831) return Double.NaN;
+
+        double dot = 0, leftNorm = 0, rightNorm = 0;
+        for (double value : embedding) {
+            double reference = buffer.getFloat();
+            dot += reference * value;
+            leftNorm += reference * reference;
+            rightNorm += value * value;
+        }
+        if (leftNorm <= 0 || rightNorm <= 0) return Double.NaN;
+        return dot / Math.sqrt(leftNorm * rightNorm);
     }
 
     private void notifyFacialRegistrationCompleted(UUID userId, boolean updated) {
