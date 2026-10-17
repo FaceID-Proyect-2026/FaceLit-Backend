@@ -195,7 +195,7 @@ public class ChipServiceImpl implements ChipService {
 
     private void notifyDeleteBlocked(Chip chip, long assignmentCount) {
         try {
-            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+            notificationService.createIndependentCoordinatorEvent(new MonolithEventRequestDTO(
                     "academic_delete_blocked",
                     "Intento de eliminacion bloqueado",
                     "No fue posible eliminar la ficha " + chip.getChipCode()

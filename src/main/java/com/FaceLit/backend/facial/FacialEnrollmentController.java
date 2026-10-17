@@ -189,6 +189,29 @@ public class FacialEnrollmentController {
         }
     }
 
+    @PostMapping("/registration-confirmation")
+    public Map<String, Boolean> confirmRegistration(@AuthenticationPrincipal UUID userId) {
+        if (userId == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        transactions.executeWithoutResult(tx -> {
+            jdbc.queryForObject("SELECT id_user_app FROM security.user_app WHERE id_user_app = ? FOR UPDATE", UUID.class, userId);
+            if (!registered(userId)) throw new ResponseStatusException(HttpStatus.CONFLICT, "No hay registro facial guardado.");
+            boolean notified = Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM notification.notification
+                WHERE id_user_app = ? AND notification_type = 'facial_registration_completed')
+                """, Boolean.class, userId));
+            // Replacements have their own durable completion delivery, with request context.
+            boolean replacement = Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM facialrecognition.face_reset_request
+                WHERE id_user_app = ? AND consumed_at IS NOT NULL)
+                """, Boolean.class, userId));
+            if (!notified && !replacement) notificationService.createForRecipient(new CreateNotificationRequestDTO(
+                    userId, "facial_registration_completed", "Registro facial completado",
+                    "Tu rostro se guardó correctamente. Para reemplazarlo debes solicitar autorización al coordinador.",
+                    userId, "user_face", null, "{\"action\":\"completed\"}"));
+        });
+        return Map.of("confirmed", true);
+    }
+
     private boolean registered(UUID userId) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS (SELECT 1 FROM facialrecognition.user_face WHERE id_user_app = ? AND deleted_at IS NULL AND status = 'ACTIVE')",

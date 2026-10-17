@@ -29,4 +29,6 @@ public class FacialAttendanceCaptureRequestDTO {
     private List<String> livenessChallenges;
 
     private String origin;
+
+    private com.FaceLit.backend.facial.model.enums.FacialEventType eventType;
 }

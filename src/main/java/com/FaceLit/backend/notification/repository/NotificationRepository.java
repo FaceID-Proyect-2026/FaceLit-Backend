@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface NotificationRepository extends JpaRepository<Notification, UUID> {
+    boolean existsByIdFacialEventAndType(UUID idFacialEvent, String type);
     List<Notification> findByReferenceEntityAndReferenceId(String referenceEntity, UUID referenceId);
     List<Notification> findByIdUserAppOrderByCreatedAtDesc(UUID idUserApp);
 }

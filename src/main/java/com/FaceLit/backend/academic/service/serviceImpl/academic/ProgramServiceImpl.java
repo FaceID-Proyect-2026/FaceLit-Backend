@@ -206,7 +206,7 @@ public class ProgramServiceImpl implements ProgramService {
 
     private void notifyDeleteBlocked(Program program, long chips, long instructors) {
         try {
-            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+            notificationService.createIndependentCoordinatorEvent(new MonolithEventRequestDTO(
                     "academic_delete_blocked",
                     "Intento de eliminacion bloqueado",
                     "No fue posible eliminar el programa " + program.getProgramName()

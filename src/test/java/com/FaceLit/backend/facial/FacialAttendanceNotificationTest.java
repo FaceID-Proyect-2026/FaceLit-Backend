@@ -36,6 +36,7 @@ class FacialAttendanceNotificationTest {
     private final ApprenticeRepository apprentices = mock(ApprenticeRepository.class);
     private final UserChipRepository assignments = mock(UserChipRepository.class);
     private final NotificationService notifications = mock(NotificationService.class);
+    private final DeviceRepository devices = mock(DeviceRepository.class);
     private final RecordEnvironment session = new RecordEnvironment();
     private final Apprentice apprentice = new Apprentice();
     private final Instructor scheduled = instructor("Ana", "Gómez");
@@ -45,7 +46,7 @@ class FacialAttendanceNotificationTest {
 
     @BeforeEach
     void setUp() {
-        service = new FacialEventServiceImpl(events, sessions, mock(DeviceRepository.class), apprentices,
+        service = new FacialEventServiceImpl(events, sessions, devices, apprentices,
                 assignments, mock(InstructorRepository.class), mock(FacialEmbeddingVerificationClient.class),
                 mock(JdbcTemplate.class), notifications);
         apprentice.setIdApprentice(UUID.randomUUID());
@@ -59,6 +60,8 @@ class FacialAttendanceNotificationTest {
         session.setInstructorInCharge(substitute);
         // UTC October 13 is still October 12 in Colombia.
         session.setEntryTime(OffsetDateTime.parse("2026-10-13T01:00:00Z"));
+        session.setExitTime(session.getEntryTime().plusHours(2));
+        session.setShutdownTime(session.getExitTime().plusMinutes(10));
         session.setDevice(new com.FaceLit.backend.facial.model.Device());
         request = new UpdateFacialEventExcuseRequestDTO();
         request.setIdRecordEnvironment(session.getIdRecordEnvironment());
@@ -76,21 +79,21 @@ class FacialAttendanceNotificationTest {
     }
 
     @Test
-    void excuseUsesAbsenceDateAndResponsibleSubstituteForBothRecipients() throws Exception {
+    void excuseUsesAbsenceDateAndSelectedResponsibleForBothRecipients() throws Exception {
         existingAbsence(false);
         service.updateExcuse(request, UUID.randomUUID());
         var captured = ArgumentCaptor.forClass(CreateNotificationRequestDTO.class);
         verify(notifications, times(2)).createForRecipient(captured.capture());
         var sent = captured.getAllValues();
         assertThat(sent).extracting(CreateNotificationRequestDTO::recipientUserId)
-                .containsExactly(apprentice.getUser().getIdUser(), substitute.getUser().getIdUser());
+                .containsExactly(apprentice.getUser().getIdUser(), scheduled.getUser().getIdUser());
         for (var notification : sent) {
             assertThat(notification.type()).isEqualTo("attendance_excuse_registered");
             assertThat(notification.message()).contains("Carlos Ramírez", "12/10/2026", "20:00",
-                    "3145555", "Luis Pérez").doesNotContain("Ana Gómez", "13/10/2026");
+                    "3145555", "Ana Gómez").doesNotContain("Luis Pérez", "13/10/2026");
             var metadata = new ObjectMapper().readTree(notification.metadataJson());
             assertThat(metadata.get("sessionDate").asText()).isEqualTo("2026-10-12");
-            assertThat(metadata.get("idInstructor").asText()).isEqualTo(substitute.getIdInstructor().toString());
+            assertThat(metadata.get("idInstructor").asText()).isEqualTo(scheduled.getIdInstructor().toString());
             assertThat(new NotificationCatalog().require(notification.type()).channel()).isEqualTo("APP_EMAIL");
         }
     }
@@ -116,6 +119,17 @@ class FacialAttendanceNotificationTest {
         verifyNoInteractions(notifications);
     }
 
+    @Test void removingAnExcuseNotifiesTheCorrectionToLearnerAndSelectedInstructor() {
+        existingAbsence(true); request.setExcuse(false);
+        service.updateExcuse(request, scheduled.getUser().getIdUser());
+        verify(notifications, times(2)).createForRecipient(argThat(n -> n.type().equals("attendance_corrected") && n.metadataJson().contains("excuse_removed")));
+    }
+
+    @Test void provisionalAbsenceDoesNotNotifyBeforeShutdown() {
+        session.setShutdownTime(OffsetDateTime.now().plusMinutes(10)); request.setExcuse(false);
+        service.updateExcuse(request, scheduled.getUser().getIdUser()); verifyNoInteractions(notifications);
+    }
+
     @Test
     void excuseCreatingAbsenceSendsOnlyExcuseToLearnerAndInstructor() {
         service.updateExcuse(request, UUID.randomUUID());
@@ -139,6 +153,22 @@ class FacialAttendanceNotificationTest {
         when(events.findFirstByRecordEnvironment_IdRecordEnvironmentAndApprentice_IdApprenticeAndEventTypeAndDeletedAtIsNullOrderByEventDatetimeAsc(
                 eq(session.getIdRecordEnvironment()), eq(apprentice.getIdApprentice()), eq(FacialEventType.ENTRY)))
                 .thenReturn(Optional.of(event));
+    }
+
+    @Test void explicitEarlyExitRequiresAnEarlierActualEntryAndNotifiesSelectedInstructor() {
+        existingAbsence(false);
+        var entry = events.findFirstByRecordEnvironment_IdRecordEnvironmentAndApprentice_IdApprenticeAndEventTypeAndDeletedAtIsNullOrderByEventDatetimeAsc(session.getIdRecordEnvironment(), apprentice.getIdApprentice(), FacialEventType.ENTRY).orElseThrow();
+        entry.setAttendanceStatus(AttendanceStatus.PUNCTUAL);
+        session.getDevice().setIdDevice(UUID.randomUUID());
+        when(devices.findById(session.getDevice().getIdDevice())).thenReturn(Optional.of(session.getDevice()));
+        var dto = new com.FaceLit.backend.facial.dto.request.FacialEventRequestDTO();
+        dto.setIdRecordEnvironment(session.getIdRecordEnvironment()); dto.setIdApprentice(apprentice.getIdApprentice());
+        dto.setIdDevice(session.getDevice().getIdDevice()); dto.setEventType(FacialEventType.EXIT);
+        dto.setEventDatetime(session.getEntryTime().plusMinutes(30)); dto.setRecognitionResult("MATCH"); dto.setOrigin("PC");
+        service.registerEvent(dto, scheduled.getUser().getIdUser());
+        verify(notifications).createForRecipient(argThat(n -> n.type().equals("attendance_early_exit") && n.recipientUserId().equals(scheduled.getUser().getIdUser())));
+        entry.setAttendanceStatus(AttendanceStatus.ABSENT);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.registerEvent(dto, scheduled.getUser().getIdUser())).hasMessageContaining("entrada");
     }
 
     private static User user(String firstName, String lastName) {

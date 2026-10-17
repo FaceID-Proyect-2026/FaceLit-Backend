@@ -17,4 +17,12 @@ public interface FaceResetRequestRepository extends JpaRepository<FaceResetReque
 
     @Query("select r.id from FaceResetRequest r where r.contextJson is not null and (r.requestNotified = false or (r.status <> 'PENDING' and r.decisionNotified = false) or (r.consumedAt is not null and r.completionNotified = false))")
     List<UUID> findPendingNotifications();
+
+    @Query("""
+        select r.id from FaceResetRequest r where r.status = 'ACCEPTED' and r.consumedAt is null
+          and r.authorizationExpiresAt <= :now
+          and not exists (select n.idNotification from Notification n where n.referenceId = r.id
+                          and n.referenceEntity = 'face_reset_request' and n.type = 'facial_authorization_expired')
+        """)
+    List<UUID> findUnnotifiedExpired(@Param("now") java.time.OffsetDateTime now);
 }

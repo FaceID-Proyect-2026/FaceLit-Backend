@@ -542,7 +542,7 @@ public class InstructorServiceImpl implements InstructorService {
 
     private void notifyDeleteBlocked(Instructor instructor) {
         try {
-            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+            notificationService.createIndependentCoordinatorEvent(new MonolithEventRequestDTO(
                     "academic_delete_blocked",
                     "Intento de eliminacion bloqueado",
                     "No fue posible eliminar permanentemente al instructor "

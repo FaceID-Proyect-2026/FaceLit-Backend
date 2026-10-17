@@ -34,8 +34,9 @@ public class AdminRoleController {
     @PutMapping("/users/{userId}/role")
     
     public ResponseEntity<AssignRoleResponseDTO> assignRole(
-            @PathVariable UUID userId,@Valid @RequestBody AssignRoleRequestDTO dto) {
-                return ResponseEntity.ok(adminRoleService.assignRole(userId, dto)); 
+            @PathVariable UUID userId,@Valid @RequestBody AssignRoleRequestDTO dto,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal UUID actorId) {
+                return ResponseEntity.ok(adminRoleService.assignRole(userId, dto, actorId));
             }
             
 }

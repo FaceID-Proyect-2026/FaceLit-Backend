@@ -52,6 +52,41 @@ class ExitReminderRepositoryTest {
         assertThat(sessions.findExitReminderCandidates(now, now.plusMinutes(5))).containsExactly(due.getIdRecordEnvironment());
     }
 
+    @Test void confirmedAbsenceQueryExcludesOpenSessionsExcusesAndAlreadyNotifiedEvents() {
+        var ended = session(); ended.setExitTime(now.minusMinutes(5)); ended.setShutdownTime(now.minusSeconds(1));
+        User absent = event(ended, AttendanceStatus.ABSENT, FacialEventType.ENTRY, now.minusHours(1));
+        User excused = event(ended, AttendanceStatus.ABSENT, FacialEventType.ENTRY, now.minusHours(1));
+        User notified = event(ended, AttendanceStatus.ABSENT, FacialEventType.ENTRY, now.minusHours(1));
+        event(ended, AttendanceStatus.LATE, FacialEventType.ENTRY, now.minusMinutes(30));
+        event(session(), AttendanceStatus.ABSENT, FacialEventType.ENTRY, now.minusHours(1));
+        FacialEvent excusedEvent = em.createQuery("select e from FacialEvent e where e.apprentice.user.idUser = :user", FacialEvent.class).setParameter("user", excused.getIdUser()).getSingleResult();
+        excusedEvent.setExcuse(true);
+        FacialEvent notifiedEvent = em.createQuery("select e from FacialEvent e where e.apprentice.user.idUser = :user", FacialEvent.class).setParameter("user", notified.getIdUser()).getSingleResult();
+        var notice = new com.FaceLit.backend.notification.model.Notification(); notice.setIdUserApp(notified.getIdUser());
+        notice.setIdFacialEvent(notifiedEvent.getIdFacialEvent()); notice.setType("attendance_absent"); notice.setTitle("Ausencia");
+        notice.setMessage("Ausencia confirmada"); notice.setCategory("ASISTENCIA"); notice.setChannel("APP_EMAIL"); em.persist(notice);
+        UUID expected = em.createQuery("select e.idFacialEvent from FacialEvent e where e.apprentice.user.idUser = :user", UUID.class).setParameter("user", absent.getIdUser()).getSingleResult();
+        em.flush(); em.clear();
+        assertThat(attendance.findUnnotifiedConfirmedAbsences(now, org.springframework.data.domain.PageRequest.of(0, 100))).containsExactly(expected);
+    }
+
+    @Autowired com.FaceLit.backend.facial.repository.FaceResetRequestRepository resets;
+    @Test void expirationQueryOnlySelectsUnusedUnnotifiedExpiredPermissions() {
+        var expired = permission(now.minusMinutes(1));
+        permission(now.plusMinutes(1));
+        var used = permission(now.minusMinutes(1)); used.setConsumedAt(now.minusMinutes(2));
+        var notified = permission(now.minusMinutes(1));
+        var notice = new com.FaceLit.backend.notification.model.Notification(); notice.setIdUserApp(notified.getUserId());
+        notice.setType("facial_authorization_expired"); notice.setTitle("Vencido"); notice.setMessage("Permiso vencido"); notice.setCategory("RECONOCIMIENTO_FACIAL"); notice.setChannel("APP");
+        notice.setReferenceEntity("face_reset_request"); notice.setReferenceId(notified.getId()); em.persist(notice);
+        em.flush(); em.clear(); assertThat(resets.findUnnotifiedExpired(now)).containsExactly(expired.getId());
+    }
+    private com.FaceLit.backend.facial.model.FaceResetRequest permission(OffsetDateTime expires) {
+        var request = new com.FaceLit.backend.facial.model.FaceResetRequest(); request.setUserId(user().getIdUser());
+        request.setStatus("ACCEPTED"); request.setAuthorizationExpiresAt(expires); request.setAuthorizationToken(UUID.randomUUID());
+        em.persist(request); return request;
+    }
+
     private RecordEnvironment session() {
         String unique = UUID.randomUUID().toString().substring(0, 8);
         Program program = new Program(); program.setProgramName("Program " + unique); program.setProgramCode(unique); program.setState(AcademicState.ACTIVE); em.persist(program);

@@ -30,18 +30,35 @@ import com.FaceLit.backend.notification.service.NotificationService;
 import org.mockito.ArgumentCaptor;
 
 class FaceResetServiceTest {
+    @Test void unusedExpiredAuthorizationNotifiesOnlyTheLearnerInApp() {
+        service.resolve(notification.getIdNotification(), coordinatorId, "accepted");
+        request.setRequestNotified(true); request.setDecisionNotified(true);
+        request.setAuthorizationExpiresAt(OffsetDateTime.now().minusMinutes(1));
+        delivery.deliver(request.getId());
+        var capture = ArgumentCaptor.forClass(CreateNotificationRequestDTO.class);
+        verify(notificationService).createForRecipient(capture.capture());
+        assertThat(capture.getValue().type()).isEqualTo("facial_authorization_expired");
+        assertThat(capture.getValue().metadataJson()).contains("recipientName", "learner", "authorizationExpiresAt");
+        assertThat(capture.getValue().message()).contains("cámara permanece bloqueada", "rostro anterior se conserva");
+        assertThat(capture.getValue().recipientUserId()).isEqualTo(learnerId);
+        assertThat(new NotificationCatalog().require(capture.getValue().type()).channel()).isEqualTo("APP");
+        request.setConsumedAt(OffsetDateTime.now()); request.setCompletionNotified(true);
+        clearInvocations(notificationService); delivery.deliver(request.getId()); verifyNoInteractions(notificationService);
+    }
     private final UUID learnerId = UUID.randomUUID(), coordinatorId = UUID.randomUUID();
     private final FaceResetRequestRepository requests = mock(FaceResetRequestRepository.class);
     private final NotificationRepository notifications = mock(NotificationRepository.class);
     private final UserChipRepository assignments = mock(UserChipRepository.class);
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     private final NotificationService notificationService = mock(NotificationService.class);
-    private final FaceResetService service = new FaceResetService(requests, assignments, notifications, jdbc, 24);
+    private final com.FaceLit.backend.shared.service.UserDisplayNameService names = mock(com.FaceLit.backend.shared.service.UserDisplayNameService.class);
+    private final FaceResetService service = new FaceResetService(requests, assignments, notifications, jdbc, 24, names);
     private final FaceResetRequest request = new FaceResetRequest();
     private final Notification notification = new Notification();
     private FaceResetNotificationDelivery delivery;
 
     @BeforeEach void setup() {
+        when(names.fullName(coordinatorId)).thenReturn("Maria Rodriguez");
         request.setUserId(learnerId);
         request.setContextJson(service.writeJson(new LinkedHashMap<>(Map.of("learnerName", "Mariana López",
                 "fichaNumber", "3145555", "programName", "Análisis de software", "requestId", request.getId().toString()))));
@@ -73,7 +90,7 @@ class FaceResetServiceTest {
         assertThat(request.getAuthorizationExpiresAt()).isEqualTo(request.getResolvedAt().plusHours(24));
         assertThat(service.current(learnerId).authorizationToken()).isNotNull();
         assertThat(service.current(learnerId).canReregister()).isTrue();
-        assertThat(notification.getMetadataJson()).contains("accepted", coordinatorId.toString());
+        assertThat(notification.getMetadataJson()).contains("accepted", coordinatorId.toString(), "Maria Rodriguez");
         assertThatThrownBy(() -> service.resolve(notification.getIdNotification(), coordinatorId, "accepted"))
                 .isInstanceOf(ResponseStatusException.class).hasMessageContaining("409");
         request.setConsumedAt(OffsetDateTime.now());
@@ -155,6 +172,7 @@ class FaceResetServiceTest {
         var captured = ArgumentCaptor.forClass(CreateNotificationRequestDTO.class);
         verify(notificationService).createForRecipient(captured.capture());
         assertThat(captured.getValue().recipientUserId()).isEqualTo(learnerId);
+        assertThat(captured.getValue().message()).contains("Decidido por: Maria Rodriguez").doesNotContain(coordinatorId.toString());
         assertThat(captured.getValue().metadataJson()).contains("accepted").doesNotContain("authorizationToken");
     }
 }

@@ -16,4 +16,6 @@ public interface NotificationService {
     NotificationResponseDTO createForRecipient(CreateNotificationRequestDTO request);
 
     List<NotificationResponseDTO> createCoordinatorEvent(MonolithEventRequestDTO request);
+
+    List<NotificationResponseDTO> createIndependentCoordinatorEvent(MonolithEventRequestDTO request);
 }

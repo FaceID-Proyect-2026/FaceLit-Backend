@@ -13,6 +13,12 @@ public interface AdminRoleService {
       List<UserListResponseDTO> getAllUsers();
 
        // Cambia el rol de un usuario específico
-    AssignRoleResponseDTO assignRole(UUID userId, AssignRoleRequestDTO dto);
+    AssignRoleResponseDTO assignRole(UUID userId, AssignRoleRequestDTO dto, UUID actorId);
+
+    default AssignRoleResponseDTO assignRole(UUID userId, AssignRoleRequestDTO dto) {
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        UUID actor = authentication != null && authentication.getPrincipal() instanceof UUID id ? id : null;
+        return assignRole(userId, dto, actor);
+    }
 
 }

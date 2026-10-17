@@ -114,6 +114,20 @@ public class FacialEventServiceImpl implements FacialEventService {
 
         OffsetDateTime eventDatetime = dto.getEventDatetime() == null ? OffsetDateTime.now() : dto.getEventDatetime();
         FacialEventType eventType = resolveEventType(eventDatetime, record);
+        if (dto.getEventType() != null) {
+            eventType = dto.getEventType();
+            if (eventType == FacialEventType.ENTRY && !eventDatetime.isBefore(record.getExitTime())) {
+                throw new FacialEventException("La ventana de entrada ya terminó.", HttpStatus.BAD_REQUEST);
+            }
+        }
+        if (eventType == FacialEventType.EXIT) {
+            boolean attended = facialEventRepository
+                        .findFirstByRecordEnvironment_IdRecordEnvironmentAndApprentice_IdApprenticeAndEventTypeAndDeletedAtIsNullOrderByEventDatetimeAsc(
+                                record.getIdRecordEnvironment(), apprentice.getIdApprentice(), FacialEventType.ENTRY)
+                        .filter(entry -> entry.getAttendanceStatus() != AttendanceStatus.ABSENT
+                                && entry.getEventDatetime().isBefore(eventDatetime)).isPresent();
+            if (!attended) throw new FacialEventException("Debes registrar una entrada antes de registrar la salida.", HttpStatus.BAD_REQUEST);
+        }
         AttendanceStatus attendanceStatus = resolveAttendanceStatus(eventType, eventDatetime, record, apprentice);
 
         FacialEvent event = facialEventRepository
@@ -220,6 +234,7 @@ public class FacialEventServiceImpl implements FacialEventService {
         event.setIdDevice(dto.getIdDevice());
         event.setIdApprentice(verification.idApprentice());
         event.setRecognitionResult("MATCH");
+        event.setEventType(dto.getEventType());
         event.setMatchScore(verification.similarity());
         event.setOrigin(dto.getOrigin() == null || dto.getOrigin().isBlank() ? "MOBILE" : dto.getOrigin());
 
@@ -351,7 +366,36 @@ public class FacialEventServiceImpl implements FacialEventService {
 
         FacialEvent saved = facialEventRepository.saveAndFlush(event);
         notifyExcuseOrAbsence(saved, newAbsentEvent, previousExcuse);
+        if (Boolean.TRUE.equals(previousExcuse) && !Boolean.TRUE.equals(saved.getExcuse())) {
+            notifyExcuseRemoved(saved, authenticatedUserId);
+        }
         return new FacialEventResponseDTO(saved);
+    }
+
+    private void notifyExcuseRemoved(FacialEvent event, UUID actor) {
+        try {
+            var names = jdbcTemplate.queryForList("SELECT CONCAT(first_name, ' ', last_name) FROM security.user_app WHERE id_user_app = ?", String.class, actor);
+            String actorName = names.isEmpty() ? "Instructor" : names.get(0);
+            var meta = (com.fasterxml.jackson.databind.node.ObjectNode) OBJECT_MAPPER.readTree(metadataFor(event, "corrected"));
+            meta.put("previousStatus", "ABSENT"); meta.put("newStatus", "ABSENT");
+            meta.put("previousExcuse", true); meta.put("newExcuse", false);
+            meta.put("previousDatetime", event.getEventDatetime().toString()); meta.put("newDatetime", event.getEventDatetime().toString());
+            meta.put("changedByName", actorName); meta.put("changedBy", actor.toString());
+            meta.put("correctionReasonCode", "excuse_removed");
+            meta.put("correctedAt", OffsetDateTime.now().toString());
+            String message = "Se retiró la excusa: la inasistencia pasó de justificada a sin excusa. Modificado por: " + actorName + ".\n" + attendanceContext(event);
+            for (UUID recipient : new java.util.LinkedHashSet<>(List.of(event.getApprentice().getUser().getIdUser(), responsibleInstructor(event.getRecordEnvironment()).getUser().getIdUser()))) {
+                boolean learner = recipient.equals(event.getApprentice().getUser().getIdUser());
+                var user = learner ? event.getApprentice().getUser() : responsibleInstructor(event.getRecordEnvironment()).getUser();
+                meta.put("recipientName", fullName(user.getFirstName(), user.getLastName()));
+                meta.put("recipientContext", learner ? "learner" : "responsible_instructor");
+                notificationService.createForRecipient(new CreateNotificationRequestDTO(recipient, "attendance_corrected", "Asistencia corregida",
+                        "Destinatario: " + fullName(user.getFirstName(), user.getLastName()) + ".\n" + message
+                                + (learner ? "\nRecibes este aviso porque se modificó tu asistencia." : "\nRecibes este aviso porque eres el instructor responsable seleccionado para esta sesión.")
+                                + " Revisa el registro actualizado. Si no estás de acuerdo, contacta al coordinador.",
+                        event.getRecordEnvironment().getIdRecordEnvironment(), "record_environment", event.getIdFacialEvent(), meta.toString()));
+            }
+        } catch (JsonProcessingException error) { throw new IllegalStateException(error); }
     }
 
     private void notifyAttendanceEvent(FacialEvent event) {
@@ -361,7 +405,7 @@ public class FacialEventServiceImpl implements FacialEventService {
                     "attendance_late",
                     "Retraso registrado",
                     "Tu asistencia fue registrada como tardia para la sesion de la ficha "
-                            + event.getRecordEnvironment().getChip().getChipCode() + ".",
+                            + event.getRecordEnvironment().getChip().getChipCode() + ".\n" + attendanceContext(event),
                     event,
                     metadataFor(event, "late"));
             return;
@@ -377,7 +421,8 @@ public class FacialEventServiceImpl implements FacialEventService {
                     "Salida anticipada",
                     fullName(event.getApprentice().getUser().getFirstName(), event.getApprentice().getUser().getLastName())
                             + " registro salida antes de la hora configurada para la ficha "
-                            + event.getRecordEnvironment().getChip().getChipCode() + ".",
+                            + event.getRecordEnvironment().getChip().getChipCode() + ".\n" + attendanceContext(event)
+                            + "\nHora de salida registrada: " + event.getEventDatetime().atZoneSameInstant(SESSION_ZONE).format(SESSION_TIME),
                     event,
                     metadataFor(event, "early_exit"));
         }
@@ -404,7 +449,8 @@ public class FacialEventServiceImpl implements FacialEventService {
             return;
         }
 
-        if (newAbsentEvent && event.getAttendanceStatus() == AttendanceStatus.ABSENT) {
+        if (newAbsentEvent && event.getAttendanceStatus() == AttendanceStatus.ABSENT
+                && !event.getRecordEnvironment().getShutdownTime().isAfter(OffsetDateTime.now())) {
             createNotification(
                     event.getApprentice().getUser().getIdUser(),
                     "attendance_absent",
@@ -415,13 +461,13 @@ public class FacialEventServiceImpl implements FacialEventService {
         }
     }
 
-    private String attendanceContext(FacialEvent event) {
+    public String attendanceContext(FacialEvent event) {
         RecordEnvironment record = event.getRecordEnvironment();
         var learner = event.getApprentice().getUser();
         var instructor = responsibleInstructor(record).getUser();
         var sessionStart = record.getEntryTime().atZoneSameInstant(SESSION_ZONE);
         return "Aprendiz: " + fullName(learner.getFirstName(), learner.getLastName())
-                + "\nFecha de la sesión (inasistencia): " + sessionStart.format(SESSION_DATE)
+                + "\nFecha de la sesión: " + sessionStart.format(SESSION_DATE)
                 + "\nHora de inicio: " + sessionStart.format(SESSION_TIME) + " (hora de Colombia)"
                 + "\nFicha: " + record.getChip().getChipCode()
                 + "\nInstructor responsable de la sesión: "
@@ -451,12 +497,10 @@ public class FacialEventServiceImpl implements FacialEventService {
     }
 
     private Instructor responsibleInstructor(RecordEnvironment record) {
-        return record.getInstructorInCharge() != null
-                ? record.getInstructorInCharge()
-                : record.getInstructorScheduled();
+        return record.getInstructorScheduled();
     }
 
-    private String metadataFor(FacialEvent event, String reason) {
+    public String metadataFor(FacialEvent event, String reason) {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("reason", reason);
         metadata.put("idRecordEnvironment", event.getRecordEnvironment().getIdRecordEnvironment());

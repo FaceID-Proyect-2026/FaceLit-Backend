@@ -15,6 +15,23 @@ import com.FaceLit.backend.facial.model.enums.FacialEventType;
 
 public interface FacialEventRepository extends JpaRepository<FacialEvent, UUID> {
     @Query("""
+            select e.idFacialEvent from FacialEvent e
+            where e.deletedAt is null and e.recordEnvironment.deletedAt is null
+              and e.apprentice.deletedAt is null and e.apprentice.user.deletedAt is null
+              and e.eventType = com.FaceLit.backend.facial.model.enums.FacialEventType.ENTRY
+              and e.attendanceStatus = com.FaceLit.backend.facial.model.enums.AttendanceStatus.ABSENT
+              and (e.excuse is null or e.excuse = false)
+              and e.recordEnvironment.shutdownTime <= :now
+              and not exists (select n.idNotification from Notification n
+                              where n.idFacialEvent = e.idFacialEvent and n.type = 'attendance_absent')
+            order by e.eventDatetime asc
+            """)
+    List<UUID> findUnnotifiedConfirmedAbsences(@Param("now") java.time.OffsetDateTime now, org.springframework.data.domain.Pageable page);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select e from FacialEvent e where e.idFacialEvent = :id")
+    Optional<FacialEvent> lockForNotification(@Param("id") UUID id);
+    @Query("""
             select distinct e.apprentice.user.idUser from FacialEvent e
             where e.recordEnvironment.idRecordEnvironment = :id and e.deletedAt is null
               and e.apprentice.deletedAt is null and e.apprentice.user.deletedAt is null

@@ -73,7 +73,7 @@ class ExitReminderEmailTest {
     }
 
     @Test void emailOnlyNotificationsAreExcludedFromAppInboxAndMarkAllRead() {
-        var service = new NotificationServiceImpl(notifications, logs, mock(UserRoleRepository.class), new NotificationCatalog(), mock(ApplicationEventPublisher.class));
+        var service = new NotificationServiceImpl(notifications, logs, mock(UserRoleRepository.class), new NotificationCatalog(), mock(ApplicationEventPublisher.class), mock(com.FaceLit.backend.shared.service.UserDisplayNameService.class));
         Notification app = new Notification(); app.setIdNotification(UUID.randomUUID()); app.setIdUserApp(userId); app.setType("attendance_late"); app.setChannel("APP_EMAIL");
         when(notifications.findByIdUserAppOrderByCreatedAtDesc(userId)).thenReturn(List.of(notification, app));
         assertThat(service.findForUser(userId)).extracting(n -> n.type()).containsExactly("attendance_late");
@@ -85,7 +85,7 @@ class ExitReminderEmailTest {
 
     @Test void emailOnlyCreationPersistsEmailOutboxAndPublishesDispatch() {
         var publisher = mock(ApplicationEventPublisher.class);
-        var service = new NotificationServiceImpl(notifications, logs, mock(UserRoleRepository.class), new NotificationCatalog(), publisher);
+        var service = new NotificationServiceImpl(notifications, logs, mock(UserRoleRepository.class), new NotificationCatalog(), publisher, mock(com.FaceLit.backend.shared.service.UserDisplayNameService.class));
         when(notifications.save(any())).thenAnswer(call -> { Notification n = call.getArgument(0); n.setIdNotification(UUID.randomUUID()); return n; });
         service.createForRecipient(new CreateNotificationRequestDTO(userId, "attendance_exit_reminder", "Salida", "Registra tu salida", UUID.randomUUID(), "record_environment", null, "{}"));
         var captured = ArgumentCaptor.forClass(Notification.class);
@@ -93,5 +93,20 @@ class ExitReminderEmailTest {
         assertThat(captured.getValue().getChannel()).isEqualTo("EMAIL");
         verify(logs).save(any(EmailLog.class));
         verify(publisher).publishEvent(any(EmailDispatchRequested.class));
+    }
+
+    @Test void oldFacialDecisionReturnsCoordinatorNameWithoutRewritingAuditMetadata() {
+        var names = mock(com.FaceLit.backend.shared.service.UserDisplayNameService.class);
+        UUID coordinator = UUID.randomUUID();
+        when(names.fullName(coordinator)).thenReturn("Maria Rodriguez");
+        var service = new NotificationServiceImpl(notifications, logs, mock(UserRoleRepository.class),
+                new NotificationCatalog(), mock(ApplicationEventPublisher.class), names);
+        notification.setType("facial_request_resolved"); notification.setChannel("APP_EMAIL");
+        String original = "{\"decidedBy\":\"" + coordinator + "\",\"facialDecision\":\"accepted\"}";
+        notification.setMetadataJson(original);
+        when(notifications.findByIdUserAppOrderByCreatedAtDesc(userId)).thenReturn(List.of(notification));
+        assertThat(service.findForUser(userId).get(0).meta()).contains("Maria Rodriguez", coordinator.toString());
+        assertThat(notification.getMetadataJson()).isEqualTo(original);
+        verify(notifications, never()).save(any());
     }
 }

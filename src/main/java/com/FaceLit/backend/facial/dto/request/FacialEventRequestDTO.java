@@ -27,6 +27,9 @@ public class FacialEventRequestDTO {
 
     private OffsetDateTime eventDatetime;
 
+    // Optional for older clients. An early exit must be requested explicitly.
+    private com.FaceLit.backend.facial.model.enums.FacialEventType eventType;
+
     @NotBlank(message = "El resultado del reconocimiento es obligatorio.")
     @Size(max = 20, message = "El resultado del reconocimiento no puede superar 20 caracteres.")
     private String recognitionResult;

@@ -13,6 +13,7 @@ import com.FaceLit.backend.notification.repository.NotificationRepository;
 import com.FaceLit.backend.notification.service.EmailDispatchRequested;
 import com.FaceLit.backend.notification.service.NotificationCatalog;
 import com.FaceLit.backend.notification.service.NotificationService;
+import com.FaceLit.backend.shared.service.UserDisplayNameService;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
@@ -27,18 +28,20 @@ public class NotificationServiceImpl implements NotificationService {
     private final UserRoleRepository userRoleRepository;
     private final NotificationCatalog catalog;
     private final ApplicationEventPublisher eventPublisher;
+    private final UserDisplayNameService names;
 
     public NotificationServiceImpl(
             NotificationRepository notificationRepository,
             EmailLogRepository emailLogRepository,
             UserRoleRepository userRoleRepository,
             NotificationCatalog catalog,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher, UserDisplayNameService names) {
         this.notificationRepository = notificationRepository;
         this.emailLogRepository = emailLogRepository;
         this.userRoleRepository = userRoleRepository;
         this.catalog = catalog;
         this.eventPublisher = eventPublisher;
+        this.names = names;
     }
 
     @Transactional(readOnly = true)
@@ -119,6 +122,12 @@ public class NotificationServiceImpl implements NotificationService {
                 .toList();
     }
 
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public List<NotificationResponseDTO> createIndependentCoordinatorEvent(MonolithEventRequestDTO request) {
+        return createCoordinatorEvent(request);
+    }
+
     private Notification createNotification(
             UUID recipientId,
             String type,
@@ -165,7 +174,22 @@ public class NotificationServiceImpl implements NotificationService {
                 notification.getMessage(),
                 notification.getCreatedAt(),
                 notification.isReadStatus(),
-                notification.getMetadataJson(),
+                displayMetadata(notification),
                 emailStatus);
+    }
+
+    private String displayMetadata(Notification notification) {
+        String original = notification.getMetadataJson();
+        if (original == null || !("facial_request_resolved".equals(notification.getType())
+                || "facial_reregister_request".equals(notification.getType()))) return original;
+        try {
+            var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            var metadata = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(original);
+            if (metadata.path("decidedByName").asText().isBlank() && metadata.hasNonNull("decidedBy")) {
+                String name = names.fullName(UUID.fromString(metadata.get("decidedBy").asText()));
+                if (name != null && !name.isBlank()) metadata.put("decidedByName", name);
+            }
+            return mapper.writeValueAsString(metadata);
+        } catch (Exception ignored) { return original; }
     }
 }

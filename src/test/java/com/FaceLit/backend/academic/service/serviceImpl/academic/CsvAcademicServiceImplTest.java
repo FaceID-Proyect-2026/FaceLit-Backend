@@ -35,6 +35,8 @@ import com.FaceLit.backend.auth.repository.roleandpermission.RoleRepository;
 @SpringBootTest
 @ActiveProfiles("test")
 class CsvAcademicServiceImplTest {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.FaceLit.backend.shared.service.EmailService emailService;
 
     @Autowired
     private CsvAcademicServiceImpl csvAcademicService;

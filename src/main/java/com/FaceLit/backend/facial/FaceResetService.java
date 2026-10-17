@@ -9,6 +9,7 @@ import com.FaceLit.backend.academic.repository.UserChipRepository;
 import com.FaceLit.backend.facial.model.FaceResetRequest;
 import com.FaceLit.backend.facial.repository.FaceResetRequestRepository;
 import com.FaceLit.backend.notification.repository.NotificationRepository;
+import com.FaceLit.backend.shared.service.UserDisplayNameService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -29,15 +30,17 @@ public class FaceResetService {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json = new ObjectMapper();
     private final int authorizationHours;
+    private final UserDisplayNameService names;
 
     public FaceResetService(FaceResetRequestRepository requests, UserChipRepository assignments,
             NotificationRepository notifications, JdbcTemplate jdbc,
-            @Value("${facial.reset.authorization-hours:24}") int authorizationHours) {
+            @Value("${facial.reset.authorization-hours:24}") int authorizationHours, UserDisplayNameService names) {
         this.requests = requests;
         this.assignments = assignments;
         this.notifications = notifications;
         this.jdbc = jdbc;
         this.authorizationHours = Math.max(1, authorizationHours);
+        this.names = names;
     }
 
     public record ResetState(UUID requestId, String status, boolean canReregister,
@@ -108,6 +111,9 @@ public class FaceResetService {
         request.setStatus("accepted".equals(decision) ? "ACCEPTED" : "REJECTED");
         request.setResolvedBy(actor);
         request.setResolvedAt(OffsetDateTime.now());
+        Map<String, Object> decisionContext = readJson(request.getContextJson());
+        decisionContext.put("decidedByName", names.fullName(actor));
+        request.setContextJson(writeJson(decisionContext));
         if ("accepted".equals(decision)) {
             request.setAuthorizationToken(UUID.randomUUID());
             request.setAuthorizationExpiresAt(request.getResolvedAt().plusHours(authorizationHours));
@@ -131,6 +137,8 @@ public class FaceResetService {
         try { return json.readValue(source, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}); }
         catch (JsonProcessingException ex) { throw new IllegalStateException("Contexto facial inválido", ex); }
     }
+
+    public String coordinatorName(UUID actor) { return names.fullName(actor); }
 
     public String writeJson(Map<String, Object> value) {
         try { return json.writeValueAsString(value); }

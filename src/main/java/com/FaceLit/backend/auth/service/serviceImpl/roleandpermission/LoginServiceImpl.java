@@ -70,7 +70,7 @@ public class LoginServiceImpl implements LoginService {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = LoginException.class)
     public LoginResponseDTO login(LoginRequestDTO dto) {
 
         String identifier = dto.resolveIdentifier();

@@ -37,7 +37,9 @@ public class FaceResetNotificationDelivery {
 
     @Scheduled(fixedDelayString = "${facial.reset.notification-retry-ms:5000}")
     public void retryPending() {
-        for (UUID id : requests.findPendingNotifications()) {
+        var pending = new java.util.LinkedHashSet<>(requests.findPendingNotifications());
+        pending.addAll(requests.findUnnotifiedExpired(java.time.OffsetDateTime.now()));
+        for (UUID id : pending) {
             try { deliver(id); }
             catch (RuntimeException ex) { LOG.warn("Entrega facial pendiente; se reintentará. request={}", id, ex); }
         }
@@ -64,6 +66,9 @@ public class FaceResetNotificationDelivery {
                 boolean accepted = "ACCEPTED".equals(request.getStatus());
                 context.put("facialDecision", accepted ? "accepted" : "rejected");
                 context.put("decidedBy", request.getResolvedBy().toString());
+                String decidedByName = context.get("decidedByName") instanceof String name ? name : "";
+                if (decidedByName.isBlank()) decidedByName = reset.coordinatorName(request.getResolvedBy());
+                context.put("decidedByName", decidedByName);
                 context.put("decidedAt", request.getResolvedAt().toString());
                 if (accepted) context.put("authorizationExpiresAt", request.getAuthorizationExpiresAt().toString());
                 send(request.getId(), request.getUserId(), "facial_request_resolved",
@@ -71,7 +76,8 @@ public class FaceResetNotificationDelivery {
                         (accepted ? "El coordinador aprobó tu solicitud. Puedes abrir la cámara y registrar tu rostro una sola vez hasta "
                                 + request.getAuthorizationExpiresAt() + ". El nuevo rostro reemplazará al anterior al completar el registro."
                                 : "El coordinador rechazó tu solicitud. Tu registro facial anterior se conserva y puedes solicitar nuevamente.")
-                                + details + "\nAbre Mi reconocimiento facial: " + appUrl + "/apprentice/facial", context);
+                                + details + "\nDecidido por: " + (decidedByName.isBlank() ? "Coordinador" : decidedByName)
+                                + "\nAbre Mi reconocimiento facial: " + appUrl + "/apprentice/facial", context);
                 request.setDecisionNotified(true);
             }
             if (request.getConsumedAt() != null && !request.isCompletionNotified()) {
@@ -79,6 +85,18 @@ public class FaceResetNotificationDelivery {
                         "Tu nuevo rostro fue registrado. El embedding anterior fue reemplazado y la autorización quedó consumida."
                                 + details, context);
                 request.setCompletionNotified(true);
+            }
+            if ("ACCEPTED".equals(request.getStatus()) && request.getConsumedAt() == null
+                    && request.getAuthorizationExpiresAt() != null
+                    && !request.getAuthorizationExpiresAt().isAfter(java.time.OffsetDateTime.now())) {
+                context.put("authorizationExpiresAt", request.getAuthorizationExpiresAt().toString());
+                context.put("recipientName", context.get("learnerName")); context.put("recipientContext", "learner");
+                send(request.getId(), request.getUserId(), "facial_authorization_expired", "Permiso facial vencido",
+                        "Tu permiso de un solo uso para reemplazar el rostro venció sin utilizarse el "
+                                + request.getAuthorizationExpiresAt().atZoneSameInstant(java.time.ZoneId.of("America/Bogota"))
+                                        .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                                + " (hora de Colombia). Recibes este aviso porque el plazo de tu autorización terminó. Tu rostro anterior se conserva y la cámara permanece bloqueada. Solicita nuevamente autorización al coordinador."
+                                + details + "\nAbre Mi reconocimiento facial: " + appUrl + "/apprentice/facial", context);
             }
             requests.save(request);
         });

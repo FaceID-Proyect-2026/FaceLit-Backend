@@ -20,6 +20,17 @@ import org.springframework.web.server.ResponseStatusException;
 import com.FaceLit.backend.notification.service.NotificationService;
 
 class FacialEnrollmentControllerTest {
+    @Test void confirmationRequiresPersistedFaceAndDoesNotDuplicate() {
+        doAnswer(call -> { Consumer<TransactionStatus> action = call.getArgument(0); action.accept(mock(TransactionStatus.class)); return null; }).when(tx).executeWithoutResult(any());
+        when(jdbc.queryForObject(contains("FROM facialrecognition.user_face"), eq(Boolean.class), eq(user))).thenReturn(true);
+        controller.confirmRegistration(user);
+        verify(notificationService).createForRecipient(argThat(n -> n.type().equals("facial_registration_completed") && n.recipientUserId().equals(user)));
+        when(jdbc.queryForObject(contains("FROM notification.notification"), eq(Boolean.class), eq(user))).thenReturn(true);
+        controller.confirmRegistration(user);
+        verifyNoMoreInteractions(notificationService);
+        when(jdbc.queryForObject(contains("FROM facialrecognition.user_face"), eq(Boolean.class), eq(user))).thenReturn(false);
+        assertThrows(ResponseStatusException.class, () -> controller.confirmRegistration(user));
+    }
     private String photo() throws Exception {
         var output = new java.io.ByteArrayOutputStream();
         javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(320, 320, java.awt.image.BufferedImage.TYPE_INT_RGB), "jpeg", output);

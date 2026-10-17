@@ -31,18 +31,21 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final VerificationCodeGenerator verificationCodeGenerator;
+    private final com.FaceLit.backend.notification.service.NotificationService notifications;
 
     public PasswordRecoveryServiceImpl(
             CredentialRepository credentialRepository,
             PasswordRecoveryRepository passwordRecoveryRepository,
             PasswordEncoder passwordEncoder,
             EmailService emailService,
-            VerificationCodeGenerator verificationCodeGenerator) {
+            VerificationCodeGenerator verificationCodeGenerator,
+            com.FaceLit.backend.notification.service.NotificationService notifications) {
         this.credentialRepository = credentialRepository;
         this.passwordRecoveryRepository = passwordRecoveryRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
         this.verificationCodeGenerator = verificationCodeGenerator;
+        this.notifications = notifications;
     }
 
     @Override
@@ -139,6 +142,18 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
         // 6. Marcar el código como usado — no puede reutilizarse
         recovery.setUsed(true);
         passwordRecoveryRepository.save(recovery);
+
+        credential.setLockedUntil(null);
+        String recipientName = ((user.getFirstName() == null ? "" : user.getFirstName()) + " " + (user.getLastName() == null ? "" : user.getLastName())).trim();
+        var metadata = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+        metadata.put("action", "password_recovered"); metadata.put("recipientName", recipientName);
+        metadata.put("recipientContext", "account_owner"); metadata.put("occurredAt", OffsetDateTime.now().toString());
+        notifications.createForRecipient(new com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO(
+                user.getIdUser(), "password_changed", "Contraseña restablecida",
+                "Destinatario: " + recipientName + ". Tu contraseña fue restablecida mediante recuperación. Fecha: "
+                        + OffsetDateTime.now().atZoneSameInstant(java.time.ZoneId.of("America/Bogota")).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                        + " (hora de Colombia). Recibes este aviso para confirmar un cambio de seguridad de tu cuenta. Ya puedes ingresar con tu nueva contraseña. Si no realizaste este cambio, contacta al coordinador de inmediato.",
+                user.getIdUser(), "user_app", null, metadata.toString()));
 
         // 7. Responder con éxito
         return PasswordRecoveryResponseDTO.passwordReset();

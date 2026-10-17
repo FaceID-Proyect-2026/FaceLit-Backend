@@ -13,6 +13,10 @@ public class NotificationCatalog {
     private static final String APP_EMAIL = "APP_EMAIL";
 
     private final Map<String, NotificationDefinition> definitions = Map.ofEntries(
+            Map.entry("attendance_corrected", new NotificationDefinition("ASISTENCIA", APP_EMAIL, "Asistencia corregida")),
+            Map.entry("facial_authorization_expired", new NotificationDefinition("RECONOCIMIENTO_FACIAL", APP, "Permiso facial vencido")),
+            Map.entry("user_role_changed", new NotificationDefinition("SEGURIDAD", APP_EMAIL, "Rol de usuario modificado")),
+            Map.entry("email_delivery_failed", new NotificationDefinition("SEGURIDAD", APP, "Correo no entregado")),
             Map.entry("csv_upload_done", new NotificationDefinition("ACADEMICO", APP, "Carga de CSV finalizada")),
             Map.entry("csv_inconsistency", new NotificationDefinition("ACADEMICO", APP_EMAIL, "Inconsistencia pendiente de revision")),
             Map.entry("csv_transfer_applied", new NotificationDefinition("TRASLADO", APP, "Cambio de ficha aplicado")),
@@ -42,7 +46,7 @@ public class NotificationCatalog {
             Map.entry("instructor_profile_updated", new NotificationDefinition("ACADEMICO", APP, "Tus datos fueron modificados")),
             Map.entry("instructor_assignment_updated", new NotificationDefinition("ACADEMICO", APP, "Tu asignacion academica cambio")),
             Map.entry("apprentice_profile_updated", new NotificationDefinition("ACADEMICO", APP, "Tus datos fueron modificados")),
-            Map.entry("facial_session_substitution", new NotificationDefinition("RECONOCIMIENTO_FACIAL", APP, "Sesion configurada con suplencia")),
+            Map.entry("facial_session_substitution", new NotificationDefinition("RECONOCIMIENTO_FACIAL", APP_EMAIL, "Sesión configurada para otro instructor")),
             Map.entry("facial_request_resolved", new NotificationDefinition("RECONOCIMIENTO_FACIAL", APP_EMAIL, "Respuesta a tu solicitud facial")),
             Map.entry("facial_registration_completed", new NotificationDefinition("RECONOCIMIENTO_FACIAL", APP, "Tu registro facial fue completado")),
             Map.entry("password_changed", new NotificationDefinition("SEGURIDAD", APP_EMAIL, "Tu contrasena fue modificada")),
