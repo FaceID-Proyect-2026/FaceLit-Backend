@@ -33,7 +33,13 @@ public interface RecordEnvironmentRepository extends JpaRepository<RecordEnviron
             SELECT record
             FROM RecordEnvironment record
             WHERE record.active = true
-              AND record.instructorInCharge.user.idUser = :authenticatedUserId
+              AND (
+                    record.instructorInCharge.user.idUser = :authenticatedUserId
+                    OR (
+                        record.instructorInCharge IS NULL
+                        AND record.instructorScheduled.user.idUser = :authenticatedUserId
+                    )
+              )
               AND record.shutdownTime > CURRENT_TIMESTAMP
             ORDER BY record.entryTime DESC
             """)
