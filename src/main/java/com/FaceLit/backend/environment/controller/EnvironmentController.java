@@ -21,6 +21,7 @@ import com.FaceLit.backend.academic.dto.response.academic.ChipResponseDTO;
 import com.FaceLit.backend.academic.dto.response.academic.InstructorResponseDTO;
 import com.FaceLit.backend.environment.dto.request.EnvironmentRequestDTO;
 import com.FaceLit.backend.environment.dto.request.RecordEnvironmentRequestDTO;
+import com.FaceLit.backend.auth.dto.request.roleandpermission.PasswordVerificationRequestDTO;
 import com.FaceLit.backend.environment.dto.response.EnvironmentResponseDTO;
 import com.FaceLit.backend.environment.dto.response.RecordEnvironmentResponseDTO;
 import com.FaceLit.backend.environment.service.EnvironmentService;
@@ -76,6 +77,19 @@ public class EnvironmentController {
                 .findCurrentActiveSession(principalId(principal));
         return session.map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    @PostMapping("/sessions/{idRecordEnvironment}/verify-exit-password")
+    public ResponseEntity<Boolean> verifySessionExitPassword(
+            @PathVariable UUID idRecordEnvironment,
+            @RequestParam(defaultValue = "RESPONSIBLE") String credentialOwner,
+            @Valid @RequestBody PasswordVerificationRequestDTO dto,
+            @AuthenticationPrincipal Object principal) {
+        return ResponseEntity.ok(environmentService.verifySessionExitPassword(
+                idRecordEnvironment,
+                principalId(principal),
+                credentialOwner,
+                dto.getPassword()));
     }
 
     @PutMapping("/sessions/{idRecordEnvironment}")

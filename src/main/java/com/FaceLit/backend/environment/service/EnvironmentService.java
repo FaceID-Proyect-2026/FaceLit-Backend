@@ -25,5 +25,8 @@ public interface EnvironmentService {
 
     Optional<RecordEnvironmentResponseDTO> findCurrentActiveSession(UUID authenticatedUserId);
 
+    boolean verifySessionExitPassword(UUID idRecordEnvironment, UUID authenticatedUserId,
+            String credentialOwner, String password);
+
     RecordEnvironmentResponseDTO updateSession(UUID idRecordEnvironment, RecordEnvironmentRequestDTO dto, UUID authenticatedUserId);
 }

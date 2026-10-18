@@ -13,6 +13,7 @@ import com.FaceLit.backend.academic.model.academic.*;
 import com.FaceLit.backend.academic.model.enums.AcademicState;
 import com.FaceLit.backend.academic.repository.*;
 import com.FaceLit.backend.auth.model.security.User;
+import com.FaceLit.backend.auth.service.roleandpermission.LoginService;
 import com.FaceLit.backend.environment.dto.request.RecordEnvironmentRequestDTO;
 import com.FaceLit.backend.environment.model.*;
 import com.FaceLit.backend.environment.model.enums.EnvironmentState;
@@ -32,7 +33,7 @@ class SessionNotificationTest {
     private final DeviceRepository devices = mock(DeviceRepository.class);
     private final NotificationService notifications = mock(NotificationService.class);
     private final EnvironmentServiceImpl service = new EnvironmentServiceImpl(environments, sessions, instructors,
-            mock(InstructorProgramRepository.class), chips, learners, devices, notifications);
+            mock(InstructorProgramRepository.class), chips, learners, devices, notifications, mock(LoginService.class));
     private final Instructor creator = instructor("Camila", "Perez");
     private final Instructor selected = instructor("Luis", "Gomez");
     private final RecordEnvironmentRequestDTO dto = new RecordEnvironmentRequestDTO();
