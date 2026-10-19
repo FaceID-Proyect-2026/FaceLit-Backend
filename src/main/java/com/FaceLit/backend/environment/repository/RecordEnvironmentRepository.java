@@ -33,12 +33,21 @@ public interface RecordEnvironmentRepository extends JpaRepository<RecordEnviron
             SELECT record
             FROM RecordEnvironment record
             WHERE record.active = true
-              AND record.instructorInCharge.user.idUser = :authenticatedUserId
+              AND (
+                    record.instructorInCharge.user.idUser = :authenticatedUserId
+                    OR (
+                        record.instructorInCharge IS NULL
+                        AND record.instructorScheduled.user.idUser = :authenticatedUserId
+                    )
+              )
               AND record.shutdownTime > CURRENT_TIMESTAMP
             ORDER BY record.entryTime DESC
             """)
     Optional<RecordEnvironment> findCurrentActiveSessionByInstructor(
             @Param("authenticatedUserId") UUID authenticatedUserId);
+
+    Optional<RecordEnvironment> findFirstByCreatedByAndActiveTrueAndDeletedAtIsNullAndShutdownTimeAfterOrderByEntryTimeDesc(
+            String createdBy, OffsetDateTime now);
 
     @Query("""
             SELECT DISTINCT record.chip.idChip

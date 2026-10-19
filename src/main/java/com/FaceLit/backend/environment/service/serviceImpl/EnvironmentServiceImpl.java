@@ -28,6 +28,7 @@ import com.FaceLit.backend.academic.repository.InstructorProgramRepository;
 import com.FaceLit.backend.academic.repository.InstructorRepository;
 import com.FaceLit.backend.academic.repository.UserChipRepository;
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
+import com.FaceLit.backend.auth.service.roleandpermission.LoginService;
 import com.FaceLit.backend.environment.dto.request.EnvironmentRequestDTO;
 import com.FaceLit.backend.environment.dto.request.RecordEnvironmentRequestDTO;
 import com.FaceLit.backend.environment.dto.response.EnvironmentResponseDTO;
@@ -55,6 +56,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     private final UserChipRepository userChipRepository;
     private final DeviceRepository deviceRepository;
     private final NotificationService notificationService;
+    private final LoginService loginService;
 
     public EnvironmentServiceImpl(
             EnvironmentRepository environmentRepository,
@@ -64,7 +66,8 @@ public class EnvironmentServiceImpl implements EnvironmentService {
             ChipRepository chipRepository,
             UserChipRepository userChipRepository,
             DeviceRepository deviceRepository,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            LoginService loginService) {
         this.environmentRepository = environmentRepository;
         this.recordEnvironmentRepository = recordEnvironmentRepository;
         this.instructorRepository = instructorRepository;
@@ -73,6 +76,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         this.userChipRepository = userChipRepository;
         this.deviceRepository = deviceRepository;
         this.notificationService = notificationService;
+        this.loginService = loginService;
     }
 
     @Override
@@ -186,8 +190,44 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     @Transactional
     public Optional<RecordEnvironmentResponseDTO> findCurrentActiveSession(UUID authenticatedUserId) {
         recordEnvironmentRepository.deactivateExpiredSessions(OffsetDateTime.now());
+        OffsetDateTime now = OffsetDateTime.now();
         return recordEnvironmentRepository.findCurrentActiveSessionByInstructor(authenticatedUserId)
+                .or(() -> recordEnvironmentRepository
+                        .findFirstByCreatedByAndActiveTrueAndDeletedAtIsNullAndShutdownTimeAfterOrderByEntryTimeDesc(
+                                authenticatedUserId.toString(), now))
                 .map(RecordEnvironmentResponseDTO::new);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean verifySessionExitPassword(UUID idRecordEnvironment, UUID authenticatedUserId,
+            String credentialOwner, String password) {
+        RecordEnvironment record = recordEnvironmentRepository.findById(idRecordEnvironment).orElse(null);
+        if (record == null || !Boolean.TRUE.equals(record.getActive())
+                || record.getShutdownTime() == null
+                || !record.getShutdownTime().isAfter(OffsetDateTime.now())) {
+            return false;
+        }
+
+        UUID responsibleUserId = record.getInstructorScheduled().getUser().getIdUser();
+        UUID replacementUserId = record.getInstructorInCharge() == null
+                ? null
+                : record.getInstructorInCharge().getUser().getIdUser();
+        if (!authenticatedUserId.equals(responsibleUserId)
+                && !authenticatedUserId.equals(replacementUserId)) {
+            return false;
+        }
+
+        UUID credentialUserId;
+        if ("REPLACEMENT".equalsIgnoreCase(credentialOwner)) {
+            if (replacementUserId == null) return false;
+            credentialUserId = replacementUserId;
+        } else if ("RESPONSIBLE".equalsIgnoreCase(credentialOwner)) {
+            credentialUserId = responsibleUserId;
+        } else {
+            return false;
+        }
+        return loginService.verifyPassword(credentialUserId, password);
     }
 
     @Scheduled(fixedDelay = 30_000)
