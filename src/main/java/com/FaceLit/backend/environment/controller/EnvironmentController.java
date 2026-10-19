@@ -75,8 +75,13 @@ public class EnvironmentController {
             @AuthenticationPrincipal Object principal) {
         Optional<RecordEnvironmentResponseDTO> session = environmentService
                 .findCurrentActiveSession(principalId(principal));
-        return session.map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.noContent().build());
+        return session
+                .map(value -> ResponseEntity.ok()
+                        .cacheControl(CacheControl.noStore())
+                        .body(value))
+                .orElseGet(() -> ResponseEntity.noContent()
+                        .cacheControl(CacheControl.noStore())
+                        .build());
     }
 
     @PostMapping("/sessions/{idRecordEnvironment}/verify-exit-password")

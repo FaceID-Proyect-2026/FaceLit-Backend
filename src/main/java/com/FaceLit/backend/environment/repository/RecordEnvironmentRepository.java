@@ -46,6 +46,9 @@ public interface RecordEnvironmentRepository extends JpaRepository<RecordEnviron
     Optional<RecordEnvironment> findCurrentActiveSessionByInstructor(
             @Param("authenticatedUserId") UUID authenticatedUserId);
 
+    Optional<RecordEnvironment> findFirstByCreatedByAndActiveTrueAndDeletedAtIsNullAndShutdownTimeAfterOrderByEntryTimeDesc(
+            String createdBy, OffsetDateTime now);
+
     @Query("""
             SELECT DISTINCT record.chip.idChip
             FROM RecordEnvironment record

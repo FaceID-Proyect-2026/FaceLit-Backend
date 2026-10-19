@@ -190,7 +190,11 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     @Transactional
     public Optional<RecordEnvironmentResponseDTO> findCurrentActiveSession(UUID authenticatedUserId) {
         recordEnvironmentRepository.deactivateExpiredSessions(OffsetDateTime.now());
+        OffsetDateTime now = OffsetDateTime.now();
         return recordEnvironmentRepository.findCurrentActiveSessionByInstructor(authenticatedUserId)
+                .or(() -> recordEnvironmentRepository
+                        .findFirstByCreatedByAndActiveTrueAndDeletedAtIsNullAndShutdownTimeAfterOrderByEntryTimeDesc(
+                                authenticatedUserId.toString(), now))
                 .map(RecordEnvironmentResponseDTO::new);
     }
 
