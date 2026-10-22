@@ -48,6 +48,9 @@ import com.FaceLit.backend.notification.service.NotificationService;
 @Service
 public class UserChipServiceImpl implements UserChipService {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.FaceLit.backend.notification.service.ProfileChangeNotificationService profileChanges;
+
     private final UserChipRepository userChipRepository;
     private final ApprenticeRepository apprenticeRepository;
     private final UserRepository userRepository;
@@ -285,10 +288,10 @@ public class UserChipServiceImpl implements UserChipService {
         user.setLastName(dto.getApellido().trim());
         userRepository.save(user);
 
-        credential.setEmail(email);
+        initialCredentialService.requestEmailChange(user, credential, email);
         credentialRepository.save(credential);
 
-        notifyApprenticeProfileUpdated(user, activeChip, oldDocument, oldFirstName, oldLastName, oldEmail, email);
+        notifyApprenticeProfileUpdated(user, activeChip, oldDocument, oldFirstName, oldLastName, oldEmail, credential.getEmail());
         return new UserChipResponseDTO(activeChip);
     }
 
@@ -491,32 +494,11 @@ public class UserChipServiceImpl implements UserChipService {
         if (changes.isEmpty()) {
             return;
         }
-        try {
-            notificationService.createForRecipient(new CreateNotificationRequestDTO(
-                    user.getIdUser(),
-                    "apprentice_profile_updated",
-                    "Tus datos fueron modificados",
-                    "Coordinacion actualizo tus datos personales. " + String.join("; ", changes) + ".",
-                    userChip.getIdUserChip(),
-                    "apprentice_chip",
-                    null,
-                    "{\"entityType\":\"apprentice\",\"entityId\":\"" + user.getIdUser() + "\"}"));
-            notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
-                    "academic_entity_updated",
-                    "Aprendiz actualizado",
-                    "Se actualizaron los datos del aprendiz " + learnerName(user)
-                            + " con documento " + emptyAsNone(user.getDocumentNumber())
-                            + ". Cambios: " + String.join("; ", changes) + ".",
-                    null,
-                    userChip.getIdUserChip(),
-                    "apprentice_chip",
-                    null,
-                    "{\"entityType\":\"learner\",\"entityId\":\"" + user.getIdUser()
-                            + "\",\"action\":\"updated\",\"learnerName\":\"" + safe(learnerName(user))
-                            + "\",\"learnerDocument\":\"" + safe(user.getDocumentNumber()) + "\"}"));
-        } catch (RuntimeException ignored) {
-            // La actualizacion academica no debe fallar por una notificacion informativa.
-        }
+        profileChanges.notifyChanges(user, "apprentice_profile_updated", "learner", java.util.Map.of(
+                "documento", new String[]{oldDocument, user.getDocumentNumber()},
+                "nombre", new String[]{oldFirstName, user.getFirstName()},
+                "apellido", new String[]{oldLastName, user.getLastName()},
+                "correo", new String[]{oldEmail, newEmail}));
     }
 
     private void addChange(java.util.List<String> changes, String field, String oldValue, String newValue) {

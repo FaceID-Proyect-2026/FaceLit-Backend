@@ -79,7 +79,7 @@ public class EmailServiceImpl implements EmailService {
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setTo(toEmail);
             helper.setSubject(subject);
-            helper.setText("Tu cuenta en FaceLit fue creada. Abre este mensaje en un cliente compatible con HTML para ver tus credenciales.", body);
+            helper.setText("Tus datos de acceso a FaceLit están disponibles en la versión HTML de este correo. Inicia sesión con tu número de documento y la contraseña generada. Puedes cambiarla cuando quieras desde ¿Olvidaste tu contraseña? en el inicio de sesión.", body);
             helper.addInline("facelitLogo", new ClassPathResource("static/email/facelit-logo.png"), "image/png");
             mailSender.send(message);
         } catch (MessagingException exception) {

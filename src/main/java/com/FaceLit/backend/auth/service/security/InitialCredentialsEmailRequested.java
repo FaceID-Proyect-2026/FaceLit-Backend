@@ -1,26 +1,9 @@
 package com.FaceLit.backend.auth.service.security;
 
-import com.FaceLit.backend.auth.model.enums.RoleName;
+import java.util.UUID;
 
-public record InitialCredentialsEmailRequested(
-        String email,
-        String firstName,
-        String lastName,
-        String role,
-        String loginIdentifier,
-        String initialPassword,
-        String fichaCode,
-        String programName) {
-
-    public InitialCredentialsEmailRequested(
-            String email,
-            String firstName,
-            String lastName,
-            RoleName role,
-            String loginIdentifier,
-            String initialPassword,
-            String fichaCode,
-            String programName) {
-        this(email, firstName, lastName, role.name(), loginIdentifier, initialPassword, fichaCode, programName);
-    }
+/** The password lives only in the in-memory after-commit event, never in the delivery table. */
+public record InitialCredentialsEmailRequested(UUID requestId, String rawPassword) {
+    public InitialCredentialsEmailRequested(UUID requestId) { this(requestId, null); }
+    @Override public String toString() { return "InitialCredentialsEmailRequested[requestId=" + requestId + "]"; }
 }

@@ -52,6 +52,13 @@ public class PasswordRecovery extends AuditBase {
     @Column(name = "used", nullable = false)
     private boolean used = false;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "access_request_id")
+    private AccountAccessRequest accessRequest;
+
+    @Column(name = "verified_at")
+    private OffsetDateTime verifiedAt;
+
 
 
     // Verifica si el token sigue siendo válido

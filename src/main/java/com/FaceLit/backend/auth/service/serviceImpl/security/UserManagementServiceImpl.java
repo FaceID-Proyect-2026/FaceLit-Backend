@@ -52,6 +52,9 @@ import jakarta.transaction.Transactional;
 @Service
 public class UserManagementServiceImpl implements UserManagementService {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.FaceLit.backend.notification.service.ProfileChangeNotificationService profileChanges;
+
         private final UserRepository userRepository;
         private final CredentialRepository credentialRepository;
         private final UserRoleRepository userRoleRepository;
@@ -275,7 +278,7 @@ public class UserManagementServiceImpl implements UserManagementService {
                                 credential.setCredentialStatus(CredentialStatus.ACTIVE);
                         }
                 }
-                credential.setEmail(email);
+                initialCredentialService.requestEmailChange(user, credential, email);
                 credentialRepository.save(credential);
 
                 AssignRoleRequestDTO roleDto = new AssignRoleRequestDTO();
@@ -293,18 +296,13 @@ public class UserManagementServiceImpl implements UserManagementService {
                                 .filter(item -> !item.isBlank())
                                 .toList();
                 if (!changes.isEmpty()) {
-                        notifyUser(user, "user_profile_updated", "Tus datos fueron modificados",
-                                        "Coordinacion actualizo tus datos. " + String.join("; ", changes) + ".",
-                                        "{\"entityType\":\"user\",\"entityId\":\"" + user.getIdUser() + "\",\"action\":\"updated\"}");
-                        notifyCoordinatorUserEvent(
-                                        "academic_entity_updated",
-                                        "Usuario actualizado",
-                                        "Se actualizo el usuario " + fullName(user)
-                                                        + " con documento " + emptyAsNone(user.getDocumentNumber())
-                                                        + ". Cambios: " + String.join("; ", changes) + ".",
-                                        user,
-                                        "updated",
-                                        "user");
+                        profileChanges.notifyChanges(user, "user_profile_updated", "user", java.util.Map.of(
+                                "documento", new String[]{oldDocument, user.getDocumentNumber()},
+                                "nombre", new String[]{oldFirstName, user.getFirstName()},
+                                "apellido", new String[]{oldLastName, user.getLastName()},
+                                "correo", new String[]{oldEmail, credential.getEmail()},
+                                "estado", new String[]{oldStatus.name(), user.getAccountStatus().name()},
+                                "rol", new String[]{oldRole, dto.getRole().name()}));
                 }
                 if (oldStatus != dto.getAccountStatus()) {
                         if (dto.getAccountStatus() == AccountStatus.ACTIVE) {

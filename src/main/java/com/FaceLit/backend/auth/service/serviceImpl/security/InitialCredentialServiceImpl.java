@@ -2,7 +2,6 @@ package com.FaceLit.backend.auth.service.serviceImpl.security;
 
 import java.security.SecureRandom;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -10,7 +9,6 @@ import com.FaceLit.backend.auth.model.enums.RoleName;
 import com.FaceLit.backend.auth.model.security.Credential;
 import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.auth.service.security.InitialCredentialService;
-import com.FaceLit.backend.auth.service.security.InitialCredentialsEmailRequested;
 
 @Service
 public class InitialCredentialServiceImpl implements InitialCredentialService {
@@ -20,15 +18,19 @@ public class InitialCredentialServiceImpl implements InitialCredentialService {
     private static final String SYMBOLS = "@$!%*?";
 
     private final PasswordEncoder passwordEncoder;
-    private final ApplicationEventPublisher eventPublisher;
+    private final AccountAccessService accountAccess;
 
-    public InitialCredentialServiceImpl(PasswordEncoder passwordEncoder, ApplicationEventPublisher eventPublisher) {
+    public InitialCredentialServiceImpl(PasswordEncoder passwordEncoder, AccountAccessService accountAccess) {
         this.passwordEncoder = passwordEncoder;
-        this.eventPublisher = eventPublisher;
+        this.accountAccess = accountAccess;
     }
 
     @Override
     public String generateInitialPassword() {
+        return newGeneratedPassword();
+    }
+
+    static String newGeneratedPassword() {
         StringBuilder password = new StringBuilder();
         password.append((char) ('A' + RANDOM.nextInt(26)));
         password.append(RANDOM.nextInt(10));
@@ -47,14 +49,14 @@ public class InitialCredentialServiceImpl implements InitialCredentialService {
     @Override
     public void sendWelcomeAfterCommit(User user, Credential credential, RoleName role, String rawPassword,
             String fichaCode, String programName) {
-        eventPublisher.publishEvent(new InitialCredentialsEmailRequested(
-                credential.getEmail(),
-                user.getFirstName(),
-                user.getLastName(),
-                role,
-                user.getDocumentNumber(),
-                rawPassword,
-                fichaCode,
-                programName));
+        accountAccess.welcome(user, credential, rawPassword);
     }
+
+    @Override
+    public void requestEmailChange(User user, Credential credential, String email) {
+        accountAccess.changeEmail(user, credential, email);
+    }
+
+    @Override
+    public void retryWelcome(User user) { accountAccess.retryWelcome(user); }
 }

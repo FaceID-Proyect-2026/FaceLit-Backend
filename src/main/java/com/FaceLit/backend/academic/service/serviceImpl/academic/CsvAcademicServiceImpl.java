@@ -95,6 +95,9 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
     private static final Pattern CHIP_CODE = Pattern.compile("\\d{" + AppConstants.CHIP_CODE_LENGTH + "}");
     private static final Pattern NAME = Pattern.compile("[\\p{L}]+(?: [\\p{L}]+)*");
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.FaceLit.backend.notification.service.ProfileChangeNotificationService profileChanges;
+
     private final ProgramRepository programRepository;
     private final ChipRepository chipRepository;
     private final InstructorRepository instructorRepository;
@@ -488,6 +491,11 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                     "El documento " + document + " ya pertenece a un usuario con otro rol. No se puede registrar como aprendiz."));
             return;
         }
+        // Existing apprentices must also apply personal changes and retry pending access instructions.
+        user = findOrCreateUser(row, result);
+        if (user == null) {
+            return;
+        }
         assignRole(user, RoleName.APPRENTICE);
         User resolvedUser = user;
         Apprentice current = apprenticeRepository.findByUser_IdUser(resolvedUser.getIdUser())
@@ -594,10 +602,11 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                                     + " ya esta registrado en otro usuario. Corrige el correo o usa el documento correcto.",
                                     HttpStatus.CONFLICT);
                         });
-                credential.setEmail(newEmail);
-                credentialRepository.save(credential);
+                initialCredentialService.requestEmailChange(existing, credential, newEmail);
+            } else {
+                initialCredentialService.retryWelcome(existing);
             }
-            notifyCsvPersonalUpdate(row, existing, oldFirstName, oldLastName, oldEmail, newEmail);
+            notifyCsvPersonalUpdate(row, existing, oldFirstName, oldLastName, oldEmail, credential.getEmail());
             return existing;
         }
         String email = row.value("correo").toLowerCase(Locale.ROOT);
@@ -878,22 +887,10 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
             return;
         }
         String type = row.value("tipo").equals("instructor") ? "instructor_profile_updated" : "apprentice_profile_updated";
-        try {
-            notificationService.createForRecipient(new CreateNotificationRequestDTO(
-                    user.getIdUser(),
-                    type,
-                    "Tus datos fueron modificados",
-                    "Coordinacion actualizo tus datos por carga CSV. " + String.join("; ", changes) + ".",
-                    user.getIdUser(),
-                    "user",
-                    null,
-                    json(Map.of(
-                            "entityType", row.value("tipo"),
-                            "document", user.getDocumentNumber(),
-                            "channel", "csv"))));
-        } catch (Exception exception) {
-            log.warn("No se pudo generar notificacion de actualizacion CSV para {}", user.getIdUser(), exception);
-        }
+        profileChanges.notifyChanges(user, type, row.value("tipo").equals("instructor") ? "instructor" : "learner", Map.of(
+                "nombre", new String[]{oldFirstName, user.getFirstName()},
+                "apellido", new String[]{oldLastName, user.getLastName()},
+                "correo", new String[]{oldEmail, newEmail}));
     }
 
     private void notifyCsvInstructorPrograms(Instructor instructor, List<String> addedPrograms) {

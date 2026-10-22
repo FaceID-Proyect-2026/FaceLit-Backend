@@ -10,6 +10,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CredentialRepository extends JpaRepository<Credential, UUID> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select c from Credential c where c.user.idUser = :userId")
+    Optional<Credential> lockByUserId(@org.springframework.data.repository.query.Param("userId") UUID userId);
+
     // Validar si ya existe una credencial con ese email
     boolean existsByEmail(String email);
     boolean existsByEmailIgnoreCase(String email);

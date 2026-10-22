@@ -12,4 +12,8 @@ public interface InitialCredentialService {
 
     void sendWelcomeAfterCommit(User user, Credential credential, RoleName role, String rawPassword,
             String fichaCode, String programName);
+
+    void requestEmailChange(User user, Credential credential, String email);
+
+    void retryWelcome(User user);
 }
