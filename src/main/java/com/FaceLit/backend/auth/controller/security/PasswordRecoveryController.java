@@ -26,11 +26,14 @@ public class PasswordRecoveryController {
 
     private final PasswordRecoveryService passwordRecoveryService;
     private final ChangePasswordService changePasswordService;
+    private final com.FaceLit.backend.auth.service.serviceImpl.security.AccountAccessService accountAccess;
 
     public PasswordRecoveryController(PasswordRecoveryService passwordRecoveryService,
-            ChangePasswordService changePasswordService) {
+            ChangePasswordService changePasswordService,
+            com.FaceLit.backend.auth.service.serviceImpl.security.AccountAccessService accountAccess) {
         this.passwordRecoveryService = passwordRecoveryService;
         this.changePasswordService = changePasswordService;
+        this.accountAccess = accountAccess;
     }
 
     // PASO 1 — Solicitar recuperación: el usuario manda su correo
@@ -41,6 +44,13 @@ public class PasswordRecoveryController {
             @Valid @RequestBody RequestPasswordRecoveryDTO dto) {
         PasswordRecoveryResponseDTO response = passwordRecoveryService.requestRecovery(dto);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/complete-access")
+    public ResponseEntity<PasswordRecoveryResponseDTO> completeAccess(
+            @Valid @RequestBody com.FaceLit.backend.auth.dto.request.security.CompleteAccountAccessDTO dto) {
+        accountAccess.complete(dto);
+        return ResponseEntity.ok(PasswordRecoveryResponseDTO.passwordReset());
     }
 
     @PostMapping("/verify-token")

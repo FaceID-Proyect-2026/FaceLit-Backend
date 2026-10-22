@@ -32,6 +32,12 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
     private final EmailService emailService;
     private final VerificationCodeGenerator verificationCodeGenerator;
     private final com.FaceLit.backend.notification.service.NotificationService notifications;
+    private AccountAccessService accountAccess;
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAccountAccess(AccountAccessService accountAccess) { this.accountAccess = accountAccess; }
 
     public PasswordRecoveryServiceImpl(
             CredentialRepository credentialRepository,
@@ -54,8 +60,15 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
 
         // 1. Buscar las credenciales por email
         // Si no existe → se rechaza explícitamente (decisión de negocio confirmada)
-        Credential credential = credentialRepository.findByEmail(dto.getEmail())
-                .orElseThrow(() -> new PasswordRecoveryException("Correo no registrado"));
+        Credential credential = credentialRepository.findByEmailIgnoreCase(dto.getEmail().trim()).orElse(null);
+        if (credential == null) throw new PasswordRecoveryException("Correo no registrado");
+
+        if (entityManager != null) {
+            credential = credentialRepository.lockByUserId(credential.getUser().getIdUser()).orElseThrow();
+            entityManager.refresh(credential);
+            if (!credential.getEmail().equalsIgnoreCase(dto.getEmail().trim()))
+                throw new PasswordRecoveryException("Correo no registrado");
+        }
 
         User user = credential.getUser();
 
@@ -65,13 +78,17 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
         }
 
         //  2.1 Invalidar el código anterior si existe — igual que resendCode() en RegisterServiceImpl
-        passwordRecoveryRepository.findActiveByUser(user).ifPresent(previous -> {
-            previous.setUsed(true);
-            passwordRecoveryRepository.save(previous);
-        });
+        var previousCodes = passwordRecoveryRepository.findAllByUser_IdUser(user.getIdUser());
+        previousCodes.forEach(previous -> previous.setUsed(true));
+        passwordRecoveryRepository.saveAll(previousCodes);
 
         // 3. Generar el código numérico de seis dígitos.
         String code = verificationCodeGenerator.generate();
+        int retries = 0;
+        while (passwordRecoveryRepository.existsByToken(code)) {
+            if (++retries >= 10) throw new PasswordRecoveryException("No fue posible generar un codigo. Intenta nuevamente.");
+            code = verificationCodeGenerator.generate();
+        }
 
         // 4. Guardar el nuevo registro de recuperación con expiración de 5 minutos
         PasswordRecovery recovery = new PasswordRecovery();
@@ -83,7 +100,7 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
         passwordRecoveryRepository.save(recovery);
 
         // 5. Enviar el código al correo del usuario
-        emailService.sendRecoveryCode(dto.getEmail(), code);
+        emailService.sendRecoveryCode(credential.getEmail(), code);
 
         // 6. Responder confirmando el envío
         return PasswordRecoveryResponseDTO.codeSent();
@@ -95,6 +112,11 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
         PasswordRecovery recovery = passwordRecoveryRepository.findByToken(dto.getToken())
                 .orElseThrow(() -> new PasswordRecoveryException("Código incorrecto"));
 
+        if (entityManager != null) {
+            credentialRepository.lockByUserId(recovery.getUser().getIdUser()).orElseThrow();
+            entityManager.refresh(recovery);
+        }
+
         if (!recovery.isCurrent()) {
             if (recovery.isUsed()) {
                 throw new PasswordRecoveryException("Código incorrecto");
@@ -102,6 +124,9 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
             throw new PasswordRecoveryException("Código vencido");
         }
 
+        if (accountAccess != null) accountAccess.validateEmailChangeCode(recovery, false);
+        recovery.setVerifiedAt(OffsetDateTime.now());
+        passwordRecoveryRepository.save(recovery);
         return PasswordRecoveryResponseDTO.tokenVerified();
     }
 
@@ -112,6 +137,12 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
         // 1. Buscar el código ingresado
         PasswordRecovery recovery = passwordRecoveryRepository.findByToken(dto.getToken())
                 .orElseThrow(() -> new PasswordRecoveryException("Código incorrecto"));
+
+        // Serialize with email confirmation; refresh a code invalidated while waiting for this lock.
+        if (entityManager != null) {
+            credentialRepository.lockByUserId(recovery.getUser().getIdUser()).orElseThrow();
+            entityManager.refresh(recovery);
+        }
 
         // 2. Verificar que no esté usado y no haya expirado
         if (!recovery.isCurrent()) {
@@ -130,7 +161,10 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
 
         // 4. Obtener el usuario y su credencial
         User user = recovery.getUser();
-        Credential credential = user.getCredential();
+        Credential credential = entityManager == null ? user.getCredential()
+                : credentialRepository.findByUser(user)
+                        .orElseThrow(() -> new PasswordRecoveryException("El usuario no tiene credenciales"));
+        if (accountAccess != null) accountAccess.completeEmailChange(recovery, credential);
 
         // 5. Hashear y actualizar la contraseña
         // La contraseña anterior se sobreescribe — deja de ser válida automáticamente
@@ -144,6 +178,7 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
         passwordRecoveryRepository.save(recovery);
 
         credential.setLockedUntil(null);
+        if (accountAccess != null) accountAccess.cancelWelcome(user);
         String recipientName = ((user.getFirstName() == null ? "" : user.getFirstName()) + " " + (user.getLastName() == null ? "" : user.getLastName())).trim();
         var metadata = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
         metadata.put("action", "password_recovered"); metadata.put("recipientName", recipientName);

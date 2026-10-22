@@ -1,6 +1,6 @@
 package com.FaceLit.backend.shared.util;
 
-import java.util.Random;
+import java.security.SecureRandom;
 import org.springframework.stereotype.Component;
 import com.FaceLit.backend.shared.constants.AppConstants;
 
@@ -8,7 +8,7 @@ import com.FaceLit.backend.shared.constants.AppConstants;
 @Component
 public class VerificationCodeGenerator {
 
-    private final Random random = new Random();
+    private final SecureRandom random = new SecureRandom();
 
     // Genera un código de 6 dígitos con ceros a la izquierda si aplica
     // Ejemplo: 483 -> "000483"

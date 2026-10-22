@@ -18,6 +18,8 @@ public interface PasswordRecoveryRepository extends JpaRepository<PasswordRecove
     //// Busca el token exacto que el usuario ingresa para restablecer la contraseña
     Optional<PasswordRecovery> findByToken(String token);
 
+    boolean existsByToken(String token);
+
     // Busca el código activo más reciente de un usuario
     // Se usa para invalidar códigos anteriores al generar uno nuevo
     @Query("SELECT pr FROM PasswordRecovery pr WHERE pr.user = :user AND pr.used = false ORDER BY pr.createdAt DESC LIMIT 1")

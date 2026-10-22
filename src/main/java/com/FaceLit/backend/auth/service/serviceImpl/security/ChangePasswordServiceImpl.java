@@ -23,6 +23,9 @@ public class ChangePasswordServiceImpl implements ChangePasswordService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final NotificationService notificationService;
+    private AccountAccessService accountAccess;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAccountAccess(AccountAccessService accountAccess) { this.accountAccess = accountAccess; }
 
     public ChangePasswordServiceImpl(
             UserRepository userRepository,
@@ -50,6 +53,7 @@ public class ChangePasswordServiceImpl implements ChangePasswordService {
         credential.setPassword(passwordEncoder.encode(dto.getNewPassword()));
         credential.setFailedAttempts(0);
         credential.setLockedUntil(null);
+        if (accountAccess != null) accountAccess.cancelWelcome(user);
         notifyPasswordChanged(user);
         return PasswordRecoveryResponseDTO.passwordReset();
     }

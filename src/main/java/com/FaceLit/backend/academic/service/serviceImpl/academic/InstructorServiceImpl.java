@@ -44,6 +44,9 @@ import com.FaceLit.backend.notification.service.NotificationService;
 @Service
 public class InstructorServiceImpl implements InstructorService {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.FaceLit.backend.notification.service.ProfileChangeNotificationService profileChanges;
+
     private final InstructorRepository instructorRepository;
     private final InstructorProgramRepository instructorProgramRepository;
     private final ProgramRepository programRepository;
@@ -186,7 +189,7 @@ public class InstructorServiceImpl implements InstructorService {
         if (credential == null) {
             throw new AcademicException("El instructor no tiene credencial asociada.", HttpStatus.CONFLICT);
         }
-        credential.setEmail(email);
+        initialCredentialService.requestEmailChange(user, credential, email);
         userRepository.save(user);
         credentialRepository.save(credential);
 
@@ -220,34 +223,20 @@ public class InstructorServiceImpl implements InstructorService {
 
         if (!oldType.equals(newType)) {
             recordChange(instructor, "instructor", oldType.name(), newType.name(), ChangeAction.UPDATE, "instructor_type", oldType.name() + " -> " + newType.name());
-            notifyInstructor(instructor, "instructor_profile_updated", "Tus datos fueron modificados",
-                    "Coordinacion actualizo tu tipo de instructor: " + oldType.name() + " -> " + newType.name() + ".");
-            notifyCoordinatorInstructorEvent(
-                    "academic_entity_updated",
-                    "Instructor actualizado",
-                    "Se actualizo el tipo del instructor " + instructorName(instructor)
-                            + ": " + oldType.name() + " -> " + newType.name() + ".",
-                    instructor,
-                    "updated");
         }
 
         String newProfile = user.getDocumentNumber() + " / " + user.getFirstName() + " " + user.getLastName()
                 + " / " + credential.getEmail();
         if (!oldProfile.equals(newProfile)) {
             recordChange(instructor, "instructor", oldProfile, newProfile, ChangeAction.UPDATE, "instructor_profile", newProfile);
-            notifyInstructor(instructor, "instructor_profile_updated", "Tus datos fueron modificados",
-                    "Coordinacion actualizo tus datos personales. " + describeChanges(Map.of(
-                            "documento", values(oldDocument, user.getDocumentNumber()),
-                            "nombre", values(oldFirstName, user.getFirstName()),
-                            "apellido", values(oldLastName, user.getLastName()),
-                            "correo", values(oldEmail, credential.getEmail()))));
-            notifyCoordinatorInstructorEvent(
-                    "academic_entity_updated",
-                    "Instructor actualizado",
-                    "Se actualizaron los datos personales del instructor " + instructorName(instructor) + ".",
-                    instructor,
-                    "updated");
         }
+
+        profileChanges.notifyChanges(user, "instructor_profile_updated", "instructor", Map.of(
+                "documento", values(oldDocument, user.getDocumentNumber()),
+                "nombre", values(oldFirstName, user.getFirstName()),
+                "apellido", values(oldLastName, user.getLastName()),
+                "correo", values(oldEmail, credential.getEmail()),
+                "tipoInstructor", values(oldType.name(), newType.name())));
 
         List<UUID> newProgramIds = ids;
 
