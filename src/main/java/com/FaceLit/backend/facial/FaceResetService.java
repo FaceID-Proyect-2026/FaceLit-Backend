@@ -1,6 +1,9 @@
 package com.FaceLit.backend.facial;
 
 import java.time.OffsetDateTime;
+import java.time.Clock;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -31,16 +34,25 @@ public class FaceResetService {
     private final ObjectMapper json = new ObjectMapper();
     private final int authorizationHours;
     private final UserDisplayNameService names;
+    private final Clock clock;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public FaceResetService(FaceResetRequestRepository requests, UserChipRepository assignments,
             NotificationRepository notifications, JdbcTemplate jdbc,
             @Value("${facial.reset.authorization-hours:24}") int authorizationHours, UserDisplayNameService names) {
+        this(requests, assignments, notifications, jdbc, authorizationHours, names, Clock.systemUTC());
+    }
+
+    FaceResetService(FaceResetRequestRepository requests, UserChipRepository assignments,
+            NotificationRepository notifications, JdbcTemplate jdbc, int authorizationHours,
+            UserDisplayNameService names, Clock clock) {
         this.requests = requests;
         this.assignments = assignments;
         this.notifications = notifications;
         this.jdbc = jdbc;
         this.authorizationHours = Math.max(1, authorizationHours);
         this.names = names;
+        this.clock = clock;
     }
 
     public record ResetState(UUID requestId, String status, boolean canReregister,
@@ -62,6 +74,14 @@ public class FaceResetService {
         // The same lock is used by the embedding writer to serialize request/registration races.
         jdbc.queryForObject("SELECT id_user_app FROM security.user_app WHERE id_user_app = ? FOR UPDATE", UUID.class, userId);
         FaceResetRequest last = requests.findFirstByUserIdOrderByRequestedAtDesc(userId).orElse(null);
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        if (last != null && now.isBefore(last.getRequestedAt().plusDays(7))) {
+            String availableAt = last.getRequestedAt().plusDays(7).atZoneSameInstant(ZoneId.of("America/Bogota"))
+                    .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"));
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "Ya enviaste una solicitud al coordinador. Podrás enviar una nueva el "
+                            + availableAt + " (hora de Colombia).");
+        }
         if (last != null && ("PENDING".equals(last.getStatus()) || last.canRegister())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya tienes una solicitud pendiente o una autorización vigente.");
         }
@@ -85,6 +105,7 @@ public class FaceResetService {
         context.put("fichaNumber", assignment.getChip().getChipCode());
         context.put("programName", assignment.getChip().getProgram().getProgramName());
         request.setContextJson(writeJson(context));
+        request.setRequestedAt(OffsetDateTime.now(clock));
         requests.save(request);
         LOG.info("Solicitud facial creada. request={} user={}", request.getId(), userId);
         return state(request);

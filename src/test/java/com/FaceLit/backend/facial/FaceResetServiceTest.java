@@ -125,14 +125,15 @@ class FaceResetServiceTest {
     }
 
     @Test void pendingRequestCannotBeDuplicated() {
-        assertThatThrownBy(() -> service.create(learnerId)).hasMessageContaining("409");
+        assertThatThrownBy(() -> service.create(learnerId)).hasMessageContaining("429");
         verify(requests, never()).save(any());
     }
 
-    @Test void rejectionAllowsImmediateNewRequestWithAcademicContext() {
+    @Test void rejectionAllowsNewRequestAfterSevenDaysWithAcademicContext() {
         service.resolve(notification.getIdNotification(), coordinatorId, "rejected");
         assertThat(service.current(learnerId).canReregister()).isFalse();
         assertThat(request.getAuthorizationToken()).isNull();
+        request.setRequestedAt(OffsetDateTime.now().minusDays(8));
         when(jdbc.queryForObject(anyString(), eq(Boolean.class), eq(learnerId))).thenReturn(true);
         User learner = new User(); learner.setIdUser(learnerId); learner.setFirstName("Mariana"); learner.setLastName("López");
         Apprentice apprentice = new Apprentice(); apprentice.setUser(learner);
