@@ -23,13 +23,13 @@ import com.FaceLit.backend.notification.service.NotificationService;
 class FacialEnrollmentControllerTest {
     @Test void confirmationRequiresPersistedFaceAndDoesNotDuplicate() {
         doAnswer(call -> { Consumer<TransactionStatus> action = call.getArgument(0); action.accept(mock(TransactionStatus.class)); return null; }).when(tx).executeWithoutResult(any());
-        when(jdbc.queryForObject(contains("FROM facialrecognition.user_face"), eq(Boolean.class), eq(user))).thenReturn(true);
+        when(jdbc.queryForObject(contains("JOIN facialrecognition.user_face"), eq(Boolean.class), eq(user))).thenReturn(true);
         controller.confirmRegistration(user);
         verify(notificationService).createForRecipient(argThat(n -> n.type().equals("facial_registration_completed") && n.recipientUserId().equals(user)));
         when(jdbc.queryForObject(contains("FROM notification.notification"), eq(Boolean.class), eq(user))).thenReturn(true);
         controller.confirmRegistration(user);
         verifyNoMoreInteractions(notificationService);
-        when(jdbc.queryForObject(contains("FROM facialrecognition.user_face"), eq(Boolean.class), eq(user))).thenReturn(false);
+        when(jdbc.queryForObject(contains("JOIN facialrecognition.user_face"), eq(Boolean.class), eq(user))).thenReturn(false);
         assertThrows(ResponseStatusException.class, () -> controller.confirmRegistration(user));
     }
     private String photo() throws Exception {
