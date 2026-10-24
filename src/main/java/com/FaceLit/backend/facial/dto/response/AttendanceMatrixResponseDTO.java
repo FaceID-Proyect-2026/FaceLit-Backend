@@ -39,6 +39,10 @@ public record AttendanceMatrixResponseDTO(
             String fichaNumber,
             String programName,
             Boolean exitRegistered,
-            Boolean excuse) {
+            Boolean excuse,
+            String sessionStartTime,
+            String sessionEndTime,
+            String exitTime,
+            UUID idEnvironment) {
     }
 }
