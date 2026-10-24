@@ -37,7 +37,6 @@ com.tuproyecto.sena/
 ├── auth/             → RF-1: login, registro, roles
 ├── ambientes/        → RF-2: CRUD ambientes
 ├── academico/        → RF-3: programas, fichas
-├── horarios/         → RF-4: horarios
 ├── facial/           → RF-5: integración Python
 ├── asistencias/      → RF-6: control de asistencia
 ├── reportes/         → RF-7: Excel, estadísticas

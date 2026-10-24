@@ -321,7 +321,11 @@ public class FacialEventServiceImpl implements FacialEventService {
                     row.chipCode(),
                     row.programName(),
                     row.exitRegistered(),
-                    row.excuse()));
+                    row.excuse(),
+                    row.sessionStartTime(),
+                    row.sessionEndTime(),
+                    row.exitTime(),
+                    row.idEnvironment()));
         }
 
         return new AttendanceMatrixResponseDTO(
@@ -572,6 +576,12 @@ public class FacialEventServiceImpl implements FacialEventService {
                     env.environment_name,
                     CONCAT(instructor_user.first_name, ' ', instructor_user.last_name) AS instructor_name,
                     fe.id_facial_event,
+                    re.id_environment,
+                    TO_CHAR(re.entry_time AT TIME ZONE 'America/Bogota', 'HH24:MI') AS session_start_time,
+                    TO_CHAR(re.exit_time AT TIME ZONE 'America/Bogota', 'HH24:MI') AS session_end_time,
+                    CASE WHEN fex.attendance_status <> 'ABSENT'
+                         THEN COALESCE(TO_CHAR(fex.event_datetime AT TIME ZONE 'America/Bogota', 'HH24:MI'), '')
+                         ELSE '' END AS actual_exit_time,
                     CASE
                         WHEN fe.attendance_status = 'ABSENT' OR fe.event_datetime IS NULL THEN ''
                         ELSE TO_CHAR(fe.event_datetime AT TIME ZONE 'America/Bogota', 'HH24:MI')
@@ -650,7 +660,11 @@ public class FacialEventServiceImpl implements FacialEventService {
                 rs.getString("attendance_status"),
                 rs.getObject("excuse", Boolean.class),
                 rs.getInt("delay_minutes"),
-                rs.getBoolean("exit_registered")));
+                rs.getBoolean("exit_registered"),
+                rs.getString("session_start_time"),
+                rs.getString("session_end_time"),
+                rs.getString("actual_exit_time"),
+                rs.getObject("id_environment", UUID.class)));
     }
 
     private FacialEvent buildAbsentEvent(RecordEnvironment record, Apprentice apprentice, UUID authenticatedUserId) {
@@ -738,7 +752,11 @@ public class FacialEventServiceImpl implements FacialEventService {
             String attendanceStatus,
             Boolean excuse,
             Integer delayMinutes,
-            Boolean exitRegistered) {
+            Boolean exitRegistered,
+            String sessionStartTime,
+            String sessionEndTime,
+            String exitTime,
+            UUID idEnvironment) {
     }
 
     private static final class LearnerMatrixBuilder {

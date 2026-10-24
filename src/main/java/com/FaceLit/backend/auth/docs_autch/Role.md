@@ -38,7 +38,6 @@ Jerarquia: ADMINISTRATOR hereda TODOS los permisos de COORDINATOR. No existen pe
 | VIEW_ALL_ATTENDANCE | SI | SI | NO | NO |
 | VIEW_OWN_ATTENDANCE | SI | SI | SI | SI |
 | VIEW_FICHA_ATTENDANCE | SI | SI | SI | NO |
-| MANAGE_SCHEDULES | SI | SI | SI | NO |
 
 ---
 
@@ -55,7 +54,7 @@ VALUES
 ```
 
 ### Tabla permission
-Mismos 9 permisos de siempre, no se agregaron nuevos.
+The example below lists eight permissions.
 ```sql
 INSERT INTO roleandpermission.permission (id_permission, name_permission, description, created_at)
 VALUES
@@ -66,8 +65,7 @@ VALUES
     (uuid_generate_v4(), 'ASSIGN_ROLES',           'Asignar roles a usuarios',         NOW()),
     (uuid_generate_v4(), 'VIEW_ALL_ATTENDANCE',    'Ver asistencia de todos',          NOW()),
     (uuid_generate_v4(), 'VIEW_OWN_ATTENDANCE',    'Ver su propia asistencia',         NOW()),
-    (uuid_generate_v4(), 'VIEW_FICHA_ATTENDANCE',  'Ver asistencia de su ficha',       NOW()),
-    (uuid_generate_v4(), 'MANAGE_SCHEDULES',       'Gestionar horarios',               NOW());
+    (uuid_generate_v4(), 'VIEW_FICHA_ATTENDANCE',  'Ver asistencia de su ficha',       NOW());
 ```
 
 ### Tabla role_permission
@@ -86,7 +84,7 @@ FROM roleandpermission.role r
 CROSS JOIN roleandpermission.permission p
 WHERE r.name_role = 'COORDINATOR';
 
--- INSTRUCTOR: 5 permisos
+-- INSTRUCTOR: 4 permissions
 INSERT INTO roleandpermission.role_permission (id_role_permission, id_role, id_permission, assignment_date, assigned_at, created_at)
 SELECT uuid_generate_v4(), r.id_role, p.id_permission, NOW(), NOW(), NOW()
 FROM roleandpermission.role r
@@ -94,7 +92,7 @@ CROSS JOIN roleandpermission.permission p
 WHERE r.name_role = 'INSTRUCTOR'
 AND p.name_permission IN (
     'VIEW_OWN_PROFILE', 'EDIT_OWN_PROFILE',
-    'VIEW_OWN_ATTENDANCE', 'VIEW_FICHA_ATTENDANCE', 'MANAGE_SCHEDULES'
+    'VIEW_OWN_ATTENDANCE', 'VIEW_FICHA_ATTENDANCE'
 );
 
 -- APPRENTICE: 3 permisos
@@ -146,7 +144,7 @@ ALTER TABLE roleandpermission.role ADD CONSTRAINT role_name_role_check
     // Gestion de usuarios y roles - ADMINISTRATOR y COORDINATOR
     .requestMatchers("/api/admin/**").hasAnyRole("ADMINISTRATOR", "COORDINATOR")
 
-    // Asistencia de fichas, horarios
+    // Attendance for assigned training groups
     .requestMatchers("/api/instructor/**").hasAnyRole("ADMINISTRATOR", "COORDINATOR", "INSTRUCTOR")
 
     // Todos los roles autenticados
