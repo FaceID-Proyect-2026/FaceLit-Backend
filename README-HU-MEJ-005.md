@@ -1,6 +1,6 @@
 # HU-05 / HU-MEJ-005 — Pasarela biométrica autenticada
 
-Responsable: **Mariana Valenzuela Penagos**. Rama: `hu-mej-005`.
+Responsable: **Mariana Valenzuela Penagos**. Rama: `hu-41-dev`.
 Hallazgos: **H-03, H-15, H-48**. Plan: **punto 4**.
 
 ## Contrato
