@@ -118,7 +118,7 @@ Las pruebas con H2 no sustituyen la aplicación de Liquibase y la prueba de conc
 - YAML del changelog y existencia de referencias SQL/rollback: verificados con el parser YAML del frontend.
 - Docker Engine no estaba iniciado; no se ejecutó Liquibase ni la migración/rollback contra PostgreSQL.
 - No se certificó SMTP real ni se realizó un recorrido visual web/Android. Tampoco se ejecutó CI ni revisión de PR.
-- Los cambios continúan locales, sin commit ni despliegue.
+- Este apartado registra la ejecución histórica del 24/10/2026. La implementación base fue publicada después en hu-38-dev (d6d71e2); no confundir esta evidencia histórica con la revisión QA actual.
 
 Detalle de reportes Surefire:
 

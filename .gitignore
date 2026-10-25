@@ -36,3 +36,6 @@ build/
 .env
 *.env
 !.env.example
+
+# Local Maven cache. Previously tracked entries require separate cleanup.
+.m2/

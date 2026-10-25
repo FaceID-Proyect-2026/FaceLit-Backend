@@ -131,7 +131,7 @@ class RecoverySessionSecurityIntegrationTest {
         token(); assertThat(jwt.validateToken(first)).isFalse();
         mvc.perform(get("/api/profile/me").header("Authorization", "Bearer " + first)).andExpect(status().isUnauthorized());
     }
-    @Test void inactiveAccountRejectsJwt() {
+    @Test void inactiveAccountRejectsJwt() throws Exception {
         String old = token();
         tx.executeWithoutResult(status -> {
             User u = users.findById(userId).orElseThrow();
@@ -141,8 +141,10 @@ class RecoverySessionSecurityIntegrationTest {
             management.updateUser(userId, dto); dto.setAccountStatus(AccountStatus.ACTIVE); management.updateUser(userId, dto);
         });
         assertThat(jwt.validateToken(old)).isFalse();
+        mvc.perform(get("/api/profile/me").header("Authorization", "Bearer " + old))
+            .andExpect(status().isUnauthorized());
     }
-    @Test void roleChangeRevokesOldSessionEvenIfRoleIsRestored() {
+    @Test void roleChangeRevokesOldSessionEvenIfRoleIsRestored() throws Exception {
         String old = token();
         tx.executeWithoutResult(status -> {
             Role role = roles.findByNameRole(RoleName.INSTRUCTOR).orElseGet(() -> { Role r = new Role(); r.setNameRole(RoleName.INSTRUCTOR); return roles.saveAndFlush(r); });
@@ -150,6 +152,36 @@ class RecoverySessionSecurityIntegrationTest {
             roleService.assignRole(userId, dto, null); dto.setRole(RoleName.APPRENTICE); roleService.assignRole(userId, dto, null);
         });
         assertThat(jwt.validateToken(old)).isFalse();
+        mvc.perform(get("/api/profile/me").header("Authorization", "Bearer " + old))
+            .andExpect(status().isUnauthorized());
+    }
+    @Test void concurrentPasswordResetsConsumeAuthorizationOnlyOnce() throws Exception {
+        String old = token();
+        String authorization = verifyCode(address, code, 200);
+        String payload = json.writeValueAsString(Map.of("email", address, "token", authorization,
+            "newPassword", "NuevaClave1!", "confirmPassword", "NuevaClave1!"));
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CyclicBarrier start = new CyclicBarrier(2);
+        Callable<Integer> reset = () -> {
+            start.await(10, TimeUnit.SECONDS);
+            return mvc.perform(post("/api/auth/reset-password").contentType("application/json")
+                .content(payload)).andReturn().getResponse().getStatus();
+        };
+        try {
+            List<Future<Integer>> results = pool.invokeAll(List.of(reset, reset), 30, TimeUnit.SECONDS);
+            assertThat(List.of(results.get(0).get(), results.get(1).get()))
+                .containsExactlyInAnyOrder(200, 400);
+            assertThat(recoveries.findAllByUser_IdUser(userId)).singleElement().satisfies(recovery -> {
+                assertThat(recovery.isUsed()).isTrue();
+                assertThat(recovery.getResetTokenHash()).isNull();
+            });
+            assertThat(encoder.matches("NuevaClave1!", credentials.findByUser_IdUser(userId)
+                .orElseThrow().getPassword())).isTrue();
+            mvc.perform(get("/api/profile/me").header("Authorization", "Bearer " + old))
+                .andExpect(status().isUnauthorized());
+        } finally {
+            pool.shutdownNow();
+        }
     }
     @Test void loginCreatesExactlyOneRevocableSession() throws Exception {
         String document = users.findById(userId).orElseThrow().getDocumentNumber();
@@ -190,5 +222,29 @@ class RecoverySessionSecurityIntegrationTest {
         mvc.perform(post("/api/auth/verify-token").header("X-Forwarded-For", "198.51.100.1")
             .contentType("application/json").content("{}")).andExpect(status().isTooManyRequests())
             .andExpect(header().exists("Retry-After"));
+    }
+    @Test void recoverySendingLimitsPersistAcrossRequests() throws Exception {
+        String request = json.writeValueAsString(Map.of("email", address));
+        mvc.perform(post("/api/auth/request-recovery").contentType("application/json").content(request))
+            .andExpect(status().isOk());
+        mvc.perform(post("/api/auth/request-recovery").contentType("application/json").content(request))
+            .andExpect(status().isTooManyRequests()).andExpect(header().exists("Retry-After"));
+        String minuteKey = com.FaceLit.backend.auth.service.security.RecoverySecrets.digest("request-minute:" + address);
+        for (int i = 0; i < 2; i++) {
+            tx.executeWithoutResult(status -> {
+                var minute = limits.findById(minuteKey).orElseThrow();
+                minute.setWindowStart(OffsetDateTime.now().minusMinutes(2)); limits.saveAndFlush(minute);
+            });
+            mvc.perform(post("/api/auth/request-recovery").contentType("application/json").content(request))
+                .andExpect(status().isOk());
+        }
+        tx.executeWithoutResult(status -> {
+            var minute = limits.findById(minuteKey).orElseThrow();
+            minute.setWindowStart(OffsetDateTime.now().minusMinutes(2)); limits.saveAndFlush(minute);
+        });
+        mvc.perform(post("/api/auth/request-recovery").contentType("application/json").content(request))
+            .andExpect(status().isTooManyRequests()).andExpect(header().exists("Retry-After"));
+        String windowKey = com.FaceLit.backend.auth.service.security.RecoverySecrets.digest("request-window:" + address);
+        assertThat(limits.findById(windowKey).orElseThrow().getAttempts()).isEqualTo(3);
     }
 }
