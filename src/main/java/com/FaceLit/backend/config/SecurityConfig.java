@@ -45,6 +45,8 @@ public class SecurityConfig {
                         // Ver todos los usuarios, asignar roles, gestionar todo
                         .requestMatchers("/api/admin/**").hasRole("COORDINATOR")
                         .requestMatchers("/api/facial/reset-requests/**").hasRole("APPRENTICE")
+                        .requestMatchers("/api/facial/embeddings/from-image").hasRole("APPRENTICE")
+                        .requestMatchers("/api/facial/embeddings/liveness-check").hasAnyRole("APPRENTICE", "INSTRUCTOR")
                         .requestMatchers(HttpMethod.GET, "/api/academic/me/**")
                         .hasAnyRole("COORDINATOR", "INSTRUCTOR", "APPRENTICE")
                         .requestMatchers(HttpMethod.GET, "/api/academic/programs/**", "/api/academic/chips/**")

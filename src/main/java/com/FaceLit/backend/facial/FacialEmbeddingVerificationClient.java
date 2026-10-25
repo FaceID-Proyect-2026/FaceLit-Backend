@@ -20,7 +20,10 @@ public class FacialEmbeddingVerificationClient {
 
     public FacialEmbeddingVerificationClient(
             @Value("${facial.embedding.url:http://localhost:8090}") String baseUrl,
-            @Value("${facial.embedding.api-key:change-me}") String apiKey) {
+            @Value("${facial.embedding.api-key}") String apiKey) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalArgumentException("FACIAL_EMBEDDING_API_KEY debe contener un secreto de servicio.");
+        }
         this.apiKey = apiKey;
         var factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(10));
@@ -29,6 +32,18 @@ public class FacialEmbeddingVerificationClient {
                 .baseUrl(baseUrl)
                 .requestFactory(factory)
                 .build();
+    }
+
+    public com.fasterxml.jackson.databind.JsonNode registerFromImage(java.util.Map<String, Object> payload) {
+        return client.post().uri("/api/v1/facial-embeddings/from-image")
+                .header("X-API-Key", apiKey).body(payload).retrieve()
+                .body(com.fasterxml.jackson.databind.JsonNode.class);
+    }
+
+    public com.fasterxml.jackson.databind.JsonNode checkLiveness(java.util.Map<String, Object> payload) {
+        return client.post().uri("/api/v1/facial-embeddings/liveness-check")
+                .header("X-API-Key", apiKey).body(payload).retrieve()
+                .body(com.fasterxml.jackson.databind.JsonNode.class);
     }
 
     public VerificationResponse verifySession(UUID idRecordEnvironment, String imageBase64, List<String> imageFrames, String livenessChallenge, List<String> livenessChallenges) {
