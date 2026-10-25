@@ -18,6 +18,13 @@ import java.util.UUID;
 @Service
 // Singleton gestionado por Spring: servicio stateless para crear y validar JWT.
 public class JwtServiceImpl implements JwtService {
+    private final com.FaceLit.backend.auth.service.security.UserSessionService sessions;
+    private final com.FaceLit.backend.auth.service.serviceImpl.security.SessionSecurityService sessionSecurity;
+    public JwtServiceImpl(com.FaceLit.backend.auth.service.security.UserSessionService sessions,
+            com.FaceLit.backend.auth.service.serviceImpl.security.SessionSecurityService sessionSecurity) {
+        this.sessions = sessions; this.sessionSecurity = sessionSecurity;
+    }
+
 
     // Se lee desde application.yml — NUNCA hardcodeado
     @Value("${jwt.secret}")
@@ -33,8 +40,10 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public String generateToken(User user, String role, List<String> permissions) {
-        return Jwts.builder()
+        var session = sessions.registerSession(user);
+        return Jwts.builder().claim("sid", session.getIdUserSession().toString())
                 // userId — para identificar al usuario en cada request
                 .claim(AppConstants.JWT_CLAIM_USER_ID, user.getIdUser().toString())
                 // email — útil para logs y auditoría
@@ -58,8 +67,11 @@ public class JwtServiceImpl implements JwtService {
     public boolean validateToken(String token) {
         try {
             // Si no lanza excepción, el token es válido y no expiró
-            getClaims(token);
-            return true;
+            Claims claims = getClaims(token);
+            String sid = claims.get("sid", String.class);
+            return sid != null && sessionSecurity.isActive(UUID.fromString(sid),
+                    UUID.fromString(claims.get(AppConstants.JWT_CLAIM_USER_ID, String.class)),
+                    claims.get(AppConstants.JWT_CLAIM_ROLE, String.class));
         } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
             return false;
         }
@@ -86,6 +98,13 @@ public class JwtServiceImpl implements JwtService {
         return getClaims(token).get(AppConstants.JWT_CLAIM_EMAIL, String.class);
     }
 
+    @Override
+    public void revokeToken(String token) {
+        Claims claims = getClaims(token);
+        String sid = claims.get("sid", String.class);
+        if (sid != null) sessionSecurity.close(UUID.fromString(sid), extractUserId(token));
+    }
+
     // Método interno — parsea y valida el token, extrae todos los claims
     private Claims getClaims(String token) {
         return Jwts.parser()
@@ -94,15 +113,7 @@ public class JwtServiceImpl implements JwtService {
                 .parseSignedClaims(token)
                 .getPayload();
 
-        // Login exitoso
-
-        // 1. Backend genera JWT con: { userId, email, role: "INSTRUCTOR", permissions:
-        // [...] }
-        // 2. Frontend guarda ese token
-        // 3. Cada request siguiente lleva el token en el header: Authorization: Bearer
-        // eyJhbGci...
-        // 4. Backend lee el token → sabe quién es, qué rol tiene, qué puede hacer SIN
-        // consultar la BD en cada request
+        // La firma se comprueba aquí; validateToken también consulta la sesión persistida.
     }
 
 }

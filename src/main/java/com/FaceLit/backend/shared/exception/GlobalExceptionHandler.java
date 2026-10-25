@@ -40,6 +40,13 @@ public class GlobalExceptionHandler { // esta clase es para que capture errores 
         return ResponseEntity.badRequest().body(errores);
     }
 
+    @ExceptionHandler(com.FaceLit.backend.auth.exception.RecoverySecurityException.class)
+    public ResponseEntity<Map<String, String>> handleRecoverySecurity(com.FaceLit.backend.auth.exception.RecoverySecurityException ex) {
+        var response = ResponseEntity.status(ex.getStatus());
+        if (ex.getRetryAfter() > 0) response.header("Retry-After", Long.toString(ex.getRetryAfter()));
+        return response.body(Map.of("message", ex.getMessage()));
+    }
+
     @ExceptionHandler(PasswordRecoveryException.class)
     public ResponseEntity<Map<String, String>> handlePasswordRecovery(PasswordRecoveryException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", ex.getMessage()));

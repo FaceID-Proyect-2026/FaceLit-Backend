@@ -43,6 +43,12 @@ public class JwtFilter extends OncePerRequestFilter {
             FilterChain filterChain)
             throws ServletException, IOException {
 
+        if (java.util.Set.of("/api/auth/login", "/api/auth/request-recovery", "/api/auth/verify-token",
+                "/api/auth/reset-password", "/api/auth/complete-access", "/api/auth/privacy-acceptance-status")
+                .contains(request.getRequestURI().substring(request.getContextPath().length()))) {
+            filterChain.doFilter(request, response); return;
+        }
+
         // 1. Leer el header Authorization del request
         // El frontend manda: Authorization: Bearer eyJhbGci...
         String authHeader = request.getHeader(AppConstants.AUTHORIZATION_HEADER);
@@ -59,7 +65,9 @@ public class JwtFilter extends OncePerRequestFilter {
 
         // 4. Validar el token — firma correcta y no expirado
         if (!jwtService.validateToken(token)) {
-            filterChain.doFilter(request, response);
+            response.setStatus(401);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"message\":\"La sesión expiró o fue revocada. Inicia sesión nuevamente.\"}");
             return;
         }
 

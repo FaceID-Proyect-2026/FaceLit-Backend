@@ -29,14 +29,19 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, com.FaceLit.backend.auth.service.serviceImpl.security.RecoveryRateLimiter limiter) throws Exception {
 
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
+                .exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, error) -> {
+                    response.setStatus(401); response.setContentType("application/json");
+                    response.getWriter().write("{\"message\":\"Debes iniciar sesión\"}");
+                }))
                 .authorizeHttpRequests(auth -> auth
 
                         // ─── PÚBLICOS — no necesitan token ───────────────────────
+                        .requestMatchers("/api/auth/logout", "/api/auth/change-password").authenticated()
                         .requestMatchers("/api/auth/**").permitAll()
                         // El token se valida como primer mensaje del canal WebSocket.
                         .requestMatchers("/ws/realtime").permitAll()
@@ -63,7 +68,8 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // Agregar el JwtFilter ANTES del filtro de autenticación de Spring
                 // Así Spring Security ya sabe quién es el usuario antes de verificar permisos
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new RecoveryRateLimitFilter(limiter), JwtFilter.class);
 
         return http.build();
     }

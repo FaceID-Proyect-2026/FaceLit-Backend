@@ -23,6 +23,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class AdminRoleServiceImpl implements AdminRoleService {
+    private final com.FaceLit.backend.auth.service.serviceImpl.security.SessionSecurityService sessions;
 
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
@@ -37,13 +38,14 @@ public class AdminRoleServiceImpl implements AdminRoleService {
             RoleRepository roleRepository,
             CredentialRepository credentialRepository,
             com.FaceLit.backend.notification.service.NotificationService notifications,
-            com.FaceLit.backend.shared.service.UserDisplayNameService names) {
+            com.FaceLit.backend.shared.service.UserDisplayNameService names, com.FaceLit.backend.auth.service.serviceImpl.security.SessionSecurityService sessions) {
 
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
         this.roleRepository = roleRepository;
         this.credentialRepository = credentialRepository;
         this.notifications = notifications; this.names = names;
+        this.sessions = sessions;
     }
 
     @Override
@@ -84,6 +86,7 @@ public class AdminRoleServiceImpl implements AdminRoleService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new LoginException("Usuario no encontrado"));
 
+        credentialRepository.lockByUserId(userId);
         // 2. Buscar el rol que se quiere asignar
         Role newRole = roleRepository.findByNameRole(dto.getRole())
                 .orElseThrow(() -> new LoginException("Rol no encontrado"));
@@ -102,6 +105,8 @@ public class AdminRoleServiceImpl implements AdminRoleService {
         userRole.setRole(newRole);
         userRole.setAssignedAt(OffsetDateTime.now());
         userRoleRepository.save(userRole);
+
+        sessions.revokeAll(userId);
 
         // Initial assignment belongs to account creation, not to a change of role.
         if ("NONE".equals(previous)) return AssignRoleResponseDTO.success(userId, next);

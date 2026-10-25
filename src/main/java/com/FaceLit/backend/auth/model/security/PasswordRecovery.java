@@ -37,7 +37,7 @@ public class PasswordRecovery extends AuditBase {
     @JoinColumn(name = "id_user_app", nullable = false)
     private User user;
 
-    // Token UUID único que se envía al correo del usuario
+    // Código de seis dígitos enviado al destinatario de esta recuperación.
     @Column(name = "token", nullable = false, length = 255)
     private String token;
 
@@ -58,6 +58,13 @@ public class PasswordRecovery extends AuditBase {
 
     @Column(name = "verified_at")
     private OffsetDateTime verifiedAt;
+
+    @Column(name = "destination_email", length = 255)
+    private String destinationEmail;
+    @Column(name = "verification_attempts", nullable = false)
+    private int verificationAttempts;
+    @Column(name = "reset_token_hash", length = 64)
+    private String resetTokenHash;
 
 
 

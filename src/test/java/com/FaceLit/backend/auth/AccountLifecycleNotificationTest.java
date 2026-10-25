@@ -24,11 +24,13 @@ class AccountLifecycleNotificationTest {
     @Test void successfulRecoveryNotifiesOnceAndReusedCodeDoesNotNotifyAgain() {
         var credentials = mock(CredentialRepository.class); var recoveries = mock(PasswordRecoveryRepository.class);
         var encoder = mock(PasswordEncoder.class); var notices = mock(NotificationService.class);
-        var service = new PasswordRecoveryServiceImpl(credentials, recoveries, encoder, mock(EmailService.class), mock(VerificationCodeGenerator.class), notices);
+        var challenges = mock(com.FaceLit.backend.auth.service.serviceImpl.security.RecoveryChallengeService.class);
+        var sessions = mock(com.FaceLit.backend.auth.service.serviceImpl.security.SessionSecurityService.class);
+        var service = new PasswordRecoveryServiceImpl(credentials, recoveries, encoder, mock(EmailService.class), mock(VerificationCodeGenerator.class), notices, challenges, sessions);
         User user = new User(); user.setIdUser(UUID.randomUUID()); user.setFirstName("Carlos"); user.setLastName("Ramirez");
         Credential credential = new Credential(); credential.setUser(user); user.setCredential(credential); credential.setLockedUntil(OffsetDateTime.now().plusMinutes(1));
         PasswordRecovery recovery = new PasswordRecovery(); recovery.setUser(user); recovery.setUsed(false); recovery.setExpirationDate(OffsetDateTime.now().plusMinutes(5));
-        when(recoveries.findByToken("123456")).thenReturn(Optional.of(recovery)); when(encoder.encode(anyString())).thenReturn("hashed");
+        when(challenges.authorizeReset(any(), any())).thenAnswer(call -> { if (recovery.isUsed()) throw new RuntimeException("used"); return recovery; }); when(encoder.encode(anyString())).thenReturn("hashed");
         ResetPasswordDTO dto = new ResetPasswordDTO(); dto.setToken("123456"); dto.setNewPassword("Secret123!"); dto.setConfirmPassword("Secret123!");
         service.resetPassword(dto);
         verify(notices).createForRecipient(argThat(n -> n.type().equals("password_changed") && n.recipientUserId().equals(user.getIdUser()) && !n.message().contains("Secret123!")
@@ -39,7 +41,7 @@ class AccountLifecycleNotificationTest {
     @Test void roleChangeContainsOldNewAndAuthenticatedActorAndSameRoleDoesNotRepeat() {
         var users = mock(UserRepository.class); var roles = mock(UserRoleRepository.class); var catalog = mock(RoleRepository.class);
         var notices = mock(NotificationService.class); var names = mock(UserDisplayNameService.class);
-        var service = new AdminRoleServiceImpl(users, roles, catalog, mock(CredentialRepository.class), notices, names);
+        var service = new AdminRoleServiceImpl(users, roles, catalog, mock(CredentialRepository.class), notices, names, mock(com.FaceLit.backend.auth.service.serviceImpl.security.SessionSecurityService.class));
         UUID actor = UUID.randomUUID(); User user = new User(); user.setIdUser(UUID.randomUUID());
         Role old = new Role(); old.setNameRole(RoleName.APPRENTICE); Role next = new Role(); next.setNameRole(RoleName.INSTRUCTOR);
         UserRole assigned = new UserRole(); assigned.setRole(old); assigned.setUser(user);

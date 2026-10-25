@@ -8,10 +8,14 @@ import lombok.Setter;
 @Getter
 @Setter
 public class ResetPasswordDTO {
+    @NotBlank(message = "El correo es obligatorio")
+    @jakarta.validation.constraints.Email(message = "Correo inválido")
+    private String email;
 
-    // Código de 6 dígitos recibido en el correo
+
+    // Autorización de un solo uso emitida tras verificar cuenta y código.
     @NotBlank(message = "El código es obligatorio")
-    @Pattern(regexp = "^[0-9]{6}$", message = "El código debe tener exactamente 6 dígitos numéricos")
+    @Pattern(regexp = "^[A-Za-z0-9_-]{43}$", message = "Debes verificar el código antes de cambiar la contraseña")
     private String token;
 
     // Política de contraseña compartida por recuperación y cambio voluntario.

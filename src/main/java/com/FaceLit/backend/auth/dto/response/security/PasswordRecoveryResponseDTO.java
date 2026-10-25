@@ -9,6 +9,12 @@ public class PasswordRecoveryResponseDTO {
 
     // Mensaje legible para el frontend
     private String message;
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private String resetToken;
+    public PasswordRecoveryResponseDTO(String message) { this(message, null); }
+    public static PasswordRecoveryResponseDTO authorized(String token) {
+        return new PasswordRecoveryResponseDTO("Código válido", token);
+    }
 
     // Se devuelve cuando el código de 6 dígitos fue enviado al correo
     public static PasswordRecoveryResponseDTO codeSent() {

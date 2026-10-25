@@ -25,7 +25,6 @@ import com.FaceLit.backend.auth.repository.roleandpermission.RolePermissionRepos
 import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.JwtService;
 import com.FaceLit.backend.auth.service.roleandpermission.LoginService;
-import com.FaceLit.backend.auth.service.security.UserSessionService;
 import com.FaceLit.backend.notification.dto.request.MonolithEventRequestDTO;
 import com.FaceLit.backend.notification.service.NotificationService;
 import com.FaceLit.backend.shared.constants.AppConstants;
@@ -35,12 +34,13 @@ import java.util.List;
 @Service
 public class LoginServiceImpl implements LoginService {
 
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
     private final CredentialRepository credentialRepository;
     private final UserRoleRepository userRoleRepository;
     private final RolePermissionRepository rolePermissionRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final UserSessionService userSessionService;
     private final NotificationService notificationService;
     private final AcceptanceTermsRepository acceptanceTermsRepository;
     private final UserSessionRepository userSessionRepository;
@@ -52,7 +52,6 @@ public class LoginServiceImpl implements LoginService {
             RolePermissionRepository rolePermissionRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            UserSessionService userSessionService,
             NotificationService notificationService,
             AcceptanceTermsRepository acceptanceTermsRepository,
             UserSessionRepository userSessionRepository,
@@ -62,7 +61,6 @@ public class LoginServiceImpl implements LoginService {
         this.rolePermissionRepository = rolePermissionRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
-        this.userSessionService = userSessionService;
         this.notificationService = notificationService;
         this.acceptanceTermsRepository = acceptanceTermsRepository;
         this.userSessionRepository = userSessionRepository;
@@ -82,6 +80,9 @@ public class LoginServiceImpl implements LoginService {
             .or(() -> credentialRepository.findByEmailIgnoreCase(identifier))
             .orElseThrow(() -> new LoginException("Usuario o contraseña incorrectos"));
 
+        credential = credentialRepository.lockByUserId(credential.getUser().getIdUser()).orElseThrow();
+        entityManager.refresh(credential);
+        entityManager.refresh(credential.getUser());
         // 3. Obtener el usuario asociado a esa credencial
         User user = credential.getUser();
 
@@ -158,9 +159,7 @@ public class LoginServiceImpl implements LoginService {
         // 11. Generar el JWT con userId, email, rol y permisos
         String token = jwtService.generateToken(user, roleName, permissions);
 
-        // 12. Registrar la sesión — queda guardada en user_session
-        // El service encapsula toda la lógica de creación de sesión
-        userSessionService.registerSession(user);
+        // La emisión del JWT registra y vincula exactamente una sesión (sid).
 
         // 12. Devolver la respuesta con el token
         return LoginResponseDTO.success(token, roleName, permissions, user.getIdUser(), firstAccessPasswordPrompt);
