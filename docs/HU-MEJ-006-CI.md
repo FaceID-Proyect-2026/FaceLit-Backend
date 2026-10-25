@@ -38,4 +38,18 @@ Guardar SHA, URL de PR, URL del run y artifact. La HU no está Done sin CI verde
 - Informe local: target/site/jacoco/index.html y target/site/jacoco/jacoco.xml. Evidencia de pruebas en target/surefire-reports; log de esta ejecución en ../hu006-backend-ci.log. No agregar target, cachés ni logs completos al commit.
 - La validación local utilizó el JDK 21 instalado y compilación release 17. El workflow configura Java 17; su ejecución real en GitHub Actions todavía debe verificarse.
 
-La configuración se entrega para publicación en hu-39-dev y revisión mediante PR hacia dev. La ejecución verde en GitHub Actions y la revisión independiente quedan pendientes de verificar; el resultado local no las reemplaza.
+## Actualización de evidencia y alcance — 25 de octubre de 2026
+
+Rama de esta entrega: `hu-39-dev`, PR [#67 hacia dev](https://github.com/FaceID-Proyect-2026/FaceLit-Backend/pull/67). El SHA base `0e6666b3f726746b8026df8eb83b7941bf7849fa` ya tiene una [ejecución real verde](https://github.com/FaceID-Proyect-2026/FaceLit-Backend/actions/runs/40195794058). Esa evidencia corresponde a ese SHA; al publicar esta actualización documental debe revisarse el CI del nuevo head del PR.
+
+Se repitió Maven verify y JaCoCo sobre una copia del código versionado de ese SHA: **123 pruebas aprobadas, 0 fallos, 0 errores, 0 omitidas, BUILD SUCCESS**. Cobertura de líneas: **62,72 % (2857/4555)**. Perfil test/H2, Maven 3.9.14 y JDK 21.0.7 compilando para Java 17; el workflow usa JDK 17. No se incluyeron pruebas sin seguimiento, cachés ni borrados locales. La clase opt-in `FacialRegistrationConfirmationPostgresIT` no forma parte de las 123 pruebas ejecutadas.
+
+El primer intento local encontró un bloqueo de comunicación Mockito/JVM dentro del sandbox; se repitió la misma validación fuera de esa restricción. Las advertencias iniciales H2 de drop de un esquema aún inexistente no impidieron el resultado exitoso. Los logs completos permanecen fuera del repositorio, en `ci-evidence/hu006-validation-20261025/` del directorio de trabajo.
+
+La delimitación solicitada por la responsable asigna HU-MEJ-006 a **H-16/H-18: automatización, cobertura y evidencia**. La propuesta inicial citaba también H-17; su implementación de seguridad se deriva a HU-MEJ-001 (autorización/pertenencia, 401/403) y HU-MEJ-002 (recuperación, intentos y JWT invalidado). H-17 es un hallazgo, no HU-MEJ-017. CI debe ejecutar sus pruebas cuando se integren; este PR no afirma que esas reglas estén implementadas ni cierra H-17.
+
+Se configuró como obligatorio `Maven tests and JaCoCo coverage` en el ruleset CI activo de dev/qa/main, conservando una aprobación y sin bypass. La responsable informa haber probado el bloqueo con CI rojo: falta adjuntar y contrastar esa evidencia. La última consulta de revisiones no tenía aprobaciones registradas; debe comprobarse su estado final en el PR. No se declara Done antes de evidencia y aprobación independiente.
+
+La cobertura indica líneas recorridas, no porcentaje de funcionamiento ni garantía de ausencia de defectos. La HU no define un umbral mínimo del 100 %. No se modificaron código de negocio ni workflow durante esta actualización documental.
+
+Documento de entrega compartido: [alcance, inventario y resultados de HU-MEJ-006](https://github.com/FaceID-Proyect-2026/FaceLit/blob/hu-38-dev/docs/HU-MEJ-006-ALCANCE-Y-ENTREGA-QA.md).
