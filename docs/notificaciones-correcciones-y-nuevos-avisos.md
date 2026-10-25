@@ -50,7 +50,7 @@ El nuevo endpoint permite conectar una interfaz de edición de estado/hora sin g
 En `FaceLit-Backend`, reiniciar con la configuración Maven que utiliza el proyecto:
 
 ```powershell
-mvn -s .mvn/local-settings.xml clean spring-boot:run
+mvn clean spring-boot:run
 ```
 
 Recargar la app para utilizar el selector de captura y las traducciones nuevas. Mantener configurado SMTP para correos reales. Las pruebas de esta entrega simulan correo; no se enviaron mensajes de prueba a usuarios reales.

@@ -36,3 +36,9 @@ build/
 .env
 *.env
 !.env.example
+
+# Local build cache and generated runtime artifacts
+/.m2/
+/.mvn/local-settings.xml
+/FaceID-Back-end.jar
+/*.log
