@@ -19,6 +19,7 @@ import jakarta.transaction.Transactional;
 
 @Service
 public class ChangePasswordServiceImpl implements ChangePasswordService {
+    private final com.FaceLit.backend.auth.service.serviceImpl.security.SessionSecurityService sessions;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -30,10 +31,11 @@ public class ChangePasswordServiceImpl implements ChangePasswordService {
     public ChangePasswordServiceImpl(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            NotificationService notificationService) {
+            NotificationService notificationService, com.FaceLit.backend.auth.service.serviceImpl.security.SessionSecurityService sessions) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.notificationService = notificationService;
+        this.sessions = sessions;
     }
 
     @Override
@@ -54,6 +56,7 @@ public class ChangePasswordServiceImpl implements ChangePasswordService {
         credential.setFailedAttempts(0);
         credential.setLockedUntil(null);
         if (accountAccess != null) accountAccess.cancelWelcome(user);
+        sessions.revokeAll(userId);
         notifyPasswordChanged(user);
         return PasswordRecoveryResponseDTO.passwordReset();
     }

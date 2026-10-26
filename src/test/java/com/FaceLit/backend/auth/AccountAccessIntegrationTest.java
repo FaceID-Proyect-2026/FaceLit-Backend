@@ -82,13 +82,15 @@ class AccountAccessIntegrationTest {
         clearInvocations(email);
         var dto = new RequestPasswordRecoveryDTO(); dto.setEmail(address); recoveryService.requestRecovery(dto);
         var code = ArgumentCaptor.forClass(String.class); verify(email).sendRecoveryCode(eq(address.toLowerCase(java.util.Locale.ROOT)), code.capture());
-        assertThat(code.getValue()).matches("[0-9]{6}"); return code.getValue();
+        assertThat(code.getValue()).matches("[0-9]{6}"); addresses.put(code.getValue(), address); return code.getValue();
     }
+    final java.util.Map<String, String> addresses = new java.util.HashMap<>();
+    final java.util.Map<String, String> authorizations = new java.util.HashMap<>();
     void verifyCode(String code) {
-        var dto = new com.FaceLit.backend.auth.dto.request.security.VerifyTokenDTO(); dto.setToken(code); recoveryService.verifyToken(dto);
+        var dto = new com.FaceLit.backend.auth.dto.request.security.VerifyTokenDTO(); dto.setToken(code); dto.setEmail(addresses.get(code)); authorizations.put(code, recoveryService.verifyToken(dto).getResetToken());
     }
     void resetCode(String code) {
-        var dto = new ResetPasswordDTO(); dto.setToken(code); dto.setNewPassword("NuevaClave1!"); dto.setConfirmPassword("NuevaClave1!"); recoveryService.resetPassword(dto);
+        var dto = new ResetPasswordDTO(); dto.setEmail(addresses.get(code)); dto.setToken(authorizations.getOrDefault(code, code)); dto.setNewPassword("NuevaClave1!"); dto.setConfirmPassword("NuevaClave1!"); recoveryService.resetPassword(dto);
     }
     void finishEmailChange(String address) {
         String code = codeFor(address); verifyCode(code); resetCode(code);
@@ -162,7 +164,7 @@ class AccountAccessIntegrationTest {
         assertThat(recoveries.findByToken(first)).get().extracting(PasswordRecovery::isUsed).isEqualTo(true);
         assertThatThrownBy(() -> verifyCode(first)).hasMessageContaining("incorrecto");
         verifyCode(next); resetCode(next);
-        assertThatThrownBy(() -> resetCode(next)).hasMessageContaining("incorrecto");
+        assertThatThrownBy(() -> resetCode(next)).hasMessageContaining("inválida");
         String expired = codeFor("current@example.com");
         recoveries.findByToken(expired).orElseThrow().setExpirationDate(OffsetDateTime.now().minusSeconds(1)); recoveries.flush();
         String hash = credential.getPassword();
@@ -176,7 +178,7 @@ class AccountAccessIntegrationTest {
         access.changeEmail(user, credential, "second@example.com"); var second = pending();
         assertThat(first.isUsed()).isTrue(); assertThat(first.getSendStatus()).isEqualTo("CANCELLED");
         clearInvocations(email); access.dispatch(first.getId()); verifyNoInteractions(email);
-        assertThatThrownBy(() -> resetCode(code)).hasMessageContaining("incorrecto");
+        assertThatThrownBy(() -> resetCode(code)).hasMessageContaining("inválida");
         deliver(second); assertThat(credential.getEmail()).isEqualTo("second@example.com");
         assertThat(requests.findById(first.getId())).isPresent();
     }

@@ -11,6 +11,10 @@ import java.util.List;
 
 @Repository
 public interface UserSessionRepository extends JpaRepository<UserSession, UUID> {
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE UserSession s SET s.sessionStatus = com.FaceLit.backend.auth.model.enums.SessionStatus.INACTIVE, s.endDate = :now WHERE s.user.idUser = :userId AND s.sessionStatus = com.FaceLit.backend.auth.model.enums.SessionStatus.ACTIVE")
+    int revokeAll(@Param("userId") UUID userId, @Param("now") OffsetDateTime now);
+
     // No necesita métodos personalizados por ahora
     // JpaRepository ya tiene save() que es lo único que necesitamos en el login
 

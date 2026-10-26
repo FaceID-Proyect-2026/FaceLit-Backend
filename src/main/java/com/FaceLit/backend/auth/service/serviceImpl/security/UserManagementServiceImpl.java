@@ -238,7 +238,7 @@ public class UserManagementServiceImpl implements UserManagementService {
         public UserDetailResponseDTO updateUser(UUID userId, UpdateUserRequestDTO dto) {
                 User user = userRepository.findById(userId)
                                 .orElseThrow(() -> new UserManagementException("Usuario no encontrado"));
-                Credential credential = credentialRepository.findByUser(user)
+                Credential credential = credentialRepository.lockByUserId(userId)
                                 .orElseThrow(() -> new UserManagementException("El usuario no tiene credenciales"));
 
                 String documentNumber = dto.getNumberDocument().trim();
@@ -268,6 +268,8 @@ public class UserManagementServiceImpl implements UserManagementService {
                 user.setFirstName(dto.getFirstName().trim());
                 user.setLastName(dto.getLastName().trim());
                 user.setAccountStatus(dto.getAccountStatus());
+                if (dto.getAccountStatus() != AccountStatus.ACTIVE)
+                        userSessionRepository.revokeAll(userId, java.time.OffsetDateTime.now());
                 userRepository.save(user);
 
                 if (oldStatus != dto.getAccountStatus()) {
@@ -327,6 +329,7 @@ public class UserManagementServiceImpl implements UserManagementService {
 
                 if (user.getAccountStatus() != AccountStatus.INACTIVE) {
                         user.setAccountStatus(AccountStatus.INACTIVE);
+                        userSessionRepository.revokeAll(userId, java.time.OffsetDateTime.now());
                         userRepository.save(user);
                         notifyAccountStatusChanged(user, "desactivada");
                         notifyAcademicUserStatusChanged(user, roleName, false);

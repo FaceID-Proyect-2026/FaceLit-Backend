@@ -24,16 +24,18 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 @CrossOrigin(origins = "*")
 public class PasswordRecoveryController {
 
+    private final com.FaceLit.backend.auth.service.serviceImpl.security.RecoveryRateLimiter limiter;
     private final PasswordRecoveryService passwordRecoveryService;
     private final ChangePasswordService changePasswordService;
     private final com.FaceLit.backend.auth.service.serviceImpl.security.AccountAccessService accountAccess;
 
     public PasswordRecoveryController(PasswordRecoveryService passwordRecoveryService,
             ChangePasswordService changePasswordService,
-            com.FaceLit.backend.auth.service.serviceImpl.security.AccountAccessService accountAccess) {
+            com.FaceLit.backend.auth.service.serviceImpl.security.AccountAccessService accountAccess,
+            com.FaceLit.backend.auth.service.serviceImpl.security.RecoveryRateLimiter limiter) {
         this.passwordRecoveryService = passwordRecoveryService;
         this.changePasswordService = changePasswordService;
-        this.accountAccess = accountAccess;
+        this.accountAccess = accountAccess; this.limiter = limiter;
     }
 
     // PASO 1 — Solicitar recuperación: el usuario manda su correo
@@ -42,6 +44,7 @@ public class PasswordRecoveryController {
     @PostMapping("/request-recovery")
     public ResponseEntity<PasswordRecoveryResponseDTO> requestRecovery(
             @Valid @RequestBody RequestPasswordRecoveryDTO dto) {
+        limiter.account(dto.getEmail(), "request");
         PasswordRecoveryResponseDTO response = passwordRecoveryService.requestRecovery(dto);
         return ResponseEntity.ok(response);
     }
@@ -56,6 +59,7 @@ public class PasswordRecoveryController {
     @PostMapping("/verify-token")
     public ResponseEntity<PasswordRecoveryResponseDTO> verifyToken(
             @Valid @RequestBody VerifyTokenDTO dto) {
+        limiter.account(dto.getEmail(), "verify");
         return ResponseEntity.ok(passwordRecoveryService.verifyToken(dto));
     }
 
@@ -66,6 +70,7 @@ public class PasswordRecoveryController {
     @PostMapping("/reset-password")
     public ResponseEntity<PasswordRecoveryResponseDTO> resetPassword(
             @Valid @RequestBody ResetPasswordDTO dto) {
+        limiter.account(dto.getEmail(), "reset");
         PasswordRecoveryResponseDTO response = passwordRecoveryService.resetPassword(dto);
         return ResponseEntity.ok(response);
 

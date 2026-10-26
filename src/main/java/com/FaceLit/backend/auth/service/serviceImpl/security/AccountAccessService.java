@@ -27,6 +27,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 /** Durable credential-email delivery. Passwords are generated in memory and stored only as hashes. */
 @Service
 public class AccountAccessService {
+    private final com.FaceLit.backend.auth.service.serviceImpl.security.SessionSecurityService sessions;
     private static final Logger log = LoggerFactory.getLogger(AccountAccessService.class);
     private final AccountAccessRequestRepository requests;
     private final CredentialRepository credentials;
@@ -47,10 +48,11 @@ public class AccountAccessService {
     public AccountAccessService(AccountAccessRequestRepository requests, CredentialRepository credentials,
             PasswordRecoveryRepository recoveries, PasswordEncoder encoder, EmailService email,
             ApplicationEventPublisher events, TransactionTemplate transactions, NotificationService notifications,
-            @Value("${facelit.access-url:http://localhost:8081}") String accessUrl) {
+            @Value("${facelit.access-url:http://localhost:8081}") String accessUrl, com.FaceLit.backend.auth.service.serviceImpl.security.SessionSecurityService sessions) {
         this.requests = requests; this.credentials = credentials; this.recoveries = recoveries;
         this.encoder = encoder; this.email = email; this.events = events; this.transactions = transactions;
         this.notifications = notifications; this.accessUrl = accessUrl.replaceAll("/+$", "");
+        this.sessions = sessions;
     }
 
     @Transactional
@@ -224,6 +226,7 @@ public class AccountAccessService {
                                 accessUrl + "/auth/login", accessUrl + "/auth/password-recovery", emailChange));
                 // Failed SMTP attempts preserve the previous usable password.
                 credential.setPassword(encoder.encode(password));
+                sessions.revokeAll(credential.getUser().getIdUser());
                 credential.setFailedAttempts(0); credential.setLockedUntil(null);
                 credentials.save(credential);
                 request.setTokenHash(null); request.setExpiresAt(null);
@@ -264,6 +267,7 @@ public class AccountAccessService {
         credential.setEmail(request.getTargetEmail());
         credential.setPassword(encoder.encode(dto.getNewPassword()));
         credential.setFailedAttempts(0); credential.setLockedUntil(null);
+        sessions.revokeAll(credential.getUser().getIdUser());
         credentials.saveAndFlush(credential);
         // Consume every previously issued path, including recovery codes sent to the old email.
         var pending = requests.findByUser_IdUserAndUsedFalse(credential.getUser().getIdUser());

@@ -32,6 +32,8 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
     private final EmailService emailService;
     private final VerificationCodeGenerator verificationCodeGenerator;
     private final com.FaceLit.backend.notification.service.NotificationService notifications;
+    private final RecoveryChallengeService challenges;
+    private final SessionSecurityService sessions;
     private AccountAccessService accountAccess;
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager entityManager;
@@ -45,13 +47,14 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
             PasswordEncoder passwordEncoder,
             EmailService emailService,
             VerificationCodeGenerator verificationCodeGenerator,
-            com.FaceLit.backend.notification.service.NotificationService notifications) {
+            com.FaceLit.backend.notification.service.NotificationService notifications, RecoveryChallengeService challenges, SessionSecurityService sessions) {
         this.credentialRepository = credentialRepository;
         this.passwordRecoveryRepository = passwordRecoveryRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
         this.verificationCodeGenerator = verificationCodeGenerator;
         this.notifications = notifications;
+        this.challenges = challenges; this.sessions = sessions;
     }
 
     @Override
@@ -79,6 +82,14 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
 
         //  2.1 Invalidar el código anterior si existe — igual que resendCode() en RegisterServiceImpl
         var previousCodes = passwordRecoveryRepository.findAllByUser_IdUser(user.getIdUser());
+        var now = OffsetDateTime.now();
+        for (var previous : previousCodes) {
+            if (!previous.isUsed() && previous.getExpirationDate().isAfter(now)
+                    && previous.getVerificationAttempts() >= challenges.maxAttempts())
+                throw new com.FaceLit.backend.auth.exception.RecoverySecurityException(429,
+                    "Recuperación bloqueada. Espera a que venza antes de solicitar otro código.",
+                    Math.max(1, java.time.Duration.between(now, previous.getExpirationDate()).toSeconds()));
+        }
         previousCodes.forEach(previous -> previous.setUsed(true));
         passwordRecoveryRepository.saveAll(previousCodes);
 
@@ -94,6 +105,7 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
         PasswordRecovery recovery = new PasswordRecovery();
         recovery.setUser(user);
         recovery.setToken(code);
+        recovery.setDestinationEmail(credential.getEmail().trim().toLowerCase(java.util.Locale.ROOT));
         recovery.setExpirationDate(OffsetDateTime.now()
             .plusMinutes(AppConstants.PASSWORD_RECOVERY_EXPIRY_MINUTES));
         recovery.setUsed(false);
@@ -107,52 +119,15 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
     }
 
     @Override
-    @Transactional
     public PasswordRecoveryResponseDTO verifyToken(VerifyTokenDTO dto) {
-        PasswordRecovery recovery = passwordRecoveryRepository.findByToken(dto.getToken())
-                .orElseThrow(() -> new PasswordRecoveryException("Código incorrecto"));
-
-        if (entityManager != null) {
-            credentialRepository.lockByUserId(recovery.getUser().getIdUser()).orElseThrow();
-            entityManager.refresh(recovery);
-        }
-
-        if (!recovery.isCurrent()) {
-            if (recovery.isUsed()) {
-                throw new PasswordRecoveryException("Código incorrecto");
-            }
-            throw new PasswordRecoveryException("Código vencido");
-        }
-
-        if (accountAccess != null) accountAccess.validateEmailChangeCode(recovery, false);
-        recovery.setVerifiedAt(OffsetDateTime.now());
-        passwordRecoveryRepository.save(recovery);
-        return PasswordRecoveryResponseDTO.tokenVerified();
+        return PasswordRecoveryResponseDTO.authorized(challenges.verify(dto.getEmail(), dto.getToken()));
     }
 
     @Override
     @Transactional
     public PasswordRecoveryResponseDTO resetPassword(ResetPasswordDTO dto) {
 
-        // 1. Buscar el código ingresado
-        PasswordRecovery recovery = passwordRecoveryRepository.findByToken(dto.getToken())
-                .orElseThrow(() -> new PasswordRecoveryException("Código incorrecto"));
-
-        // Serialize with email confirmation; refresh a code invalidated while waiting for this lock.
-        if (entityManager != null) {
-            credentialRepository.lockByUserId(recovery.getUser().getIdUser()).orElseThrow();
-            entityManager.refresh(recovery);
-        }
-
-        // 2. Verificar que no esté usado y no haya expirado
-        if (!recovery.isCurrent()) {
-            // isCurrent() ya devuelve false tanto si used=true como si expiró
-            // Diferenciamos el mensaje según la causa exacta
-            if (recovery.isUsed()) {
-                throw new PasswordRecoveryException("Código incorrecto");
-            }
-            throw new PasswordRecoveryException("Código vencido");
-        }
+        PasswordRecovery recovery = challenges.authorizeReset(dto.getEmail(), dto.getToken());
 
         // 3. Verificar que las contraseñas coincidan
         if (!dto.getNewPassword().equals(dto.getConfirmPassword())) {
@@ -175,6 +150,8 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
 
         // 6. Marcar el código como usado — no puede reutilizarse
         recovery.setUsed(true);
+        recovery.setResetTokenHash(null);
+        sessions.revokeAll(user.getIdUser());
         passwordRecoveryRepository.save(recovery);
 
         credential.setLockedUntil(null);

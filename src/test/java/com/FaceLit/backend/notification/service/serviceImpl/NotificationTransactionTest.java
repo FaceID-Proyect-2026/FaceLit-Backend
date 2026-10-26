@@ -31,12 +31,14 @@ class NotificationTransactionTest {
         var user = new com.FaceLit.backend.auth.model.security.User(); user.setIdUser(UUID.randomUUID()); user.setAccountStatus(com.FaceLit.backend.auth.model.enums.AccountStatus.ACTIVE);
         var credential = new com.FaceLit.backend.auth.model.security.Credential(); credential.setUser(user); credential.setPassword("hash"); credential.setFailedAttempts(1);
         when(credentials.findByUser_DocumentNumber("123")).thenReturn(Optional.of(credential));
+        when(credentials.lockByUserId(user.getIdUser())).thenReturn(Optional.of(credential));
         when(credentials.save(any())).thenAnswer(call -> { jdbc.update("update attempts set attempt_count = ?", credential.getFailedAttempts()); return credential; });
         when(notices.createCoordinatorEvent(any())).thenAnswer(call -> { jdbc.update("insert into security_notice values (1)"); return List.of(); });
         var target = new com.FaceLit.backend.auth.service.serviceImpl.roleandpermission.LoginServiceImpl(credentials, mock(UserRoleRepository.class),
                 mock(com.FaceLit.backend.auth.repository.roleandpermission.RolePermissionRepository.class), encoder,
-                mock(com.FaceLit.backend.auth.service.roleandpermission.JwtService.class), mock(com.FaceLit.backend.auth.service.security.UserSessionService.class), notices,
+                mock(com.FaceLit.backend.auth.service.roleandpermission.JwtService.class), notices,
                 mock(com.FaceLit.backend.auth.repository.legal.AcceptanceTermsRepository.class), mock(com.FaceLit.backend.auth.repository.security.UserSessionRepository.class), jdbc);
+        org.springframework.test.util.ReflectionTestUtils.setField(target, "entityManager", mock(jakarta.persistence.EntityManager.class));
         var factory = new ProxyFactory(target); factory.addAdvice(new TransactionInterceptor(manager, new AnnotationTransactionAttributeSource()));
         var service = (com.FaceLit.backend.auth.service.roleandpermission.LoginService) factory.getProxy();
         var dto = new com.FaceLit.backend.auth.dto.request.roleandpermission.LoginRequestDTO(); dto.setEmail("123"); dto.setPassword("incorrect");

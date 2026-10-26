@@ -12,6 +12,8 @@ public interface JwtService {
     // Valida que el token sea válido y no esté expirado
     boolean validateToken(String token);
 
+    void revokeToken(String token);
+
     // Extrae el userId del payload del token
     UUID extractUserId(String token);
 

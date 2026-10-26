@@ -37,6 +37,8 @@ build/
 *.env
 !.env.example
 
+# Local Maven cache. Previously tracked entries require separate cleanup.
+.m2/
 # Local build cache and generated runtime artifacts
 /.m2/
 /.mvn/local-settings.xml

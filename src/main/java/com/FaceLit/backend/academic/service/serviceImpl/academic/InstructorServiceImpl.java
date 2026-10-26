@@ -57,6 +57,7 @@ public class InstructorServiceImpl implements InstructorService {
     private final InitialCredentialService initialCredentialService;
     private final AdminRoleService adminRoleService;
     private final NotificationService notificationService;
+    private final com.FaceLit.backend.auth.service.serviceImpl.security.SessionSecurityService sessions;
 
     public InstructorServiceImpl(
             InstructorRepository instructorRepository,
@@ -68,7 +69,7 @@ public class InstructorServiceImpl implements InstructorService {
             RecordEnvironmentRepository recordEnvironmentRepository,
             InitialCredentialService initialCredentialService,
             AdminRoleService adminRoleService,
-            NotificationService notificationService) {
+            NotificationService notificationService, com.FaceLit.backend.auth.service.serviceImpl.security.SessionSecurityService sessions) {
         this.instructorRepository = instructorRepository;
         this.instructorProgramRepository = instructorProgramRepository;
         this.programRepository = programRepository;
@@ -78,7 +79,7 @@ public class InstructorServiceImpl implements InstructorService {
         this.recordEnvironmentRepository = recordEnvironmentRepository;
         this.initialCredentialService = initialCredentialService;
         this.adminRoleService = adminRoleService;
-        this.notificationService = notificationService;
+        this.notificationService = notificationService; this.sessions = sessions;
     }
 
     @Override
@@ -297,7 +298,9 @@ public class InstructorServiceImpl implements InstructorService {
 
         User user = instructor.getUser();
         if (user.getAccountStatus() == AccountStatus.ACTIVE) {
+            credentialRepository.lockByUserId(user.getIdUser());
             user.setAccountStatus(AccountStatus.INACTIVE);
+            sessions.revokeAll(user.getIdUser());
             if (user.getCredential() != null) {
                 user.getCredential().setCredentialStatus(CredentialStatus.INACTIVE);
             }
