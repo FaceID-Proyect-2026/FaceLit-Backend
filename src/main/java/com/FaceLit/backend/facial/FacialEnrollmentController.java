@@ -258,7 +258,18 @@ public class FacialEnrollmentController {
 
     private boolean registered(UUID userId) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
-            "SELECT EXISTS (SELECT 1 FROM facialrecognition.user_face WHERE id_user_app = ? AND deleted_at IS NULL AND status = 'ACTIVE')",
+            """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM academic.apprentice apprentice
+                    JOIN facialrecognition.user_face user_face
+                      ON user_face.id_apprentice = apprentice.id_apprentice
+                    WHERE apprentice.id_user_app = ?
+                      AND apprentice.deleted_at IS NULL
+                      AND user_face.deleted_at IS NULL
+                      AND user_face.status = 'ACTIVE'
+                )
+                """,
             Boolean.class, userId));
     }
 
