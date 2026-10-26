@@ -18,6 +18,15 @@ import com.FaceLit.backend.facial.dto.response.AttendanceMatrixResponseDTO;
 import com.FaceLit.backend.facial.service.serviceImpl.FacialEventServiceImpl;
 
 class AttendanceMatrixSessionTimesTest {
+    private final UUID actor = UUID.randomUUID();
+    @org.junit.jupiter.api.BeforeEach void authenticate() {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(actor, null,
+                        List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_COORDINATOR"))));
+    }
+    @org.junit.jupiter.api.AfterEach void clearSecurity() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
     @Test
     @SuppressWarnings({"unchecked", "rawtypes"})
     void exposesPersistedSessionTimesWithoutChangingAttendanceRules() throws Exception {
@@ -47,7 +56,7 @@ class AttendanceMatrixSessionTimesTest {
         FacialEventServiceImpl service = new FacialEventServiceImpl(null, null, null, null, null,
                 instructors, null, jdbc, null);
         AttendanceMatrixResponseDTO result = service.getAttendanceMatrix(group,
-                LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), UUID.randomUUID());
+                LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), actor);
         var day = result.learners().get(0).days().get(0);
         assertThat(day.sessionStartTime()).isEqualTo("09:15");
         assertThat(day.sessionEndTime()).isEqualTo("14:45");
@@ -67,7 +76,7 @@ class AttendanceMatrixSessionTimesTest {
         FacialEventServiceImpl service = new FacialEventServiceImpl(null, null, null, null, null,
                 instructors, null, jdbc, null);
         var result = service.getAttendanceMatrix(UUID.randomUUID(), LocalDate.of(2026, 10, 1),
-                LocalDate.of(2026, 10, 31), UUID.randomUUID());
+                LocalDate.of(2026, 10, 31), actor);
         assertThat(result.learners()).isEmpty();
         assertThat(result.sessions()).isEmpty();
     }

@@ -27,6 +27,7 @@ public class UserChipResponseDTO {
     private final String document;
     private final String email;
     private final String state;
+    private final String accountStatus;
     private final String initialPassword;
     private final OffsetDateTime assignmentDate;
     private final OffsetDateTime createdAt;
@@ -54,6 +55,7 @@ public class UserChipResponseDTO {
         this.document = user.getDocumentNumber();
         this.email = credential != null ? credential.getEmail() : null;
         this.state = userChip.getState().name();
+        this.accountStatus = user.getAccountStatus() == null ? "INACTIVE" : user.getAccountStatus().name();
         this.initialPassword = initialPassword;
         this.assignmentDate = userChip.getAssignmentDate();
         this.createdAt = userChip.getCreatedAt();

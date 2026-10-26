@@ -242,6 +242,12 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         validateTimes(dto);
         RecordEnvironment record = recordEnvironmentRepository.findById(idRecordEnvironment)
                 .orElseThrow(() -> new EnvironmentException("Sesión no encontrada.", HttpStatus.NOT_FOUND));
+        boolean belongs = record.getInstructorScheduled().getUser().getIdUser().equals(authenticatedUserId)
+                || record.getInstructorInCharge() != null
+                && record.getInstructorInCharge().getUser().getIdUser().equals(authenticatedUserId);
+        if (!belongs || record.getDeletedAt() != null) {
+            throw new EnvironmentException("No puedes modificar esta sesión.", HttpStatus.FORBIDDEN);
+        }
 
         SessionSnapshot previous = SessionSnapshot.from(record);
         if (previous.exitTime() == null || !previous.exitTime().isEqual(dto.getExitTime())) record.setExitReminderSent(false);
@@ -369,6 +375,10 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         }
         if (!dto.getExitTime().isAfter(dto.getEntryTime())) {
             throw new EnvironmentException("La hora de salida debe ser posterior a la hora de entrada.", HttpStatus.BAD_REQUEST);
+        }
+        if (dto.getRegistrationMinutes() == null || dto.getRegistrationMinutes() <= 0
+                || !dto.getExitTime().isAfter(dto.getEntryTime().plusMinutes(dto.getRegistrationMinutes()))) {
+            throw new EnvironmentException("La hora de salida debe ser posterior al tiempo de registro.", HttpStatus.BAD_REQUEST);
         }
         if (!dto.getShutdownTime().isAfter(dto.getExitTime())) {
             throw new EnvironmentException("La hora de apagado debe ser posterior a la hora de salida.", HttpStatus.BAD_REQUEST);

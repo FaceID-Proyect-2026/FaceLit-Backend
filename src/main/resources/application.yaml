@@ -14,7 +14,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: true
+    show-sql: ${FACELIT_SHOW_SQL:false}
 
   liquibase:
     enabled: false
@@ -46,7 +46,8 @@ jwt:
 facial:
   embedding:
     url: ${FACIAL_EMBEDDING_URL:http://localhost:8090}
-    api-key: ${FACIAL_EMBEDDING_API_KEY:change-me}
+    api-key: ${FACIAL_EMBEDDING_API_KEY:}
 
 facelit:
+  allowed-origins: ${FACELIT_ALLOWED_ORIGINS:http://localhost:8081,http://localhost:19006,https://facelit-ten.vercel.app}
   access-url: ${FACELIT_ACCESS_URL:http://localhost:8081}

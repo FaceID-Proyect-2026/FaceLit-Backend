@@ -23,6 +23,8 @@ public class SecurityConfig {
 
     // Inyección por constructor — igual que en tus servicios
     private final JwtFilter jwtFilter;
+    @org.springframework.beans.factory.annotation.Value("${facelit.allowed-origins:http://localhost:8081,http://localhost:19006}")
+    private List<String> allowedOrigins;
 
     public SecurityConfig(JwtFilter jwtFilter) {
         this.jwtFilter = jwtFilter;
@@ -41,7 +43,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
 
                         // ─── PÚBLICOS — no necesitan token ───────────────────────
-                        .requestMatchers("/api/auth/logout", "/api/auth/change-password").authenticated()
+                        .requestMatchers("/api/auth/logout", "/api/auth/change-password", "/api/auth/verify-password").authenticated()
                         .requestMatchers("/api/auth/**").permitAll()
                         // El token se valida como primer mensaje del canal WebSocket.
                         .requestMatchers("/ws/realtime").permitAll()
@@ -50,6 +52,14 @@ public class SecurityConfig {
                         // Ver todos los usuarios, asignar roles, gestionar todo
                         .requestMatchers("/api/admin/**").hasRole("COORDINATOR")
                         .requestMatchers("/api/facial/reset-requests/**").hasRole("APPRENTICE")
+                        .requestMatchers("/api/facial/embeddings/from-image").hasRole("APPRENTICE")
+                        .requestMatchers("/api/facial/embeddings/liveness-check").hasAnyRole("APPRENTICE", "INSTRUCTOR")
+                        // Retired browser-vector enrollment used a different, incompatible schema.
+                        .requestMatchers("/api/facial/challenge", "/api/facial/enrollment", "/api/facial/profile-photo").denyAll()
+                        .requestMatchers(HttpMethod.GET, "/api/facial/events/attendance-status", "/api/facial/events/attendance-matrix")
+                        .hasAnyRole("APPRENTICE", "INSTRUCTOR", "COORDINATOR")
+                        .requestMatchers("/api/facial/events", "/api/facial/events/**")
+                        .hasAnyRole("INSTRUCTOR", "COORDINATOR")
                         .requestMatchers(HttpMethod.GET, "/api/academic/me/**")
                         .hasAnyRole("COORDINATOR", "INSTRUCTOR", "APPRENTICE")
                         .requestMatchers(HttpMethod.GET, "/api/academic/programs/**", "/api/academic/chips/**")
@@ -60,7 +70,7 @@ public class SecurityConfig {
                         // ─── PERFIL PERSONAL — cualquier usuario autenticado, sin importar rol ───
                         .requestMatchers("/api/profile/**").authenticated()
                         .requestMatchers("/api/notifications/**").authenticated()
-                        .requestMatchers("/api/attendance/events").authenticated()
+                        .requestMatchers("/api/attendance/events").hasRole("COORDINATOR")
 
                         // Cualquier otro endpoint requiere autenticación
                         .anyRequest().authenticated())
@@ -77,7 +87,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedOrigins(allowedOrigins);
         config.setAllowedHeaders(List.of("*"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowCredentials(false);

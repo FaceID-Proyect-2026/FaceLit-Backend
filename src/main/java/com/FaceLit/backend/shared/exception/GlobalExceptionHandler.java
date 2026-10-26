@@ -29,6 +29,18 @@ public class GlobalExceptionHandler { // esta clase es para que capture errores 
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> handleStatus(org.springframework.web.server.ResponseStatusException ex) {
+        return ResponseEntity.status(ex.getStatusCode()).body(Map.of("message", ex.getReason() == null ? "Solicitud rechazada" : ex.getReason()));
+    }
+
+    @ExceptionHandler({org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+            org.springframework.web.bind.MissingServletRequestParameterException.class,
+            jakarta.validation.ConstraintViolationException.class})
+    public ResponseEntity<Map<String, String>> handleInvalidParameter(Exception ex) {
+        return ResponseEntity.badRequest().body(Map.of("message", "Revisa los parámetros de la solicitud."));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, String>> handleValidacion(
             MethodArgumentNotValidException ex) {

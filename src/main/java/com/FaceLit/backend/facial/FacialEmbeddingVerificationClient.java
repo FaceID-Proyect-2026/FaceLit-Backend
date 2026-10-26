@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 
 @Service
 public class FacialEmbeddingVerificationClient {
@@ -20,7 +21,10 @@ public class FacialEmbeddingVerificationClient {
 
     public FacialEmbeddingVerificationClient(
             @Value("${facial.embedding.url:http://localhost:8090}") String baseUrl,
-            @Value("${facial.embedding.api-key:change-me}") String apiKey) {
+            @Value("${facial.embedding.api-key:}") String apiKey) {
+        if (apiKey == null || apiKey.isBlank() || "change-me".equals(apiKey.trim())) {
+            throw new IllegalArgumentException("Configura FACIAL_EMBEDDING_API_KEY con una clave de servicio propia.");
+        }
         this.apiKey = apiKey;
         var factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(10));
@@ -38,6 +42,16 @@ public class FacialEmbeddingVerificationClient {
                 .body(new VerificationRequest(idRecordEnvironment, imageBase64, imageFrames, livenessChallenge, livenessChallenges))
                 .retrieve()
                 .body(VerificationResponse.class);
+    }
+
+    public JsonNode registerFromImage(Object payload) {
+        return client.post().uri("/api/v1/facial-embeddings/from-image")
+                .header("X-API-Key", apiKey).body(payload).retrieve().body(JsonNode.class);
+    }
+
+    public JsonNode checkLiveness(Object payload) {
+        return client.post().uri("/api/v1/facial-embeddings/liveness-check")
+                .header("X-API-Key", apiKey).body(payload).retrieve().body(JsonNode.class);
     }
 
     record VerificationRequest(

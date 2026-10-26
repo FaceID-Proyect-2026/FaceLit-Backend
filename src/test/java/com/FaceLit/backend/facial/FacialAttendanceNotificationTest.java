@@ -46,6 +46,10 @@ class FacialAttendanceNotificationTest {
 
     @BeforeEach
     void setUp() {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        scheduled.getUser().getIdUser(), null,
+                        java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_INSTRUCTOR"))));
         service = new FacialEventServiceImpl(events, sessions, devices, apprentices,
                 assignments, mock(InstructorRepository.class), mock(FacialEmbeddingVerificationClient.class),
                 mock(JdbcTemplate.class), notifications);
@@ -55,6 +59,7 @@ class FacialAttendanceNotificationTest {
         chip.setIdChip(UUID.randomUUID());
         chip.setChipCode("3145555");
         session.setIdRecordEnvironment(UUID.randomUUID());
+        session.setActive(true);
         session.setChip(chip);
         session.setInstructorScheduled(scheduled);
         session.setInstructorInCharge(substitute);
@@ -78,10 +83,13 @@ class FacialAttendanceNotificationTest {
         });
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void clearSecurity() { org.springframework.security.core.context.SecurityContextHolder.clearContext(); }
+
     @Test
     void excuseUsesAbsenceDateAndSelectedResponsibleForBothRecipients() throws Exception {
         existingAbsence(false);
-        service.updateExcuse(request, UUID.randomUUID());
+        service.updateExcuse(request, scheduled.getUser().getIdUser());
         var captured = ArgumentCaptor.forClass(CreateNotificationRequestDTO.class);
         verify(notifications, times(2)).createForRecipient(captured.capture());
         var sent = captured.getAllValues();
@@ -102,7 +110,7 @@ class FacialAttendanceNotificationTest {
     void newAbsenceIncludesLearnerDateAndScheduledInstructor() {
         session.setInstructorInCharge(null);
         request.setExcuse(false);
-        service.updateExcuse(request, UUID.randomUUID());
+        service.updateExcuse(request, scheduled.getUser().getIdUser());
         var captured = ArgumentCaptor.forClass(CreateNotificationRequestDTO.class);
         verify(notifications).createForRecipient(captured.capture());
         var sent = captured.getValue();
@@ -115,7 +123,7 @@ class FacialAttendanceNotificationTest {
     @Test
     void repeatingExcuseDoesNotSendDuplicateNotifications() {
         existingAbsence(true);
-        service.updateExcuse(request, UUID.randomUUID());
+        service.updateExcuse(request, scheduled.getUser().getIdUser());
         verifyNoInteractions(notifications);
     }
 
@@ -132,7 +140,7 @@ class FacialAttendanceNotificationTest {
 
     @Test
     void excuseCreatingAbsenceSendsOnlyExcuseToLearnerAndInstructor() {
-        service.updateExcuse(request, UUID.randomUUID());
+        service.updateExcuse(request, scheduled.getUser().getIdUser());
         var captured = ArgumentCaptor.forClass(CreateNotificationRequestDTO.class);
         verify(notifications, times(2)).createForRecipient(captured.capture());
         assertThat(captured.getAllValues()).extracting(CreateNotificationRequestDTO::type)

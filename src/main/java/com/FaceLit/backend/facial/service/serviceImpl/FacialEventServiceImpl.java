@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -97,6 +98,10 @@ public class FacialEventServiceImpl implements FacialEventService {
     public FacialEventResponseDTO registerEvent(FacialEventRequestDTO dto, UUID authenticatedUserId) {
         RecordEnvironment record = recordEnvironmentRepository.findById(dto.getIdRecordEnvironment())
                 .orElseThrow(() -> new FacialEventException("Sesión no encontrada.", HttpStatus.NOT_FOUND));
+        requireSessionOperator(record, authenticatedUserId);
+        if (!Boolean.TRUE.equals(record.getActive()) || record.getDeletedAt() != null) {
+            throw new FacialEventException("La sesión no está activa.", HttpStatus.CONFLICT);
+        }
         Device device = deviceRepository.findById(dto.getIdDevice())
                 .orElseThrow(() -> new FacialEventException("Dispositivo no encontrado.", HttpStatus.NOT_FOUND));
         Apprentice apprentice = apprenticeRepository.findById(dto.getIdApprentice())
@@ -167,6 +172,7 @@ public class FacialEventServiceImpl implements FacialEventService {
     public void initializeSessionAbsences(UUID idRecordEnvironment, UUID authenticatedUserId) {
         RecordEnvironment record = recordEnvironmentRepository.findById(idRecordEnvironment)
                 .orElseThrow(() -> new FacialEventException("Sesión no encontrada.", HttpStatus.NOT_FOUND));
+        requireSessionOperator(record, authenticatedUserId);
 
         String sql = """
                 INSERT INTO facialrecognition.facial_event (
@@ -201,6 +207,12 @@ public class FacialEventServiceImpl implements FacialEventService {
     @Override
     @Transactional
     public FacialEventResponseDTO registerEventFromImage(FacialAttendanceCaptureRequestDTO dto, UUID authenticatedUserId) {
+        RecordEnvironment record = recordEnvironmentRepository.findById(dto.getIdRecordEnvironment())
+                .orElseThrow(() -> new FacialEventException("Sesión no encontrada.", HttpStatus.NOT_FOUND));
+        requireSessionOperator(record, authenticatedUserId);
+        if (!Boolean.TRUE.equals(record.getActive()) || record.getDeletedAt() != null) {
+            throw new FacialEventException("La sesión no está activa.", HttpStatus.CONFLICT);
+        }
         VerificationResponse verification;
         try {
             verification = verificationClient.verifySession(
@@ -243,12 +255,19 @@ public class FacialEventServiceImpl implements FacialEventService {
 
     @Override
     @Transactional(readOnly = true)
-    public AttendanceStatusResponseDTO getAttendanceStatus(UUID idRecordEnvironment, UUID idApprentice) {
-        if (!recordEnvironmentRepository.existsById(idRecordEnvironment)) {
-            throw new FacialEventException("Sesión no encontrada.", HttpStatus.NOT_FOUND);
-        }
-        if (!apprenticeRepository.existsById(idApprentice)) {
-            throw new FacialEventException("Aprendiz no encontrado.", HttpStatus.NOT_FOUND);
+    public AttendanceStatusResponseDTO getAttendanceStatus(UUID idRecordEnvironment, UUID idApprentice, UUID authenticatedUserId) {
+        RecordEnvironment record = recordEnvironmentRepository.findById(idRecordEnvironment)
+                .orElseThrow(() -> new FacialEventException("Sesión no encontrada.", HttpStatus.NOT_FOUND));
+        Apprentice apprentice = apprenticeRepository.findById(idApprentice)
+                .orElseThrow(() -> new FacialEventException("Aprendiz no encontrado.", HttpStatus.NOT_FOUND));
+        if (hasRole(authenticatedUserId, "APPRENTICE")) {
+            if (!apprentice.getUser().getIdUser().equals(authenticatedUserId)
+                    || !userChipRepository.existsByApprentice_IdApprenticeAndChip_IdChipAndState(
+                            idApprentice, record.getChip().getIdChip(), AcademicState.ACTIVE)) {
+                throw new FacialEventException("Solo puedes consultar tu propia asistencia.", HttpStatus.FORBIDDEN);
+            }
+        } else {
+            requireSessionOperator(record, authenticatedUserId);
         }
 
         AttendanceStatus status = facialEventRepository
@@ -273,13 +292,34 @@ public class FacialEventServiceImpl implements FacialEventService {
             throw new FacialEventException("El rango de fechas no es válido.", HttpStatus.BAD_REQUEST);
         }
 
-        UUID idInstructor = instructorRepository.findByUser_IdUser(authenticatedUserId)
-                .map(Instructor::getIdInstructor)
-                .orElse(null);
+        UUID ownUserId = null;
+        UUID idInstructor = null;
+        if (hasRole(authenticatedUserId, "APPRENTICE")) {
+            if (!userChipRepository.findByApprentice_User_IdUserAndState(authenticatedUserId, AcademicState.ACTIVE)
+                    .map(link -> link.getChip().getIdChip().equals(idChip)).orElse(false)) {
+                throw new FacialEventException("No puedes consultar esta ficha.", HttpStatus.FORBIDDEN);
+            }
+            ownUserId = authenticatedUserId;
+        } else if (hasRole(authenticatedUserId, "INSTRUCTOR")) {
+            idInstructor = instructorRepository.findByUser_IdUser(authenticatedUserId)
+                    .map(Instructor::getIdInstructor)
+                    .orElseThrow(() -> new FacialEventException("Instructor no autorizado.", HttpStatus.FORBIDDEN));
+            boolean assigned = Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                    SELECT EXISTS (SELECT 1 FROM academic.instructor_chip
+                        WHERE id_instructor = ? AND id_chip = ? AND active = TRUE AND deleted_at IS NULL)
+                        OR EXISTS (SELECT 1 FROM environment.record_environment
+                        WHERE id_chip = ? AND deleted_at IS NULL
+                        AND (id_instructor_scheduled = ? OR id_instructor_in_charge = ?))
+                    """, Boolean.class, idInstructor, idChip, idChip, idInstructor, idInstructor));
+            if (!assigned) throw new FacialEventException("No puedes consultar esta ficha.", HttpStatus.FORBIDDEN);
+        } else if (!hasRole(authenticatedUserId, "COORDINATOR")) {
+            throw new FacialEventException("No puedes consultar asistencias.", HttpStatus.FORBIDDEN);
+        }
 
         List<AttendanceMatrixRow> rows = findAttendanceMatrixRows(
                 idChip,
                 idInstructor,
+                ownUserId,
                 dateFrom,
                 dateTo);
 
@@ -342,6 +382,7 @@ public class FacialEventServiceImpl implements FacialEventService {
     public FacialEventResponseDTO updateExcuse(UpdateFacialEventExcuseRequestDTO dto, UUID authenticatedUserId) {
         RecordEnvironment record = recordEnvironmentRepository.findById(dto.getIdRecordEnvironment())
                 .orElseThrow(() -> new FacialEventException("Sesión no encontrada.", HttpStatus.NOT_FOUND));
+        requireSessionOperator(record, authenticatedUserId);
         Apprentice apprentice = apprenticeRepository.findById(dto.getIdApprentice())
                 .orElseThrow(() -> new FacialEventException("Aprendiz no encontrado.", HttpStatus.NOT_FOUND));
 
@@ -536,6 +577,7 @@ public class FacialEventServiceImpl implements FacialEventService {
     private List<AttendanceMatrixRow> findAttendanceMatrixRows(
             UUID idChip,
             UUID idInstructor,
+            UUID ownUserId,
             LocalDate dateFrom,
             LocalDate dateTo) {
         String sql = """
@@ -631,6 +673,7 @@ public class FacialEventServiceImpl implements FacialEventService {
                  AND fex.id_apprentice = a.id_apprentice
                  AND fex.event_type = 'EXIT'
                  AND fex.deleted_at IS NULL
+                WHERE (CAST(? AS uuid) IS NULL OR u.id_user_app = ?)
                 ORDER BY re.entry_time ASC, u.last_name ASC, u.first_name ASC, u.number_document ASC
                 """;
 
@@ -641,6 +684,8 @@ public class FacialEventServiceImpl implements FacialEventService {
             ps.setObject(4, idInstructor);
             ps.setObject(5, idInstructor);
             ps.setObject(6, idInstructor);
+            ps.setObject(7, ownUserId);
+            ps.setObject(8, ownUserId);
         }, (rs, rowNum) -> new AttendanceMatrixRow(
                 rs.getObject("record_environment_id", UUID.class),
                 rs.getObject("session_date", LocalDate.class),
@@ -788,6 +833,23 @@ public class FacialEventServiceImpl implements FacialEventService {
             return FacialEventOrigin.valueOf(rawOrigin.trim().toUpperCase(Locale.ROOT));
         } catch (RuntimeException ex) {
             throw new FacialEventException("El origen debe ser PC o MOBILE.", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private boolean hasRole(UUID actor, String role) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        return actor != null && authentication != null && authentication.isAuthenticated()
+                && actor.toString().equals(authentication.getName())
+                && authentication.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_" + role));
+    }
+
+    private void requireSessionOperator(RecordEnvironment record, UUID actor) {
+        boolean belongs = record.getInstructorScheduled() != null
+                && record.getInstructorScheduled().getUser().getIdUser().equals(actor)
+                || record.getInstructorInCharge() != null
+                && record.getInstructorInCharge().getUser().getIdUser().equals(actor);
+        if (record.getDeletedAt() != null || !(hasRole(actor, "COORDINATOR") || hasRole(actor, "INSTRUCTOR") && belongs)) {
+            throw new FacialEventException("No puedes operar esta sesión.", HttpStatus.FORBIDDEN);
         }
     }
 

@@ -10,6 +10,8 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 public class RealtimeWebSocketConfig implements WebSocketConfigurer {
 
     private final RealtimeWebSocketHandler handler;
+    @org.springframework.beans.factory.annotation.Value("${facelit.allowed-origins:http://localhost:8081,http://localhost:19006}")
+    private String[] allowedOrigins;
 
     public RealtimeWebSocketConfig(RealtimeWebSocketHandler handler) {
         this.handler = handler;
@@ -18,6 +20,6 @@ public class RealtimeWebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(handler, "/ws/realtime")
-                .setAllowedOriginPatterns("*");
+                .setAllowedOrigins(allowedOrigins);
     }
 }

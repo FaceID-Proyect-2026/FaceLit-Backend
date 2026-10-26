@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 public enum Language {
     ES,
     EN,
+    DE,
     PR,
     FR;
 
