@@ -42,3 +42,11 @@ build/
 /.mvn/local-settings.xml
 /FaceID-Back-end.jar
 /*.log
+
+# Generated artifacts and temporary folders at any depth
+*.jar
+*.log
+.tmp/
+
+# Keep a Maven Wrapper JAR available if the wrapper distribution requires it.
+!/.mvn/wrapper/maven-wrapper.jar
