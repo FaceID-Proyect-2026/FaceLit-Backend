@@ -1,524 +1,128 @@
-<p align="center">
-  <img src="https://readme-typing-svg.herokuapp.com?color=00C853&size=50&center=true&vCenter=true&width=900&font=Audiowide&lines=FACELIT+BACKEND;Sistema+de+Reconocimiento+Facial;Spring+Boot+%2B+PostgreSQL+%2B+JWT" />
-</p>
+# FaceLit backend
 
-<p align="center">
-  <img src="./img/f9ac71baaa8d0d294289e8491da0a3f7.gif" width="350"/>
-</p>
+Spring Boot REST backend for FaceLit's account access, academic management, environment sessions, facial attendance and notifications. This repository uses Java 17 and Spring Boot 3.4.1, as declared in [pom.xml](pom.xml). Its Java package is `com.FaceLit.backend`.
 
-![Java](https://img.shields.io/badge/Java-17-orange)
-![Spring](https://img.shields.io/badge/SpringBoot-4.0.6-green)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-blue)
-![JWT](https://img.shields.io/badge/Auth-JWT-red)
+## Architecture
 
+```text
+HTTP / JWT filter -> controllers -> services -> repositories / PostgreSQL
+                                      |
+                         SMTP, realtime and facial integration
 
+src/main/java/com/FaceLit/backend/
+  academic/       Programs, training groups, enrollment and CSV processing
+  auth/           Accounts, credentials, roles, recovery and configuration
+  config/         Security and application configuration
+  environment/    Environments and attendance sessions
+  facial/         Enrollment, reset authorization and attendance
+  notification/   In-app messages and email dispatch
+  realtime/       Authenticated realtime communication
+  shared/         Shared exceptions, utilities and infrastructure
+src/main/resources/application.yaml
+src/main/resources/static/email/   Runtime email assets
+src/test/                         Automated tests and isolated configuration
+README.md                         Single maintained documentation entry
+```
 
-# 🧩 Arquitectura del Proyecto
+Controllers accept requests and delegate application behavior; services apply rules and coordinate persistence/delivery. The current facial implementation also contains JDBC integration. This README describes that implementation rather than claiming an architectural refactor has already been delivered. Technical comments remain beside the code; separate implementation reports are not application inputs.
 
-El backend de **FaceLit** está construido bajo una arquitectura:
+## Prerequisites and configuration
 
-> 🧠 **Arquitectura en N Capas con Spring Boot**
+Install Java 17 and use the committed `mvnw`/`mvnw.cmd`, or compatible Maven. Prepare PostgreSQL with [FaceLit-DB](https://github.com/FaceID-Proyect-2026/FaceLit-DB). Facial operations and email acceptance require their configured services.
 
-### 🎯 ¿Por qué esta arquitectura?
+[application.yaml](src/main/resources/application.yaml) is the configuration source. Supply private environment variables or an ignored local `.env`, read by spring-dotenv. Do not overwrite a working local configuration during a checkout update.
 
-* Permite una separación clara de responsabilidades
-* Facilita el mantenimiento y la escalabilidad del sistema
-* Mejora la organización del código por capas (presentación, negocio, persistencia)
-* Ideal para proyectos académicos con buenas prácticas profesionales
-* Reduce el acoplamiento entre componentes
+| Variable | Purpose |
+| --- | --- |
+| `DB_URL` | PostgreSQL JDBC connection URL |
+| `DB_USERNAME`, `DB_PASSWORD` | Database account |
+| `MAIL_USERNAME`, `MAIL_PASSWORD` | SMTP account; YAML configures Gmail SMTP on port 587 |
+| `JWT_SECRET` | Signing key compatible with the JWT implementation |
+| `FACIAL_EMBEDDING_URL` | Facial API address; development default is localhost:8090 |
+| `FACIAL_EMBEDDING_API_KEY` | Server-side service credential; configure it privately |
+| `FACELIT_ACCESS_URL` | Frontend address used in notifications; development default is localhost:8081 |
 
----
+HTTP uses port 8080. Hibernate is configured with `ddl-auto: validate`, and backend Liquibase execution is disabled. Run the database project's migration procedure before normal startup. Do not use a Hibernate setting change to conceal missing migrations or schema differences.
 
-# 📦 Estructura Global del Proyecto
+The currently checked-out YAML/client still has the legacy facial credential fallback; the coordinated security change is delivered separately. Removing generated files does not certify credential rotation or complete all security findings.
+
+## Run and build
+
+From PowerShell in this repository:
+
+```powershell
+.\mvnw.cmd spring-boot:run
+.\mvnw.cmd -Dspring.profiles.active=test test
+.\mvnw.cmd -Dspring.profiles.active=test package
+```
+
+On Unix-like systems, use `./mvnw` with the same arguments; use `bash mvnw` if the checkout's executable bit is unavailable. Configure isolated mail/JWT values when running tests. [application-test.yaml](src/test/resources/application-test.yaml) uses H2 with disposable schemas. It does not certify PostgreSQL-specific behavior or a production deployment. The explicitly enabled PostgreSQL integration test needs its own local verification environment.
+
+## Continuous integration
+
+The [CI workflow](.github/workflows/ci.yml) runs on pull requests and pushes to dev, qa and main, with optional manual dispatch. The `Maven tests and JaCoCo coverage` job uses Java 17 and the Maven Wrapper to run JaCoCo 0.8.12 prepare-agent, `verify` and report generation without skipping tests. Its test profile uses H2 with dummy JWT/mail values and local SMTP; it does not certify PostgreSQL or real email delivery.
+
+Download `backend-tests-and-coverage` from the exact commit's Actions run for Surefire/Failsafe reports and JaCoCo HTML/XML. The HTML entry is `target/site/jacoco/index.html`. Coverage measures executed lines/branches; no minimum threshold is configured by this workflow. The opt-in PostgreSQL integration test needs a separately enabled environment. A local or historical successful run does not establish the current head's status.
+
+HU-MEJ-006 automates tests and evidence for H-16/H-18. Authorization/ownership and account-recovery fixes remain responsibilities of HU-MEJ-001/HU-MEJ-002; CI configuration alone does not close H-17. Verify required-check rules, failed-check blocking evidence and independent approval separately; a workflow file does not configure repository protection.
+
+## API and access model
+
+The actual controllers and [SecurityConfig](src/main/java/com/FaceLit/backend/config/SecurityConfig.java) define the contract. The JWT filter reads a Bearer token and establishes the user principal/authorities before controller execution. Public authentication routes and authenticated role checks are distinct; application/service ownership checks must also be tested for the flow in question.
+
+| Area | Current route families and examples |
+| --- | --- |
+| Authentication | `POST /api/auth/login`, `/verify-password`, `/privacy-acceptance-status` |
+| Account access/recovery | `/api/auth/complete-access`, `/request-recovery`, `/verify-token`, `/reset-password`, `/change-password` |
+| User administration | `/api/admin/users`, `/api/admin/users/{userId}/role` |
+| Personal profile | `/api/profile/me`, `/api/profile/configuration` |
+| Academic management | `/api/academic/programs`, `/chips`, `/instructors`, `/csv` and `/me` |
+| Environment sessions | `/api/environment/environments`, `/sessions`, `/sessions/active` and session exit-password verification |
+| Facial enrollment | `/api/facial/me`, `/registration-status`, `/profile-photo`, `/challenge`, `/enrollment`, `/registration-confirmation` |
+| Facial reset | `POST /api/facial/reset-requests`, `GET /api/facial/reset-requests/me` |
+| Notifications | `/api/notifications`, read/read-all and recipient-bound facial-request resolution |
+| Realtime | `/ws/realtime`, with token validation through its existing protocol |
+
+Use request DTOs and controllers for exact method/body requirements. Program/training-group modification and administration are coordinator operations; environment-session routes are instructor operations in the current security configuration. The `/api/academic/me/**` routes provide role-aware self-service reads. This inventory does not introduce missing CRUD operations or grant new roles.
+
+## Academic and environment behavior
+
+Academic management coordinates programs, training groups (`chip` in the database), instructors, apprentices, assignments and change history. CSV endpoints provide the template, upload and pending-transfer decisions. Duplicate checks, active status and transfer handling are defined by their services and DTOs.
+
+Environment sessions hold entry/exit and shutdown times for attendance. They remain part of the application after schedule management was removed. Follow their existing validation and instructor assignment rules; do not infer support for a screen operation that lacks an API contract.
+
+## Facial enrollment and reset authorization
+
+Enrollment status/confirmation and the facial processing service use the schema established by FaceLit-DB. A reset request is associated with the authenticated apprentice; academic membership supplies display context. Coordinators resolve recipient-bound notifications in the app, not by following an unauthenticated email action.
+
+Approval creates a one-use authorization, normally valid for 24 hours (`facial.reset.authorization-hours`). The token is returned to its authenticated owner through the self-service request endpoint, not in email or coordinator notifications. Replacing the existing face requires the approved, unexpired authorization and live capture. The microservice consumes the permission and saves the replacement in one transaction; a failure must leave the previous state intact. Test the coordinated backend/micro/frontend versions before release.
+
+## Notifications, email and troubleshooting
+
+Notification records and email delivery state are separate concerns. Event/recipient information drives in-app rendering and realtime updates; email dispatch records attempts and outcomes through the existing email log. `FACELIT_ACCESS_URL` must resolve from the recipient's device. A localhost link in a received message targets that device, not the server.
+
+Account-access/recovery links and codes follow their existing services; do not distribute fixed sample passwords or verification codes. A database commit does not by itself prove SMTP delivery. Diagnose mail with the dispatch/error logs and configured account, while preserving private values.
+
+Exit reminders use the session's `exit_time`: periodic checks select the relevant attendees and selected instructor during the configured window before exit. They use the EMAIL channel, are excluded from the in-app inbox and are revalidated before delivery/retry. The existing tests cover cancellation, deduplication, late arrivals and isolation of email-only messages. Actual timing and reception still depend on the running scheduler and SMTP provider.
+
+For startup failures, verify environment variables, database availability and schema validation first. For denied requests, inspect the authenticated role and service ownership conditions; broadening permissions is not a cleanup fix. For facial failures, verify private service connectivity, credential compatibility, capture/authorization and the relevant persisted state. Keep raw biometrics, tokens and credentials out of shared diagnostic output.
+
+## Container and deployment
+
+The [Dockerfile](Dockerfile) builds a new JAR from `pom.xml` and `src/`, using `mvn -q -DskipTests clean package`, then copies `target/*.jar` into a Java 17 runtime image. It does not consume the deleted root JAR, repository-local Maven cache, diagnostic logs or developer-specific settings. Run the appropriate tests independently before accepting this branch; this Dockerfile does not prove a passing suite on its own.
 
 ```bash
-com.tuproyecto.sena/
-├── config/           → Seguridad, JWT, Swagger
-├── auth/             → RF-1: login, registro, roles
-├── ambientes/        → RF-2: CRUD ambientes
-├── academico/        → RF-3: programas, fichas
-├── facial/           → RF-5: integración Python
-├── asistencias/      → RF-6: control de asistencia
-├── reportes/         → RF-7: Excel, estadísticas
-├── notificaciones/   → RF-8: email, push
-├── perfil/           → RF-9: usuario
-├── admin/            → RF-10/11: auditoría
-└── shared/           → utilidades comunes
+docker build -t facelit-backend:review .
 ```
 
-📌 Cada módulo sigue esta estructura interna basada en capas:
+Supply runtime environment through the host configuration. The team identified `srv2068863.hstgr.cloud` as its Hostinger target, but source readiness is not proof that the final commit is deployed. Container hardening and health probes belong to the separately preserved HU-MEJ-015 work, not this cleanup branch.
 
-```bash
-controller/   → Capa de presentación
-service/      → Capa de lógica de negocio
-repository/   → Capa de acceso a datos
-model/        → Capa de persistencia (entidades)
-dto/          → Capa de transferencia de datos
-exception/    → Manejo de errores
-```
+## Repository hygiene and release acceptance
 
----
+`.gitignore` excludes `.m2/`, local Maven settings, generated JAR/log files and `.tmp/`, including nested generated files. Maven Wrapper scripts/properties remain tracked; an exception permits a wrapper JAR if a future wrapper distribution needs it. Removing current artifacts does not rewrite Git history.
 
-# 🏗️ Estructura Base (Ejemplo: módulo auth)
+This README is the single maintained explanatory document. Historical notes, reports and screenshots were archived outside the source checkout before removal and remain recoverable through Git history. Runtime email images, source comments, tests and executable configuration remain present.
 
-```bash
-auth/
-├── controller/
-├── service/
-├── repository/
-├── model/
-├── dto/
-└── exception/
-```
+Before acceptance, record the final commits and applicable CI checks; verify startup, login per role, academic/environment behavior, enrollment/reset, attendance, notifications and SMTP on a coordinated deployment. Unit/H2 tests do not replace PostgreSQL integration or real camera acceptance. Obtain independent review before merging.
 
----
-
-# 🧠 Explicación de la Arquitectura por Capas
-
-## 🎮 Controller (Capa de Presentación)
-
-Punto de entrada de la API.
-
-* Recibe peticiones HTTP
-* Valida datos de entrada
-* Llama al Service
-
-```java
-@PostMapping("/registro")
-```
-
----
-
-## ⚙️ Service (Capa de Negocio)
-
-Contiene la lógica de negocio.
-
-* Aplica reglas del sistema
-* Coordina entidades
-* Orquesta procesos
-
----
-
-## 🔧 ServiceImpl (Implementación de la lógica)
-
-Implementación del Service.
-
-* Separa contrato de implementación
-* Facilita pruebas unitarias
-* Mejora la mantenibilidad del código
-
----
-
-## 🗄️ Repository (Capa de Persistencia)
-
-Acceso a la base de datos.
-
-* Extiende JpaRepository
-* Genera consultas automáticamente
-
-```java
-interface UsuarioRepository extends JpaRepository<Usuario, Long>
-```
-
----
-
-## 📦 Model (Entity)
-
-Representa tablas en la base de datos.
-
-```java
-@Entity
-@Table(name = "usuarios")
-```
-
----
-
-## 🔄 DTO (Data Transfer Object)
-
-### 📥 Request DTO
-
-Datos que envía el cliente
-
-### 📤 Response DTO
-
-Datos que devuelve el backend
-
-### ⚠️ ¿Por qué usar DTO?
-
-* Evita exponer entidades directamente
-* Mejora la seguridad
-* Permite controlar la información enviada y recibida
-
----
-
-
-# 🔥 Análisis de Spring Initializr
-
-# Documentación de dependencias — Backend FaceLit
-**Proyecto:** Sistema de reconocimiento facial SENA  
-**Archivo:** `pom.xml`  
-**Spring Boot:** 4.0.6  
-**Java:** 17  
-**Build tool:** Maven  
-
----
-
-## Configuración base en Spring Initializr
-
-| Campo | Valor | Razón |
-|---|---|---|
-| Project | Maven | Más documentado que Gradle, estándar académico |
-| Language | Java | — |
-| Spring Boot | 4.0.6 | Versión estable LTS. |
-| Group | com.FaceLit | — |
-| Artifact | backend | — |
-| Package name | com.FaceLit.backend | — |
-| Packaging | Jar | Estándar para aplicaciones Spring Boot |
-| Java | 17 | LTS con compatibilidad total de todas las librerías del proyecto |
-
----
-
-## Dependencias — análisis y estado
-
-### ✅ Spring Web
-```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-web</artifactId>
-</dependency>
-```
-**Para qué sirve:** Permite crear endpoints REST (`@RestController`, `@GetMapping`, `@PostMapping`, etc.) y levanta el servidor Tomcat embebido.  
-**Estado:** Obligatoria. Sin esta no existen controllers ni endpoints HTTP.
-
----
-
-### ✅ Spring Data JPA
-```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-data-jpa</artifactId>
-</dependency>
-```
-**Para qué sirve:** Integra Hibernate con Spring. Permite mapear clases Java a tablas de PostgreSQL con `@Entity`, `@Table`, `@Column` y genera SQL automáticamente desde los Repository.  
-**Estado:** Obligatoria. Es el puente entre los `model/` y la base de datos.
-
----
-
-### ✅ Spring Security
-```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-security</artifactId>
-</dependency>
-```
-**Para qué sirve:** Gestiona autenticación, autorización y protección de endpoints. Provee `BCryptPasswordEncoder` para hashear contraseñas y el filtro para validar JWT en cada request.  
-**Estado:** Obligatoria.  
-**⚠️ Atención:** En cuanto se agrega esta dependencia, Spring bloquea TODOS los endpoints automáticamente. Se debe crear `SecurityConfig.java` desde el primer día para permitir acceso público a `/auth/registrar` y `/auth/login`. Si no, el endpoint de registro va a devolver 403 siempre.
-
----
-
-### ✅ Validation
-```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-validation</artifactId>
-</dependency>
-```
-**Para qué sirve:** Activa las anotaciones de validación en los DTOs: `@NotBlank`, `@Email`, `@Pattern`, `@Past`, `@NotNull`, `@Size`.  
-**Estado:** Obligatoria. Sin esta dependencia las anotaciones existen en el código pero no hacen nada en tiempo de ejecución.
-
----
-
-### ✅ PostgreSQL Driver
-```xml
-<dependency>
-    <groupId>org.postgresql</groupId>
-    <artifactId>postgresql</artifactId>
-    <scope>runtime</scope>
-</dependency>
-```
-**Para qué sirve:** Conector JDBC que permite a Java comunicarse con PostgreSQL.  
-**Estado:** Obligatoria. Sin el driver Spring Data JPA no sabe cómo conectarse a la base de datos.
-
----
-
-### ✅ Liquibase Migration
-```xml
-<dependency>
-    <groupId>org.liquibase</groupId>
-    <artifactId>liquibase-core</artifactId>
-</dependency>
-```
-**Para qué sirve:** Controla las versiones de la base de datos mediante changesets. Cada modificación en la BD se registra en archivos XML o SQL que Liquibase ejecuta en orden automáticamente al iniciar la app.  
-**Estado:** Correcta. Ya acordada con la compañera de BD.  
-**⚠️ Importante:** No agregar Flyway. Ambas hacen lo mismo y tenerlas juntas genera conflicto al arrancar la aplicación.
-
----
-
-### ✅ Lombok
-```xml
-<dependency>
-    <groupId>org.projectlombok</groupId>
-    <artifactId>lombok</artifactId>
-    <optional>true</optional>
-</dependency>
-```
-**Para qué sirve:** Genera en tiempo de compilación getters, setters y constructores mediante anotaciones.
-
-| Anotación | Qué genera |
-|---|---|
-| `@Data` | Getters + Setters + toString + equals + hashCode |
-| `@Getter` / `@Setter` | Solo getters o solo setters |
-| `@NoArgsConstructor` | Constructor vacío |
-| `@AllArgsConstructor` | Constructor con todos los campos |
-| `@Builder` | Patrón Builder para crear objetos |
-
-**Estado:** Recomendada. Reduce el código repetitivo en Models y DTOs.
-
----
-
-### ✅ Spring Boot DevTools
-```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-devtools</artifactId>
-    <scope>runtime</scope>
-    <optional>true</optional>
-</dependency>
-```
-**Para qué sirve:** Reinicia el servidor automáticamente al detectar cambios en el código.  
-**Estado:** Correcta solo para desarrollo. El `optional=true` garantiza que no se incluye en el jar de producción.
-
----
-
-## Dependencia que se agrega manualmente
-
-### ⚠️ JWT — jjwt versión 0.12.6
-```xml
-<dependency>
-    <groupId>io.jsonwebtoken</groupId>
-    <artifactId>jjwt-api</artifactId>
-    <version>0.12.6</version>
-</dependency>
-<dependency>
-    <groupId>io.jsonwebtoken</groupId>
-    <artifactId>jjwt-impl</artifactId>
-    <version>0.12.6</version>
-    <scope>runtime</scope>
-</dependency>
-<dependency>
-    <groupId>io.jsonwebtoken</groupId>
-    <artifactId>jjwt-jackson</artifactId>
-    <version>0.12.6</version>
-    <scope>runtime</scope>
-</dependency>
-```
-**Para qué sirve:** Genera y valida tokens JWT. Al hacer login el backend genera un token firmado con `userId`, `email` y `rol`. El frontend lo envía en cada petición y el backend lo valida sin necesitar sesiones.  
-**Estado:** Necesaria — agregar manualmente en el pom.xml.  
-**⚠️ Versión corregida:** Usar **0.12.6** y NO 0.11.5. La 0.11.5 tiene toda la API deprecated.
-
----
-
-## Dependencias que NO se agregan
-
-### ❌ Flyway
-**Razón:** El equipo trabaja con Liquibase. No pueden coexistir.
-
-### ❌ MapStruct
-**Razón:** Agrega complejidad de configuración sin beneficio real en esta etapa. El mapeo manual en el ServiceImpl es más claro ahora. Se puede evaluar más adelante cuando haya muchos módulos con conversiones repetitivas.
-
----
-
-## Configuración application.yml
-
-```yaml
-spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/facelit_db
-    username: postgres
-    password: tu_password_aqui
-    driver-class-name: org.postgresql.Driver
-
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-
-  liquibase:
-    enabled: true
-    change-log: classpath:db/changelog/db.changelog-master.xml
-
-server:
-  port: 8080
-
-jwt:
-  secret: clave-secreta-muy-larga-de-al-menos-32-caracteres-para-HS256
-  expiration: 28800000
-```
-
-**Notas:**
-- `ddl-auto: validate` — Hibernate NO crea ni modifica tablas. Liquibase es quien maneja los cambios de BD. Hibernate solo verifica que el Model coincida con lo que Liquibase creó.
-- `show-sql: true` — muestra el SQL generado en consola. Útil durante desarrollo.
-- `liquibase.change-log` — debe coincidir con la ruta del archivo master que maneja la compañera de BD.
-- `jwt.expiration: 28800000` — 8 horas en milisegundos.
-- La clave JWT debe tener mínimo 32 caracteres. En producción va en variable de entorno, nunca en el código fuente.
-
----
-
-## pom.xml completo y corregido
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
-         https://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
-
-    <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.4.1</version>
-        <relativePath/>
-    </parent>
-
-    <groupId>com.FaceLit</groupId>
-    <artifactId>backend</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <name>backend</name>
-    <description>Sistema de reconocimiento facial SENA</description>
-
-    <properties>
-        <java.version>17</java.version>
-    </properties>
-
-    <dependencies>
-
-        <!-- WEB - endpoints REST y servidor Tomcat -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-
-        <!-- JPA + HIBERNATE - mapeo Model a BD -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
-
-        <!-- SEGURIDAD - BCrypt, JWT filter, roles -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-security</artifactId>
-        </dependency>
-
-        <!-- VALIDACIÓN - anotaciones en DTOs -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-validation</artifactId>
-        </dependency>
-
-        <!-- BASE DE DATOS - driver PostgreSQL -->
-        <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-
-        <!-- MIGRACIONES BD - Liquibase -->
-        <dependency>
-            <groupId>org.liquibase</groupId>
-            <artifactId>liquibase-core</artifactId>
-        </dependency>
-
-        <!-- JWT - autenticación stateless -->
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-api</artifactId>
-            <version>0.12.6</version>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-impl</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-jackson</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
-        </dependency>
-
-        <!-- LOMBOK - reduce boilerplate en Models y DTOs -->
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- DEVTOOLS - recarga automática en desarrollo -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-devtools</artifactId>
-            <scope>runtime</scope>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- TESTS -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-    </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <excludes>
-                        <exclude>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                        </exclude>
-                    </excludes>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
-
-</project>
-```
-
----
-
-## Correcciones aplicadas respecto a la configuración original
-
-| Problema | Original | Corregido |
-|---|---|---|
-| Versión Spring Boot inestable | 4.0.6 | 3.4.1 |
-| Versión JWT deprecated | 0.11.5 | 0.12.6 |
-| Flyway junto a Liquibase | Ambas presentes | Solo Liquibase |
-| MapStruct innecesario en esta etapa | Incluido | No incluido |
-
-**Sin cambios — decisiones del equipo válidas:**
-- Java 17 — correcto, compatibilidad total con todas las librerías
-- Liquibase — correcto, ya acordado con la compañera de BD
-
----
-
-*Documento del equipo FaceLit — Módulo auth HU-01*  
-*Actualizar al agregar nuevas dependencias por módulo*
+Related repositories: [frontend](https://github.com/FaceID-Proyect-2026/FaceLit), [database](https://github.com/FaceID-Proyect-2026/FaceLit-DB), [facial service](https://github.com/FaceID-Proyect-2026/micro-facial).
