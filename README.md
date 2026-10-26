@@ -58,6 +58,14 @@ From PowerShell in this repository:
 
 On Unix-like systems, use `./mvnw` with the same arguments; use `bash mvnw` if the checkout's executable bit is unavailable. Configure isolated mail/JWT values when running tests. [application-test.yaml](src/test/resources/application-test.yaml) uses H2 with disposable schemas. It does not certify PostgreSQL-specific behavior or a production deployment. The explicitly enabled PostgreSQL integration test needs its own local verification environment.
 
+## Continuous integration
+
+The [CI workflow](.github/workflows/ci.yml) runs on pull requests and pushes to dev, qa and main, with optional manual dispatch. The `Maven tests and JaCoCo coverage` job uses Java 17 and the Maven Wrapper to run JaCoCo 0.8.12 prepare-agent, `verify` and report generation without skipping tests. Its test profile uses H2 with dummy JWT/mail values and local SMTP; it does not certify PostgreSQL or real email delivery.
+
+Download `backend-tests-and-coverage` from the exact commit's Actions run for Surefire/Failsafe reports and JaCoCo HTML/XML. The HTML entry is `target/site/jacoco/index.html`. Coverage measures executed lines/branches; no minimum threshold is configured by this workflow. The opt-in PostgreSQL integration test needs a separately enabled environment. A local or historical successful run does not establish the current head's status.
+
+HU-MEJ-006 automates tests and evidence for H-16/H-18. Authorization/ownership and account-recovery fixes remain responsibilities of HU-MEJ-001/HU-MEJ-002; CI configuration alone does not close H-17. Verify required-check rules, failed-check blocking evidence and independent approval separately; a workflow file does not configure repository protection.
+
 ## API and access model
 
 The actual controllers and [SecurityConfig](src/main/java/com/FaceLit/backend/config/SecurityConfig.java) define the contract. The JWT filter reads a Bearer token and establishes the user principal/authorities before controller execution. Public authentication routes and authenticated role checks are distinct; application/service ownership checks must also be tested for the flow in question.

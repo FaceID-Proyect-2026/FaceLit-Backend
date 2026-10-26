@@ -1,0 +1,55 @@
+name: FaceLit Backend CI
+
+on:
+  pull_request:
+  push:
+    branches: [dev, qa, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    name: Maven tests and JaCoCo coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SPRING_PROFILES_ACTIVE: test
+      JWT_SECRET: facelit-ci-only-test-signing-key-never-use-in-production-2026
+      MAIL_USERNAME: ci@example.invalid
+      MAIL_PASSWORD: ci-only-not-a-real-password
+      SPRING_MAIL_HOST: localhost
+      SPRING_MAIL_PORT: '1025'
+    steps:
+      - name: Checkout backend
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Enable Maven wrapper
+        run: chmod +x mvnw
+
+      - name: Run tests with JaCoCo agent
+        run: >-
+          ./mvnw -B -ntp
+          org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent
+          verify
+          org.jacoco:jacoco-maven-plugin:0.8.12:report
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-tests-and-coverage
+          path: |
+            target/surefire-reports/
+            target/failsafe-reports/
+            target/site/jacoco/
+            target/jacoco.exec
+          if-no-files-found: warn
