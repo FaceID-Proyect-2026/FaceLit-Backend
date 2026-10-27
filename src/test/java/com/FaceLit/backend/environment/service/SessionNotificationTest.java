@@ -33,7 +33,8 @@ class SessionNotificationTest {
     private final DeviceRepository devices = mock(DeviceRepository.class);
     private final NotificationService notifications = mock(NotificationService.class);
     private final EnvironmentServiceImpl service = new EnvironmentServiceImpl(environments, sessions, instructors,
-            mock(InstructorProgramRepository.class), chips, learners, devices, notifications, mock(LoginService.class));
+            mock(InstructorProgramRepository.class), chips, learners, devices, mock(LoginService.class),
+            new EnvironmentSessionNotifier(instructors, learners, notifications));
     private final Instructor creator = instructor("Camila", "Perez");
     private final Instructor selected = instructor("Luis", "Gomez");
     private final RecordEnvironmentRequestDTO dto = new RecordEnvironmentRequestDTO();

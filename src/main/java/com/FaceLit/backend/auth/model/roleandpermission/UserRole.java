@@ -51,6 +51,6 @@ public class UserRole extends AuditBase {
     @JoinColumn(name = "id_role", nullable = false)
     private Role role;
 
-    @Column(name = "asigned_at", nullable = false)
+    @Column(name = "assigned_at", nullable = false)
     private OffsetDateTime assignedAt;
 }

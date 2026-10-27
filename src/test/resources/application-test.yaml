@@ -18,3 +18,7 @@ spring:
 
   liquibase:
     enabled: false
+
+facial:
+  embedding:
+    api-key: test-only-internal-service-key

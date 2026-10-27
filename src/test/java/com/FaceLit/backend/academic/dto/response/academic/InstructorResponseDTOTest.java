@@ -17,6 +17,24 @@ import com.FaceLit.backend.auth.model.security.User;
 class InstructorResponseDTOTest {
 
     @Test
+    void profileAuditUsesUserChangesButNotCredentialActivity() {
+        var created = java.time.OffsetDateTime.parse("2026-10-20T10:00:00Z");
+        var edited = created.plusDays(1);
+        User user = new User();
+        user.setAccountStatus(AccountStatus.ACTIVE);
+        user.setCreatedAt(created); user.setUpdatedAt(edited);
+        var credential = new com.FaceLit.backend.auth.model.security.Credential();
+        credential.setUpdatedAt(edited.plusDays(1));
+        user.setCredential(credential);
+        Instructor instructor = new Instructor();
+        instructor.setUser(user); instructor.setInstructorType(InstructorType.ESPECIFICO);
+        instructor.setCreatedAt(created); instructor.setUpdatedAt(created);
+        var response = new InstructorResponseDTO(instructor, List.of());
+        assertEquals(created, response.getCreatedAt());
+        assertEquals(edited, response.getUpdatedAt());
+    }
+
+    @Test
     void shouldExposeUserIdentityAndPrograms() {
         User user = new User();
         user.setIdUser(UUID.randomUUID());

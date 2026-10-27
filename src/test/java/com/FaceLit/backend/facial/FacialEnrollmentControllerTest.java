@@ -69,7 +69,9 @@ class FacialEnrollmentControllerTest {
     private final TransactionTemplate tx = mock(TransactionTemplate.class);
     private final PadVerifier pad = mock(PadVerifier.class);
     private final NotificationService notificationService = mock(NotificationService.class);
-    private final FacialEnrollmentController controller = new FacialEnrollmentController(jdbc, tx, pad, notificationService);
+    private final FacialEnrollmentController controller = new FacialEnrollmentController(jdbc, tx, pad, notificationService,
+            new com.FaceLit.backend.facial.service.FacialRegistrationService(
+                    new com.FaceLit.backend.facial.repository.FacialRegistrationStatusRepository(jdbc), tx, notificationService));
     private final UUID user = UUID.randomUUID();
 
     private List<FacialEnrollmentController.Sample> samples(FacialEnrollmentController.Challenge challenge) {

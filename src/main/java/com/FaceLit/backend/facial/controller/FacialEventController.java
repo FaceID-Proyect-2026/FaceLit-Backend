@@ -60,8 +60,9 @@ public class FacialEventController {
     @GetMapping("/attendance-status")
     public ResponseEntity<AttendanceStatusResponseDTO> getAttendanceStatus(
             @RequestParam UUID idRecordEnvironment,
-            @RequestParam UUID idApprentice) {
-        return ResponseEntity.ok(facialEventService.getAttendanceStatus(idRecordEnvironment, idApprentice));
+            @RequestParam UUID idApprentice,
+            @AuthenticationPrincipal Object principal) {
+        return ResponseEntity.ok(facialEventService.getAttendanceStatus(idRecordEnvironment, idApprentice, principalId(principal)));
     }
 
     @GetMapping("/attendance-matrix")

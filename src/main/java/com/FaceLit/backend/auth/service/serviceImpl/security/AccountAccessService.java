@@ -80,11 +80,18 @@ public class AccountAccessService {
         // Administrative changes take effect on this same account immediately.
         // Invalidate every recovery code addressed to the previous mailbox.
         String previousEmail = current.getEmail();
-        current.setEmail(target);
+        updateEmailAndAudit(current, target);
         credentials.saveAndFlush(current);
         var oldCodes = recoveries.findAllByUser_IdUser(user.getIdUser());
         oldCodes.forEach(r -> r.setUsed(true)); recoveries.saveAll(oldCodes);
         queue(user, current, target, "EMAIL_CHANGE", null, previousEmail);
+    }
+
+    private void updateEmailAndAudit(Credential credential, String target) {
+        if (!credential.getEmail().equalsIgnoreCase(target)) {
+            credential.setEmail(target);
+            credential.getUser().setUpdatedAt(OffsetDateTime.now());
+        }
     }
 
     private void queue(User user, Credential credential, String target, String purpose, String rawPassword, String originalEmail) {
@@ -180,7 +187,7 @@ public class AccountAccessService {
     public void completeEmailChange(PasswordRecovery recovery, Credential credential) {
         if (recovery.getAccessRequest() == null) return;
         validateEmailChangeCode(recovery, true);
-        credential.setEmail(recovery.getAccessRequest().getTargetEmail());
+        updateEmailAndAudit(credential, recovery.getAccessRequest().getTargetEmail());
         var pending = requests.findByUser_IdUserAndUsedFalse(recovery.getUser().getIdUser());
         pending.forEach(r -> { r.setUsed(true); if (!r.getId().equals(recovery.getAccessRequest().getId())) r.setSendStatus("CANCELLED"); });
         requests.saveAll(pending);
@@ -264,7 +271,7 @@ public class AccountAccessService {
         credentials.findByEmailIgnoreCase(request.getTargetEmail())
                 .filter(c -> !c.getUser().getIdUser().equals(credential.getUser().getIdUser()))
                 .ifPresent(c -> { throw new PasswordRecoveryException("Ya existe un usuario con ese correo"); });
-        credential.setEmail(request.getTargetEmail());
+        updateEmailAndAudit(credential, request.getTargetEmail());
         credential.setPassword(encoder.encode(dto.getNewPassword()));
         credential.setFailedAttempts(0); credential.setLockedUntil(null);
         sessions.revokeAll(credential.getUser().getIdUser());

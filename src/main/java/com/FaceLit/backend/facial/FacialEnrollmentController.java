@@ -22,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
 import com.FaceLit.backend.notification.service.NotificationService;
+import com.FaceLit.backend.facial.service.FacialRegistrationService;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -36,6 +37,7 @@ public class FacialEnrollmentController {
     private final TransactionTemplate transactions;
     private final PadVerifier pad;
     private final NotificationService notificationService;
+    private final FacialRegistrationService registrationService;
     private final SecureRandom random = new SecureRandom();
     private final Map<UUID, Challenge> challenges = new ConcurrentHashMap<>();
 
@@ -43,11 +45,13 @@ public class FacialEnrollmentController {
             JdbcTemplate jdbc,
             TransactionTemplate transactions,
             PadVerifier pad,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            FacialRegistrationService registrationService) {
         this.jdbc = jdbc;
         this.transactions = transactions;
         this.pad = pad;
         this.notificationService = notificationService;
+        this.registrationService = registrationService;
     }
 
     public record Challenge(UUID id, List<String> poses, Instant expiresAt) {}
@@ -235,58 +239,16 @@ public class FacialEnrollmentController {
 
     @PostMapping("/registration-confirmation")
     public Map<String, Boolean> confirmRegistration(@AuthenticationPrincipal UUID userId) {
-        if (userId == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
-        transactions.executeWithoutResult(tx -> {
-            jdbc.queryForObject("SELECT id_user_app FROM security.user_app WHERE id_user_app = ? FOR UPDATE", UUID.class, userId);
-            if (!registered(userId)) throw new ResponseStatusException(HttpStatus.CONFLICT, "No hay registro facial guardado.");
-            boolean notified = Boolean.TRUE.equals(jdbc.queryForObject("""
-                SELECT EXISTS (SELECT 1 FROM notification.notification
-                WHERE id_user_app = ? AND notification_type = 'facial_registration_completed')
-                """, Boolean.class, userId));
-            // Replacements have their own durable completion delivery, with request context.
-            boolean replacement = Boolean.TRUE.equals(jdbc.queryForObject("""
-                SELECT EXISTS (SELECT 1 FROM facialrecognition.face_reset_request
-                WHERE id_user_app = ? AND consumed_at IS NOT NULL)
-                """, Boolean.class, userId));
-            if (!notified && !replacement) notificationService.createForRecipient(new CreateNotificationRequestDTO(
-                    userId, "facial_registration_completed", "Registro facial completado",
-                    "Tu rostro se guardó correctamente. Para reemplazarlo debes solicitar autorización al coordinador.",
-                    userId, "user_face", null, "{\"action\":\"completed\"}"));
-        });
-        return Map.of("confirmed", true);
+        return registrationService.confirm(userId);
     }
 
     private boolean registered(UUID userId) {
-        return Boolean.TRUE.equals(jdbc.queryForObject(
-            """
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM academic.apprentice apprentice
-                    JOIN facialrecognition.user_face user_face
-                      ON user_face.id_apprentice = apprentice.id_apprentice
-                    WHERE apprentice.id_user_app = ?
-                      AND apprentice.deleted_at IS NULL
-                      AND user_face.deleted_at IS NULL
-                      AND user_face.status = 'ACTIVE'
-                )
-                """,
-            Boolean.class, userId));
+        return registrationService.isRegistered(userId);
     }
 
     private RegistrationStatus registrationStatusForFrontend(UUID userId) {
-        List<OffsetDateTime> dates = jdbc.queryForList("""
-            SELECT COALESCE(user_face.updated_at, user_face.created_at) AS registration_date
-            FROM academic.apprentice apprentice
-            JOIN facialrecognition.user_face user_face
-              ON user_face.id_apprentice = apprentice.id_apprentice
-             AND user_face.deleted_at IS NULL
-             AND user_face.status = 'ACTIVE'
-            WHERE apprentice.id_user_app = ?
-              AND apprentice.deleted_at IS NULL
-            ORDER BY COALESCE(user_face.updated_at, user_face.created_at) DESC
-            LIMIT 1
-            """, OffsetDateTime.class, userId);
-        return new RegistrationStatus(!dates.isEmpty(), dates.isEmpty() ? null : dates.get(0));
+        var status = registrationService.status(userId);
+        return new RegistrationStatus(status.registered(), status.registrationDate());
     }
 
     static void validateSamples(Challenge challenge, List<Sample> samples) {

@@ -64,7 +64,7 @@ class ExitReminderRepositoryTest {
         FacialEvent notifiedEvent = em.createQuery("select e from FacialEvent e where e.apprentice.user.idUser = :user", FacialEvent.class).setParameter("user", notified.getIdUser()).getSingleResult();
         var notice = new com.FaceLit.backend.notification.model.Notification(); notice.setIdUserApp(notified.getIdUser());
         notice.setIdFacialEvent(notifiedEvent.getIdFacialEvent()); notice.setType("attendance_absent"); notice.setTitle("Ausencia");
-        notice.setMessage("Ausencia confirmada"); notice.setCategory("ASISTENCIA"); notice.setChannel("APP_EMAIL"); em.persist(notice);
+        notice.setMessage("Ausencia confirmada"); notice.setCategory("ATTENDANCE"); notice.setChannel("APP_EMAIL"); em.persist(notice);
         UUID expected = em.createQuery("select e.idFacialEvent from FacialEvent e where e.apprentice.user.idUser = :user", UUID.class).setParameter("user", absent.getIdUser()).getSingleResult();
         em.flush(); em.clear();
         assertThat(attendance.findUnnotifiedConfirmedAbsences(now, org.springframework.data.domain.PageRequest.of(0, 100))).containsExactly(expected);
@@ -77,7 +77,7 @@ class ExitReminderRepositoryTest {
         var used = permission(now.minusMinutes(1)); used.setConsumedAt(now.minusMinutes(2));
         var notified = permission(now.minusMinutes(1));
         var notice = new com.FaceLit.backend.notification.model.Notification(); notice.setIdUserApp(notified.getUserId());
-        notice.setType("facial_authorization_expired"); notice.setTitle("Vencido"); notice.setMessage("Permiso vencido"); notice.setCategory("RECONOCIMIENTO_FACIAL"); notice.setChannel("APP");
+        notice.setType("facial_authorization_expired"); notice.setTitle("Vencido"); notice.setMessage("Permiso vencido"); notice.setCategory("FACIAL_RECOGNITION"); notice.setChannel("APP");
         notice.setReferenceEntity("face_reset_request"); notice.setReferenceId(notified.getId()); em.persist(notice);
         em.flush(); em.clear(); assertThat(resets.findUnnotifiedExpired(now)).containsExactly(expired.getId());
     }

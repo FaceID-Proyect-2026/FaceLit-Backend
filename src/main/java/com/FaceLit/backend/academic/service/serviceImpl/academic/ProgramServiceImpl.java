@@ -66,7 +66,7 @@ public class ProgramServiceImpl implements ProgramService {
         program.setProgramName(name);
         program.setProgramCode(code);
         program.setState(AcademicState.ACTIVE);
-        program = programRepository.save(program);
+        program = programRepository.saveAndFlush(program);
         record(program, "program", null, program.getProgramName(), ChangeAction.CREATE);
         return new ProgramResponseDTO(program, chipRepository.findByProgram_IdProgram(program.getIdProgram()));
     }
@@ -129,7 +129,7 @@ public class ProgramServiceImpl implements ProgramService {
         String oldValue = program.getProgramName() + " / " + program.getProgramCode();
         program.setProgramName(name);
         program.setProgramCode(code);
-        program = programRepository.save(program);
+        program = programRepository.saveAndFlush(program);
         record(program, "program", oldValue, name + " / " + code, ChangeAction.UPDATE);
         return new ProgramResponseDTO(program, chipRepository.findByProgram_IdProgram(program.getIdProgram()));
     }
@@ -143,7 +143,7 @@ public class ProgramServiceImpl implements ProgramService {
         }
         program.setState(AcademicState.ACTIVE);
         program.setDeactivationReason(null);
-        program = programRepository.save(program);
+        program = programRepository.saveAndFlush(program);
         record(program, "program", AcademicState.INACTIVE.name(), AcademicState.ACTIVE.name(), ChangeAction.REACTIVATE);
         notifyAcademicRemoval(
                 "academic_entity_activated",
@@ -167,7 +167,7 @@ public class ProgramServiceImpl implements ProgramService {
         if (program.getState() == AcademicState.ACTIVE) {
             program.setState(AcademicState.INACTIVE);
             program.setDeactivationReason(reason == null || reason.isBlank() ? null : reason.trim());
-            program = programRepository.save(program);
+            program = programRepository.saveAndFlush(program);
             record(program, "program", AcademicState.ACTIVE.name(), AcademicState.INACTIVE.name(), ChangeAction.DEACTIVATE);
             notifyAcademicRemoval(
                     "academic_entity_deactivated",

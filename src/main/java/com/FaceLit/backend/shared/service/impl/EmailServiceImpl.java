@@ -1,6 +1,7 @@
 package com.FaceLit.backend.shared.service.impl;
 
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import com.FaceLit.backend.shared.service.EmailService;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -19,16 +20,19 @@ public class EmailServiceImpl implements EmailService {
     // private → solo se puede usar dentro de esta clase
     // final → el valor no cambiará después de asignarse
     private final JavaMailSender mailSender;
+    private final String fromAddress;
 
     // Constructor de la clase.
     // Spring envía automáticamente el JavaMailSender
     // para poder usar el servicio de correos.
-    public EmailServiceImpl(JavaMailSender mailSender) {
+    public EmailServiceImpl(JavaMailSender mailSender,
+            @Value("${spring.mail.username}") String fromAddress) {
 
         // this.mailSender → variable de la clase
         // mailSender → valor recibido en el constructor
         // Aquí se guarda la herramienta de envío de correos.
         this.mailSender = mailSender;
+        this.fromAddress = fromAddress;
     }
 
     @Override
@@ -39,6 +43,7 @@ public class EmailServiceImpl implements EmailService {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
             helper.setTo(toEmail);
             helper.setSubject(subject);
             helper.setText(
@@ -62,6 +67,7 @@ public class EmailServiceImpl implements EmailService {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
             helper.setTo(toEmail);
             helper.setSubject(subject);
             helper.setText(body, html);
@@ -77,6 +83,7 @@ public class EmailServiceImpl implements EmailService {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
             helper.setTo(toEmail);
             helper.setSubject(subject);
             helper.setText("Tus datos de acceso a FaceLit están disponibles en la versión HTML de este correo. Inicia sesión con tu número de documento y la contraseña generada. Puedes cambiarla cuando quieras desde ¿Olvidaste tu contraseña? en el inicio de sesión.", body);

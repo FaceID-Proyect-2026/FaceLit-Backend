@@ -25,6 +25,16 @@ import jakarta.persistence.Column;
 
 public abstract class AuditBase {  // Auditoria Base
 
+    /** Last persisted change across the records represented by one response. */
+    public static OffsetDateTime latestUpdatedAt(AuditBase... records) {
+        return java.util.Arrays.stream(records)
+                .filter(java.util.Objects::nonNull)
+                .flatMap(record -> java.util.stream.Stream.of(record.getCreatedAt(), record.getUpdatedAt()))
+                .filter(java.util.Objects::nonNull)
+                .max(java.util.Comparator.comparing(OffsetDateTime::toInstant))
+                .orElse(null);
+    }
+
     @CreationTimestamp   // Fecha y hora en que el registro fue creado, Se asigna automáticamente al momento de persistir el registro.
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
