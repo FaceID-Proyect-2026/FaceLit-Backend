@@ -87,7 +87,7 @@ class InitialCredentialEmailTemplateTest {
         MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
         when(sender.createMimeMessage()).thenReturn(message);
         String html = template.render(user(), "Aprendiz", "aprendiz@example.com", password, login, recovery, false);
-        new EmailServiceImpl(sender).sendInitialCredentials("aprendiz@example.com", "FaceLit - Credenciales iniciales", html);
+        new EmailServiceImpl(sender, "sender@example.invalid").sendInitialCredentials("aprendiz@example.com", "FaceLit - Credenciales iniciales", html);
         verify(sender).send(message);
         message.saveChanges();
         var parts = new ArrayList<Part>(); collect(message, parts);

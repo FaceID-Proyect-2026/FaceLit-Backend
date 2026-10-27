@@ -118,9 +118,31 @@ class ArchitectureFlowPostgresIT {
         String learnerToken = login("98765001");
         String teacherToken = login("98765002");
         String coordinatorToken = login("98765003");
-        List<String> frames = Collections.nCopies(10, "data:image/jpeg;base64,fixture");
+        List<String> challenges = List.of("MOVE_UP", "MOVE_DOWN", "MOVE_CLOSER", "MOVE_AWAY");
+        for (int challengeIndex = 0; challengeIndex < challenges.size(); challengeIndex++) {
+            String expected = challenges.get(challengeIndex);
+            String different = challenges.get((challengeIndex + 1) % challenges.size());
+            for (String performed : List.of(expected, "STILL", different)) {
+                List<String> samples = java.util.stream.IntStream.range(0, 7)
+                        .mapToObj(index -> "liveness-fixture:" + performed + ":" + index).toList();
+                var checked = http.exchange("/api/facial/embeddings/liveness-check", HttpMethod.POST,
+                        authenticated(Map.of("image_frames", samples, "liveness_challenge", expected), learnerToken), JsonNode.class);
+                assertThat(checked.getStatusCode().value()).as("HTTP liveness %s / %s", expected, performed).isEqualTo(200);
+                assertThat(checked.getBody().path("live").asBoolean())
+                        .as("Requested %s; performed %s", expected, performed).isEqualTo(expected.equals(performed));
+            }
+        }
+        for (String retired : List.of("BLINK", "OPEN_CLOSE_MOUTH", "NOD", "SHAKE_HEAD", "KISS_CAMERA", "MOVE_LEFT", "MOVE_RIGHT")) {
+            List<String> samples = java.util.stream.IntStream.range(0, 7)
+                    .mapToObj(index -> "liveness-fixture:MOVE_UP:" + index).toList();
+            var checked = http.exchange("/api/facial/embeddings/liveness-check", HttpMethod.POST,
+                    authenticated(Map.of("image_frames", samples, "liveness_challenge", retired), learnerToken), JsonNode.class);
+            assertThat(checked.getStatusCode().value()).isEqualTo(200);
+            assertThat(checked.getBody().path("live").asBoolean()).as("Retired challenge %s", retired).isFalse();
+        }
+        List<String> frames = Collections.nCopies(14, "data:image/jpeg;base64,fixture");
         Map<String, Object> registration = Map.of("user_id", learner, "image_base64", frames.get(0),
-                "image_frames", frames, "liveness_challenges", List.of("BLINK", "OPEN_CLOSE_MOUTH"));
+                "image_frames", frames, "liveness_challenges", List.of("MOVE_UP", "MOVE_DOWN"));
         var enrolled = http.exchange("/api/facial/embeddings/from-image", HttpMethod.POST, authenticated(registration, learnerToken), JsonNode.class);
         assertThat(enrolled.getStatusCode().value()).isEqualTo(201);
         assertThat(enrolled.getBody().has("embedding")).isFalse();
@@ -139,7 +161,7 @@ class ArchitectureFlowPostgresIT {
         assertThat(registrationStatus.getBody().path("registered").asBoolean()).isTrue();
 
         Map<String, Object> capture = Map.of("idRecordEnvironment", session, "idDevice", device,
-                "imageFrames", frames, "livenessChallenges", List.of("BLINK", "OPEN_CLOSE_MOUTH"), "origin", "PC");
+                "imageFrames", frames, "livenessChallenges", List.of("MOVE_UP", "MOVE_DOWN"), "origin", "PC");
         // Tomcat's existing error dispatch may report 401; both paths must reject the write.
         assertThat(http.exchange("/api/facial/events/from-image", HttpMethod.POST,
                 authenticated(capture, learnerToken), JsonNode.class).getStatusCode().is4xxClientError()).isTrue();

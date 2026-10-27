@@ -61,7 +61,7 @@ class FacialEmbeddingHttpTest {
         when(client.checkLiveness(any())).thenReturn(json.readTree("{\"live\":true,\"reason\":\"LIVE_OK\"}"));
         for(String role:List.of("APPRENTICE","INSTRUCTOR"))
             mvc.perform(post("/api/facial/embeddings/liveness-check").with(as(role)).contentType("application/json")
-                .content("{\"image_frames\":[\"a\",\"b\",\"c\"],\"liveness_challenge\":\"BLINK\"}"))
+                .content("{\"image_frames\":[\"a\",\"b\",\"c\"],\"liveness_challenge\":\"MOVE_UP\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.live").value(true));
     }
     @Test void clientRejectsEmptyOrExampleServerKey() {
