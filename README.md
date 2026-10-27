@@ -1,5 +1,30 @@
 # FaceLit backend
 
+The application retains three layers: controllers/DTOs, application services/rules,
+and repositories/external clients. The Java application remains one modular monolith.
+CSV imports keep their transactional facade and original processing order; focused
+components under `academic/service/csv` handle syntax, users, each import type and
+notifications. Shared CSV lexical rules have a single definition.
+
+Attendance reporting SQL lives in JDBC repositories, authorization in
+`FacialAccessPolicy`, and notification composition in dedicated services. Active
+registration status/confirmation routes delegate to `FacialRegistrationService` and
+its repository. Existing HTTP contracts, shared PostgreSQL ownership and the facial
+client URL/API-key protocol are preserved. Retired enrollment endpoints remain denied
+by the existing security configuration.
+
+H-50 mappings use `role_name`, `description` and `assigned_at`. Apply at least the
+FaceLit-DB English-nomenclature expansion changeset before starting this version;
+the old schema alone fails Hibernate validation. The notification catalog writes
+English categories. Complete contraction only after all legacy writers are stopped
+or upgraded; no public DTO field names or role values change.
+
+The opt-in `ArchitectureFlowPostgresIT` exercises real HTTP, JWT, FastAPI and PostgreSQL
+with a deterministic inference fixture and a mocked mail sender. Run it through the
+sibling DB repository's `scripts/test-architecture-e2e.ps1`; it creates and removes a
+separate Docker project. It does not use the normal database. Browser verification
+is optional and requires Playwright tooling plus an available browser.
+
 Spring Boot REST backend for FaceLit's account access, academic management, environment sessions, facial attendance and notifications. This repository uses Java 17 and Spring Boot 3.4.1, as declared in [pom.xml](pom.xml). Its Java package is `com.FaceLit.backend`.
 
 ## Architecture

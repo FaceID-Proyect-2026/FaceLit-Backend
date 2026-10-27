@@ -25,6 +25,9 @@ import com.FaceLit.backend.facial.model.FacialEvent;
 import com.FaceLit.backend.facial.model.enums.*;
 import com.FaceLit.backend.facial.repository.*;
 import com.FaceLit.backend.facial.service.serviceImpl.FacialEventServiceImpl;
+import com.FaceLit.backend.facial.service.AttendanceMatrixService;
+import com.FaceLit.backend.facial.service.AttendanceNotificationService;
+import com.FaceLit.backend.facial.service.FacialAccessPolicy;
 import com.FaceLit.backend.notification.dto.request.CreateNotificationRequestDTO;
 import com.FaceLit.backend.notification.service.NotificationCatalog;
 import com.FaceLit.backend.notification.service.NotificationService;
@@ -50,9 +53,11 @@ class FacialAttendanceNotificationTest {
                 new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                         scheduled.getUser().getIdUser(), null,
                         java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_INSTRUCTOR"))));
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
         service = new FacialEventServiceImpl(events, sessions, devices, apprentices,
-                assignments, mock(InstructorRepository.class), mock(FacialEmbeddingVerificationClient.class),
-                mock(JdbcTemplate.class), notifications);
+                assignments, mock(FacialEmbeddingVerificationClient.class), mock(AttendanceMatrixService.class),
+                new AttendanceNotificationService(notifications, new AttendanceReadRepository(jdbc)),
+                new FacialAccessPolicy(), new AttendanceWriteRepository(jdbc));
         apprentice.setIdApprentice(UUID.randomUUID());
         apprentice.setUser(user("Carlos", "Ramírez"));
         Chip chip = new Chip();

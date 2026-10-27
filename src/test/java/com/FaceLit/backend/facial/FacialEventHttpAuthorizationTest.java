@@ -31,11 +31,16 @@ import com.FaceLit.backend.facial.controller.FacialEventController;
 import com.FaceLit.backend.facial.model.Device;
 import com.FaceLit.backend.facial.repository.*;
 import com.FaceLit.backend.facial.service.serviceImpl.FacialEventServiceImpl;
+import com.FaceLit.backend.facial.service.AttendanceMatrixService;
+import com.FaceLit.backend.facial.service.AttendanceNotificationService;
+import com.FaceLit.backend.facial.service.FacialAccessPolicy;
 import com.FaceLit.backend.notification.service.NotificationService;
 import com.FaceLit.backend.shared.exception.GlobalExceptionHandler;
 
 @WebMvcTest(FacialEventController.class)
-@Import({SecurityConfig.class, JwtFilter.class, FacialEventServiceImpl.class, GlobalExceptionHandler.class})
+@Import({SecurityConfig.class, JwtFilter.class, FacialEventServiceImpl.class, GlobalExceptionHandler.class,
+        AttendanceMatrixService.class, AttendanceNotificationService.class, FacialAccessPolicy.class,
+        AttendanceReadRepository.class, AttendanceWriteRepository.class})
 class FacialEventHttpAuthorizationTest {
     @Autowired MockMvc mvc;
     @MockitoBean JwtService jwt;

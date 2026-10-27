@@ -15,7 +15,9 @@ import org.springframework.jdbc.core.PreparedStatementSetter;
 import org.springframework.jdbc.core.RowMapper;
 import com.FaceLit.backend.academic.repository.InstructorRepository;
 import com.FaceLit.backend.facial.dto.response.AttendanceMatrixResponseDTO;
-import com.FaceLit.backend.facial.service.serviceImpl.FacialEventServiceImpl;
+import com.FaceLit.backend.facial.service.AttendanceMatrixService;
+import com.FaceLit.backend.facial.service.FacialAccessPolicy;
+import com.FaceLit.backend.facial.repository.AttendanceReadRepository;
 
 class AttendanceMatrixSessionTimesTest {
     private final UUID actor = UUID.randomUUID();
@@ -53,8 +55,8 @@ class AttendanceMatrixSessionTimesTest {
                     RowMapper mapper = call.getArgument(2);
                     return List.of(mapper.mapRow(row, 0));
                 });
-        FacialEventServiceImpl service = new FacialEventServiceImpl(null, null, null, null, null,
-                instructors, null, jdbc, null);
+        AttendanceMatrixService service = new AttendanceMatrixService(
+                new AttendanceReadRepository(jdbc), null, instructors, new FacialAccessPolicy());
         AttendanceMatrixResponseDTO result = service.getAttendanceMatrix(group,
                 LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), actor);
         var day = result.learners().get(0).days().get(0);
@@ -73,8 +75,8 @@ class AttendanceMatrixSessionTimesTest {
         InstructorRepository instructors = mock(InstructorRepository.class);
         when(instructors.findByUser_IdUser(any())).thenReturn(Optional.empty());
         when(jdbc.query(anyString(), any(PreparedStatementSetter.class), any(RowMapper.class))).thenReturn(List.of());
-        FacialEventServiceImpl service = new FacialEventServiceImpl(null, null, null, null, null,
-                instructors, null, jdbc, null);
+        AttendanceMatrixService service = new AttendanceMatrixService(
+                new AttendanceReadRepository(jdbc), null, instructors, new FacialAccessPolicy());
         var result = service.getAttendanceMatrix(UUID.randomUUID(), LocalDate.of(2026, 10, 1),
                 LocalDate.of(2026, 10, 31), actor);
         assertThat(result.learners()).isEmpty();

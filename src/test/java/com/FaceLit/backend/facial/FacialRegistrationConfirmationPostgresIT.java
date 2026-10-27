@@ -55,8 +55,11 @@ class FacialRegistrationConfirmationPostgresIT {
             envOrDefault("FACELIT_DB_PASSWORD", "facelit_password"));
         jdbc = new JdbcTemplate(dataSource);
         TransactionTemplate transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+        NotificationService notifications = new JdbcNotificationService(jdbc);
         mvc = MockMvcBuilders.standaloneSetup(new FacialEnrollmentController(
-            jdbc, transactions, null, new JdbcNotificationService(jdbc)))
+            jdbc, transactions, null, notifications,
+            new com.FaceLit.backend.facial.service.FacialRegistrationService(
+                new com.FaceLit.backend.facial.repository.FacialRegistrationStatusRepository(jdbc), transactions, notifications)))
             .setCustomArgumentResolvers(new AuthenticatedUserResolver())
             .build();
 
@@ -150,7 +153,7 @@ class FacialRegistrationConfirmationPostgresIT {
         public NotificationResponseDTO createForRecipient(CreateNotificationRequestDTO request) {
             jdbc.update("INSERT INTO notification.notification "
                 + "(id_user_app, notification_type, category, title, message, channel, reference_entity, reference_id, metadata_json) "
-                + "VALUES (?, ?, 'RECONOCIMIENTO_FACIAL', ?, ?, 'APP', ?, ?, ?)",
+                + "VALUES (?, ?, 'FACIAL_RECOGNITION', ?, ?, 'APP', ?, ?, ?)",
                 request.recipientUserId(), request.type(), request.title(), request.message(),
                 request.referenceEntity(), request.referenceId(), request.metadataJson());
             return null;
