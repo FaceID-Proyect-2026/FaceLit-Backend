@@ -415,6 +415,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
                     addedPrograms.add(program.getProgramName() + " (" + program.getProgramCode() + ")");
                 }
             }
+            if (!addedPrograms.isEmpty()) instructor.setUpdatedAt(java.time.OffsetDateTime.now());
             saveInstructorChips(instructor, instructorChips);
             notifyCsvInstructorPrograms(instructor, addedPrograms);
             result.getActualizados()
@@ -454,6 +455,7 @@ public class CsvAcademicServiceImpl implements CsvAcademicService {
             relation.setChip(chip);
             relation.setActive(true);
             instructorChipRepository.save(relation);
+            instructor.setUpdatedAt(java.time.OffsetDateTime.now());
         }
     }
 

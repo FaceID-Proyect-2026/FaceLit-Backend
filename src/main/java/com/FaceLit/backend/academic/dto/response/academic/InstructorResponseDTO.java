@@ -57,7 +57,7 @@ public class InstructorResponseDTO {
         this.status = user.getAccountStatus().name();
         this.initialPassword = initialPassword;
         this.createdAt = instructor.getCreatedAt();
-        this.updatedAt = instructor.getUpdatedAt();
+        this.updatedAt = com.FaceLit.backend.shared.model.AuditBase.latestUpdatedAt(instructor, user);
         this.programIds = instructorPrograms == null ? List.of() : instructorPrograms.stream()
                 .map(ip -> ip.getProgram().getIdProgram())
                 .collect(Collectors.toList());

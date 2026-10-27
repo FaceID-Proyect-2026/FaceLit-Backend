@@ -289,7 +289,7 @@ public class UserChipServiceImpl implements UserChipService {
         userRepository.save(user);
 
         initialCredentialService.requestEmailChange(user, credential, email);
-        credentialRepository.save(credential);
+        credentialRepository.saveAndFlush(credential);
 
         notifyApprenticeProfileUpdated(user, activeChip, oldDocument, oldFirstName, oldLastName, oldEmail, credential.getEmail());
         return new UserChipResponseDTO(activeChip);

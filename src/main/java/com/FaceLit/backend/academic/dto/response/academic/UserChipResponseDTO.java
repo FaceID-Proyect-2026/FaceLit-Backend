@@ -59,6 +59,6 @@ public class UserChipResponseDTO {
         this.initialPassword = initialPassword;
         this.assignmentDate = userChip.getAssignmentDate();
         this.createdAt = userChip.getCreatedAt();
-        this.updatedAt = userChip.getUpdatedAt();
+        this.updatedAt = com.FaceLit.backend.shared.model.AuditBase.latestUpdatedAt(userChip, user);
     }
 }

@@ -101,7 +101,7 @@ public class ChipServiceImpl implements ChipService {
         }
         String oldCode = chip.getChipCode();
         chip.setChipCode(code);
-        chip = chipRepository.save(chip);
+        chip = chipRepository.saveAndFlush(chip);
         record(chip, oldCode, code, ChangeAction.UPDATE);
         return new ChipResponseDTO(chip);
     }
@@ -118,7 +118,7 @@ public class ChipServiceImpl implements ChipService {
         }
         chip.setState(AcademicState.ACTIVE);
         chip.setDeactivationReason(null);
-        chip = chipRepository.save(chip);
+        chip = chipRepository.saveAndFlush(chip);
         record(chip, AcademicState.INACTIVE.name(), AcademicState.ACTIVE.name(), ChangeAction.REACTIVATE);
         notifyAcademicRemoval(
                 "academic_entity_activated",
@@ -149,7 +149,7 @@ public class ChipServiceImpl implements ChipService {
         if (chip.getState() == AcademicState.ACTIVE && assignmentCount > 0) {
             chip.setState(AcademicState.INACTIVE);
             chip.setDeactivationReason(reason == null || reason.isBlank() ? null : reason.trim());
-            chip = chipRepository.save(chip);
+            chip = chipRepository.saveAndFlush(chip);
             record(chip, AcademicState.ACTIVE.name(), AcademicState.INACTIVE.name(), ChangeAction.DEACTIVATE);
             notifyAcademicRemoval(
                     "academic_entity_deactivated",

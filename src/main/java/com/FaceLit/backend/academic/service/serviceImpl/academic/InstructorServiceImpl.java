@@ -205,6 +205,7 @@ public class InstructorServiceImpl implements InstructorService {
         }
 
         if (!sameIds(oldProgramIds, ids)) {
+            instructor.setUpdatedAt(java.time.OffsetDateTime.now());
             instructorProgramRepository.deleteAll(currentPrograms);
             instructorProgramRepository.flush();
         }
@@ -260,6 +261,7 @@ public class InstructorServiceImpl implements InstructorService {
                     "updated");
         }
 
+        instructorRepository.flush();
         return toResponse(instructor);
     }
 
