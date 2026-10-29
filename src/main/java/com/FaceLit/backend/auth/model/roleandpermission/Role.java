@@ -30,6 +30,6 @@ public class Role extends AuditBase {
     private UUID idRole;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "name_role", nullable = false, length = 20)
+    @Column(name = "role_name", nullable = false, length = 50)
     private RoleName nameRole;
 }

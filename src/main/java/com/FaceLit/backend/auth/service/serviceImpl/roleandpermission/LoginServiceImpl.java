@@ -1,73 +1,103 @@
 package com.FaceLit.backend.auth.service.serviceImpl.roleandpermission;
 
+import java.time.OffsetDateTime;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.FaceLit.backend.auth.dto.request.roleandpermission.LoginRequestDTO;
 import com.FaceLit.backend.auth.dto.response.roleandpermission.LoginResponseDTO;
-import
-
-com.FaceLit.backend.auth.exception.LoginException;
+import com.FaceLit.backend.auth.exception.LoginException;
+import com.FaceLit.backend.auth.model.legal.AcceptanceTerms;
 import com.FaceLit.backend.auth.model.security.Credential;
 import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
 import com.FaceLit.backend.auth.model.roleandpermission.UserRole;
 import com.FaceLit.backend.auth.model.roleandpermission.RolePermission;
+import com.FaceLit.backend.auth.repository.legal.AcceptanceTermsRepository;
 import com.FaceLit.backend.auth.repository.security.CredentialRepository;
+import com.FaceLit.backend.auth.repository.security.UserSessionRepository;
 import com.FaceLit.backend.auth.repository.roleandpermission.RolePermissionRepository;
 import com.FaceLit.backend.auth.repository.roleandpermission.UserRoleRepository;
 import com.FaceLit.backend.auth.service.roleandpermission.JwtService;
 import com.FaceLit.backend.auth.service.roleandpermission.LoginService;
-import com.FaceLit.backend.auth.service.security.UserSessionService;
+import com.FaceLit.backend.notification.dto.request.MonolithEventRequestDTO;
+import com.FaceLit.backend.notification.service.NotificationService;
+import com.FaceLit.backend.shared.constants.AppConstants;
 
 import java.util.List;
 
 @Service
 public class LoginServiceImpl implements LoginService {
 
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
     private final CredentialRepository credentialRepository;
     private final UserRoleRepository userRoleRepository;
     private final RolePermissionRepository rolePermissionRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final UserSessionService userSessionService;
+    private final NotificationService notificationService;
+    private final AcceptanceTermsRepository acceptanceTermsRepository;
+    private final UserSessionRepository userSessionRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     public LoginServiceImpl(
             CredentialRepository credentialRepository,
             UserRoleRepository userRoleRepository,
             RolePermissionRepository rolePermissionRepository,
             PasswordEncoder passwordEncoder,
-            JwtService jwtService, UserSessionService userSessionService) {
+            JwtService jwtService,
+            NotificationService notificationService,
+            AcceptanceTermsRepository acceptanceTermsRepository,
+            UserSessionRepository userSessionRepository,
+            JdbcTemplate jdbcTemplate) {
         this.credentialRepository = credentialRepository;
         this.userRoleRepository = userRoleRepository;
         this.rolePermissionRepository = rolePermissionRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
-        this.userSessionService = userSessionService;
+        this.notificationService = notificationService;
+        this.acceptanceTermsRepository = acceptanceTermsRepository;
+        this.userSessionRepository = userSessionRepository;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
+    @Transactional(noRollbackFor = LoginException.class)
     public LoginResponseDTO login(LoginRequestDTO dto) {
 
-        // 1. Verificar que aceptó las políticas de privacidad
-        // Sin esto el sistema rechaza el acceso — igual que en registro
-        if (!Boolean.TRUE.equals(dto.getAceptoPoliticas())) {
-            throw new LoginException("Debe aceptar las políticas de privacidad");
+        String identifier = dto.resolveIdentifier();
+        if (identifier == null || identifier.isBlank()) {
+            throw new LoginException("Debes indicar un documento o correo válido.");
         }
 
-        // 2. Buscar las credenciales por email
-        // Si no existe ese email en BD → rechazar
-        Credential credential = credentialRepository.findByEmail(dto.getEmail())
-                .orElseThrow(() -> new LoginException("Correo electrónico no registrado"));
+        Credential credential = credentialRepository.findByUser_DocumentNumber(identifier)
+            .or(() -> credentialRepository.findByEmailIgnoreCase(identifier))
+            .orElseThrow(() -> new LoginException("Usuario o contraseña incorrectos"));
 
+        credential = credentialRepository.lockByUserId(credential.getUser().getIdUser()).orElseThrow();
+        entityManager.refresh(credential);
+        entityManager.refresh(credential.getUser());
         // 3. Obtener el usuario asociado a esa credencial
         User user = credential.getUser();
 
-        // 4. Verificar que la cuenta esté ACTIVE
-        // PENDING_CONSENT = no verificó email o falta acudiente
-        // BLOCKED = demasiados intentos fallidos
+        if (credential.getLockedUntil() != null
+                && credential.getLockedUntil().isAfter(OffsetDateTime.now())) {
+            throw new LoginException("La cuenta está bloqueada temporalmente");
+        }
+
+        if (credential.getLockedUntil() != null) {
+            credential.setLockedUntil(null);
+            credential.setFailedAttempts(0);
+        }
+
+        // Verificar que la cuenta esté ACTIVE
+        // BLOCKED = demasiados intentos fallidos o bloqueo administrativo.
         if (!AccountStatus.ACTIVE.equals(user.getAccountStatus())) {
             throw new LoginException("La cuenta no está activa. Verifica tu correo o contacta al administrador");
         }
@@ -77,10 +107,20 @@ public class LoginServiceImpl implements LoginService {
         if (!passwordEncoder.matches(dto.getPassword(), credential.getPassword())) {
 
             // Incrementar intentos fallidos
-            credential.setFailedAttempts(credential.getFailedAttempts() + 1);
+            int failedAttempts = credential.getFailedAttempts() + 1;
+            credential.setFailedAttempts(failedAttempts);
+            if (failedAttempts >= AppConstants.MAX_LOGIN_ATTEMPTS) {
+                credential.setLockedUntil(OffsetDateTime.now().plusMinutes(AppConstants.LOGIN_LOCK_MINUTES));
+            }
             credentialRepository.save(credential);
+            notifyFailedLogin(user, failedAttempts);
 
             throw new LoginException("Usuario o contraseña incorrectos");
+        }
+
+        boolean privacyAlreadyAccepted = acceptanceTermsRepository.existsByUserAndAcceptedTrue(user);
+        if (!privacyAlreadyAccepted && !dto.isPrivacyAccepted()) {
+            throw new LoginException("Debes aceptar el aviso de privacidad para continuar.");
         }
 
         // 6. Resetear intentos fallidos — login exitoso
@@ -106,15 +146,116 @@ public class LoginServiceImpl implements LoginService {
                 .map(rp -> rp.getPermission().getNamePermission())
                 .collect(Collectors.toList());
 
+        if (!privacyAlreadyAccepted) {
+            AcceptanceTerms acceptance = acceptanceTermsRepository.findByUser(user)
+                    .orElseGet(AcceptanceTerms::new);
+            acceptance.setUser(user);
+            acceptance.setAccepted(true);
+            acceptanceTermsRepository.save(acceptance);
+        }
+
+        boolean firstAccessPasswordPrompt = consumeInitialPasswordPrompt(user);
+
         // 11. Generar el JWT con userId, email, rol y permisos
         String token = jwtService.generateToken(user, roleName, permissions);
 
-        // 12. Registrar la sesión — queda guardada en user_session
-        // El service encapsula toda la lógica de creación de sesión
-        userSessionService.registerSession(user);
+        // La emisión del JWT registra y vincula exactamente una sesión (sid).
 
         // 12. Devolver la respuesta con el token
-        return LoginResponseDTO.success(token, roleName, permissions, user.getIdUser());
+        return LoginResponseDTO.success(token, roleName, permissions, user.getIdUser(), firstAccessPasswordPrompt);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean verifyPassword(UUID userId, String password) {
+        return credentialRepository.findByUser_IdUser(userId)
+                .map(credential -> passwordEncoder.matches(password, credential.getPassword()))
+                .orElse(false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasAcceptedPrivacy(String documentNumber) {
+        String normalizedDocument = documentNumber == null ? "" : documentNumber.trim();
+        if (normalizedDocument.isBlank()) {
+            return false;
+        }
+
+        return credentialRepository.findByUser_DocumentNumber(normalizedDocument)
+                .map(Credential::getUser)
+                .map(user -> acceptanceTermsRepository.existsByUserAndAcceptedTrue(user))
+                .orElse(false);
+    }
+
+    private boolean consumeInitialPasswordPrompt(User user) {
+        ensureInitialPasswordPromptColumn();
+
+        UUID userId = user.getIdUser();
+        boolean hadSuccessfulSessionBefore = userSessionRepository.existsByUser_IdUser(userId);
+        Boolean promptSeen = jdbcTemplate.queryForObject(
+                "SELECT initial_password_prompt_seen FROM security.user_app WHERE id_user_app = ?",
+                Boolean.class,
+                userId);
+
+        boolean shouldPrompt = !hadSuccessfulSessionBefore && !Boolean.TRUE.equals(promptSeen);
+        if (!Boolean.TRUE.equals(promptSeen)) {
+            jdbcTemplate.update(
+                    "UPDATE security.user_app SET initial_password_prompt_seen = TRUE WHERE id_user_app = ?",
+                    userId);
+        }
+
+        return shouldPrompt;
+    }
+
+    private void ensureInitialPasswordPromptColumn() {
+        jdbcTemplate.execute("""
+                ALTER TABLE security.user_app
+                    ADD COLUMN IF NOT EXISTS initial_password_prompt_seen BOOLEAN NOT NULL DEFAULT FALSE
+                """);
+        jdbcTemplate.update("""
+                UPDATE security.user_app u
+                SET initial_password_prompt_seen = TRUE
+                WHERE initial_password_prompt_seen = FALSE
+                  AND EXISTS (
+                      SELECT 1
+                      FROM security.user_session s
+                      WHERE s.id_user_app = u.id_user_app
+                  )
+                """);
+    }
+
+    private void notifyFailedLogin(User user, int failedAttempts) {
+        try {
+            if (failedAttempts >= AppConstants.MAX_LOGIN_ATTEMPTS) {
+                notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                        "security_account_locked",
+                        "Cuenta bloqueada por intentos fallidos",
+                        "La cuenta con documento " + user.getDocumentNumber()
+                                + " quedo bloqueada temporalmente tras superar el limite de intentos fallidos.",
+                        null,
+                        user.getIdUser(),
+                        "user",
+                        null,
+                        "{\"accountDocument\":\"" + user.getDocumentNumber() + "\",\"failedCount\":" + failedAttempts
+                                + ",\"lockMinutes\":" + AppConstants.LOGIN_LOCK_MINUTES + "}"));
+                return;
+            }
+
+            if (failedAttempts >= 2) {
+                notificationService.createCoordinatorEvent(new MonolithEventRequestDTO(
+                        "security_multiple_failures",
+                        "Multiples intentos fallidos de inicio de sesion",
+                        "La cuenta con documento " + user.getDocumentNumber()
+                                + " acumulo " + failedAttempts + " intentos fallidos consecutivos.",
+                        null,
+                        user.getIdUser(),
+                        "user",
+                        null,
+                        "{\"accountDocument\":\"" + user.getDocumentNumber() + "\",\"failedCount\":" + failedAttempts + "}"));
+            }
+        } catch (RuntimeException ignored) {
+            // El login no debe fallar por un problema registrando la notificacion.
+        }
     }
 
 }

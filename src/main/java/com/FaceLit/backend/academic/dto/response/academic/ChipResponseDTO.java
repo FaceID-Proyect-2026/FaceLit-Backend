@@ -1,42 +1,35 @@
 package com.FaceLit.backend.academic.dto.response.academic;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
-import com.FaceLit.backend.academic.model.enums.ChipState;
-import com.FaceLit.backend.academic.model.enums.WorkingDay;
+import com.FaceLit.backend.academic.model.academic.Chip;
+
+import lombok.Getter;
 
 @Getter
-@AllArgsConstructor
-
+// Adapter: transforma Chip y su relación con Program al contrato de respuesta.
 public class ChipResponseDTO {
 
-    private UUID idChip;
-    private String chipCode;
-    private String chipName;
-    private WorkingDay workingDay;
-    private ChipState state;
-    private UUID idProgram;
-    private String programName;
-    private String message;
+    private final UUID idChip;
+    private final UUID idProgram;
+    private final String programName;
+    private final String programCode;
+    private final String chipCode;
+    private final String state;
+    private final String deactivationReason;
+    private final OffsetDateTime createdAt;
+    private final OffsetDateTime updatedAt;
 
-    public static ChipResponseDTO created(
-            UUID idChip, String chipCode, String chipName,
-            WorkingDay workingDay, ChipState state,
-            UUID idProgram, String programName) {
-        return new ChipResponseDTO(
-                idChip, chipCode, chipName, workingDay, state,
-                idProgram, programName, "Ficha registrada correctamente");
+    public ChipResponseDTO(Chip chip) {
+        this.idChip = chip.getIdChip();
+        this.idProgram = chip.getProgram().getIdProgram();
+        this.programName = chip.getProgram().getProgramName();
+        this.programCode = chip.getProgram().getProgramCode();
+        this.chipCode = chip.getChipCode();
+        this.state = chip.getState().name();
+        this.deactivationReason = chip.getDeactivationReason();
+        this.createdAt = chip.getCreatedAt();
+        this.updatedAt = chip.getUpdatedAt() != null ? chip.getUpdatedAt() : chip.getCreatedAt();
     }
-
-    public static ChipResponseDTO updated(
-            UUID idChip, String chipCode, String chipName,
-            WorkingDay workingDay, ChipState state,
-            UUID idProgram, String programName) {
-        return new ChipResponseDTO(
-                idChip, chipCode, chipName, workingDay, state,
-                idProgram, programName, "Ficha actualizada correctamente");
-    }
-
 }
