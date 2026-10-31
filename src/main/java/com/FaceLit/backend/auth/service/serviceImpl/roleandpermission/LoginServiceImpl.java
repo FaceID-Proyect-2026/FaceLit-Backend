@@ -4,7 +4,6 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,7 +43,6 @@ public class LoginServiceImpl implements LoginService {
     private final NotificationService notificationService;
     private final AcceptanceTermsRepository acceptanceTermsRepository;
     private final UserSessionRepository userSessionRepository;
-    private final JdbcTemplate jdbcTemplate;
 
     public LoginServiceImpl(
             CredentialRepository credentialRepository,
@@ -54,8 +52,7 @@ public class LoginServiceImpl implements LoginService {
             JwtService jwtService,
             NotificationService notificationService,
             AcceptanceTermsRepository acceptanceTermsRepository,
-            UserSessionRepository userSessionRepository,
-            JdbcTemplate jdbcTemplate) {
+            UserSessionRepository userSessionRepository) {
         this.credentialRepository = credentialRepository;
         this.userRoleRepository = userRoleRepository;
         this.rolePermissionRepository = rolePermissionRepository;
@@ -64,7 +61,6 @@ public class LoginServiceImpl implements LoginService {
         this.notificationService = notificationService;
         this.acceptanceTermsRepository = acceptanceTermsRepository;
         this.userSessionRepository = userSessionRepository;
-        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
@@ -188,40 +184,10 @@ public class LoginServiceImpl implements LoginService {
     }
 
     private boolean consumeInitialPasswordPrompt(User user) {
-        ensureInitialPasswordPromptColumn();
-
-        UUID userId = user.getIdUser();
-        boolean hadSuccessfulSessionBefore = userSessionRepository.existsByUser_IdUser(userId);
-        Boolean promptSeen = jdbcTemplate.queryForObject(
-                "SELECT initial_password_prompt_seen FROM security.user_app WHERE id_user_app = ?",
-                Boolean.class,
-                userId);
-
-        boolean shouldPrompt = !hadSuccessfulSessionBefore && !Boolean.TRUE.equals(promptSeen);
-        if (!Boolean.TRUE.equals(promptSeen)) {
-            jdbcTemplate.update(
-                    "UPDATE security.user_app SET initial_password_prompt_seen = TRUE WHERE id_user_app = ?",
-                    userId);
-        }
-
+        boolean hadSuccessfulSessionBefore = userSessionRepository.existsByUser_IdUser(user.getIdUser());
+        boolean shouldPrompt = !hadSuccessfulSessionBefore && !user.isInitialPasswordPromptSeen();
+        user.setInitialPasswordPromptSeen(true);
         return shouldPrompt;
-    }
-
-    private void ensureInitialPasswordPromptColumn() {
-        jdbcTemplate.execute("""
-                ALTER TABLE security.user_app
-                    ADD COLUMN IF NOT EXISTS initial_password_prompt_seen BOOLEAN NOT NULL DEFAULT FALSE
-                """);
-        jdbcTemplate.update("""
-                UPDATE security.user_app u
-                SET initial_password_prompt_seen = TRUE
-                WHERE initial_password_prompt_seen = FALSE
-                  AND EXISTS (
-                      SELECT 1
-                      FROM security.user_session s
-                      WHERE s.id_user_app = u.id_user_app
-                  )
-                """);
     }
 
     private void notifyFailedLogin(User user, int failedAttempts) {

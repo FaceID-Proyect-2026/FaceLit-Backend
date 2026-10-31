@@ -79,6 +79,9 @@ public class User extends AuditBase {
     @Column(name = "account_status", nullable = false, length = 20)
     private AccountStatus accountStatus;
 
+    @Column(name = "initial_password_prompt_seen", nullable = false)
+    private boolean initialPasswordPromptSeen;
+
     // =========================================================
     // RELACIÓN 1:1 CON CREDENTIAL
     //

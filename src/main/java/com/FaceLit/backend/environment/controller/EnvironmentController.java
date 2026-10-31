@@ -59,8 +59,9 @@ public class EnvironmentController {
     }
 
     @GetMapping("/chips-for-instructor/{idInstructor}")
-    public ResponseEntity<List<ChipResponseDTO>> findChipsForInstructor(@PathVariable UUID idInstructor) {
-        return noStore(environmentService.findChipsForInstructor(idInstructor));
+    public ResponseEntity<List<ChipResponseDTO>> findChipsForInstructor(@PathVariable UUID idInstructor,
+            @AuthenticationPrincipal Object principal) {
+        return noStore(environmentService.findChipsForInstructor(idInstructor, principalId(principal)));
     }
 
     @PostMapping("/sessions")

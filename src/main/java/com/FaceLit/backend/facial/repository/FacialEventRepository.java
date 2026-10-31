@@ -14,6 +14,7 @@ import com.FaceLit.backend.facial.model.FacialEvent;
 import com.FaceLit.backend.facial.model.enums.FacialEventType;
 
 public interface FacialEventRepository extends JpaRepository<FacialEvent, UUID> {
+    boolean existsByRecordEnvironment_IdRecordEnvironment(UUID idRecordEnvironment);
     @Query("""
             select e.idFacialEvent from FacialEvent e
             where e.deletedAt is null and e.recordEnvironment.deletedAt is null

@@ -49,5 +49,15 @@ facial:
     api-key: ${FACIAL_EMBEDDING_API_KEY:}
 
 facelit:
+  bootstrap:
+    coordinator:
+      enabled: ${FACELIT_COORDINATOR_BOOTSTRAP:false}
+      rotate-password: ${FACELIT_COORDINATOR_ROTATE_PASSWORD:false}
+      exit-after: ${FACELIT_COORDINATOR_EXIT_AFTER:false}
+      document: ${FACELIT_COORDINATOR_DOCUMENT:}
+      first-name: ${FACELIT_COORDINATOR_FIRST_NAME:}
+      last-name: ${FACELIT_COORDINATOR_LAST_NAME:}
+      email: ${FACELIT_COORDINATOR_EMAIL:}
+      password: ${FACELIT_COORDINATOR_PASSWORD:}
   allowed-origins: ${FACELIT_ALLOWED_ORIGINS:http://localhost:8081,http://localhost:19006,https://facelit-ten.vercel.app}
   access-url: ${FACELIT_ACCESS_URL:http://localhost:8081}

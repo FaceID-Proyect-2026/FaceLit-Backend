@@ -28,6 +28,7 @@ import com.FaceLit.backend.environment.service.EnvironmentSessionNotifier.Sessio
 import com.FaceLit.backend.environment.service.EnvironmentSessionNotifier;
 import com.FaceLit.backend.facial.model.Device;
 import com.FaceLit.backend.facial.repository.DeviceRepository;
+import com.FaceLit.backend.facial.repository.FacialEventRepository;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -51,6 +52,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     private final DeviceRepository deviceRepository;
     private final LoginService loginService;
     private final EnvironmentSessionNotifier sessionNotifier;
+    private final FacialEventRepository attendance;
 
     public EnvironmentServiceImpl(
             EnvironmentRepository environmentRepository,
@@ -61,7 +63,8 @@ public class EnvironmentServiceImpl implements EnvironmentService {
             UserChipRepository userChipRepository,
             DeviceRepository deviceRepository,
             LoginService loginService,
-            EnvironmentSessionNotifier sessionNotifier) {
+            EnvironmentSessionNotifier sessionNotifier,
+            FacialEventRepository attendance) {
         this.environmentRepository = environmentRepository;
         this.recordEnvironmentRepository = recordEnvironmentRepository;
         this.instructorRepository = instructorRepository;
@@ -71,6 +74,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         this.deviceRepository = deviceRepository;
         this.loginService = loginService;
         this.sessionNotifier = sessionNotifier;
+        this.attendance = attendance;
     }
 
     @Override
@@ -124,6 +128,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                 : findEligibleForSpecificInstructor(authenticatedInstructor);
 
         return candidates.stream()
+                .filter(instructor -> instructor.getDeletedAt() == null && instructor.getUser().getDeletedAt() == null)
                 .filter(instructor -> instructor.getUser().getAccountStatus() == AccountStatus.ACTIVE)
                 .sorted(Comparator.comparing(instructor -> sessionNotifier.fullName(instructor).toLowerCase()))
                 .map(this::toInstructorResponse)
@@ -132,7 +137,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ChipResponseDTO> findChipsForInstructor(UUID idInstructor) {
+    public List<ChipResponseDTO> findChipsForInstructor(UUID idInstructor, UUID authenticatedUserId) {
         Instructor instructor = instructorRepository.findById(idInstructor)
                 .orElseThrow(() -> new EnvironmentException("Instructor no encontrado.", HttpStatus.NOT_FOUND));
 
@@ -142,7 +147,9 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                         .filter(chip -> chip.getState() == AcademicState.ACTIVE)
                         .toList();
 
+        Instructor actor = findAuthenticatedInstructor(authenticatedUserId);
         return chips.stream()
+                .filter(chip -> canUseChip(actor, chip) && canUseChip(instructor, chip))
                 .sorted(Comparator.comparing(Chip::getChipCode))
                 .map(ChipResponseDTO::new)
                 .toList();
@@ -157,6 +164,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         Instructor scheduledInstructor = findInstructor(dto.getIdInstructorInCharge());
         Instructor inChargeInstructor = resolveInstructorInCharge(scheduledInstructor, authenticatedUserId);
         Chip chip = findActiveChip(dto.getIdChip());
+        validateSessionInstructors(scheduledInstructor, inChargeInstructor, chip);
         validateChipHasRegisteredFaces(chip);
         Device device = findOrCreateDevice(dto.getDeviceCode(), environment, authenticatedUserId);
 
@@ -185,7 +193,8 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     public Optional<RecordEnvironmentResponseDTO> findCurrentActiveSession(UUID authenticatedUserId) {
         recordEnvironmentRepository.deactivateExpiredSessions(OffsetDateTime.now());
         OffsetDateTime now = OffsetDateTime.now();
-        return recordEnvironmentRepository.findCurrentActiveSessionByInstructor(authenticatedUserId)
+        return recordEnvironmentRepository.findCurrentActiveSessionsByInstructor(
+                        authenticatedUserId, org.springframework.data.domain.PageRequest.of(0, 1)).stream().findFirst()
                 .or(() -> recordEnvironmentRepository
                         .findFirstByCreatedByAndActiveTrueAndDeletedAtIsNullAndShutdownTimeAfterOrderByEntryTimeDesc(
                                 authenticatedUserId.toString(), now))
@@ -243,7 +252,14 @@ public class EnvironmentServiceImpl implements EnvironmentService {
             throw new EnvironmentException("No puedes modificar esta sesión.", HttpStatus.FORBIDDEN);
         }
 
+        if (!Boolean.TRUE.equals(record.getActive()) || !record.getShutdownTime().isAfter(OffsetDateTime.now())) {
+            throw new EnvironmentException("La sesión ya terminó.", HttpStatus.CONFLICT);
+        }
         SessionSnapshot previous = SessionSnapshot.from(record);
+        // Events refer to this session: changing its context would rewrite their history.
+        if (attendance.existsByRecordEnvironment_IdRecordEnvironment(idRecordEnvironment)) {
+            throw new EnvironmentException("La sesión ya tiene asistencias; conserva su configuración y crea otra sesión.", HttpStatus.CONFLICT);
+        }
         if (previous.exitTime() == null || !previous.exitTime().isEqual(dto.getExitTime())) record.setExitReminderSent(false);
 
         Environment environment = findActiveEnvironment(dto.getIdEnvironment());
@@ -252,7 +268,10 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         Instructor scheduledInstructor = findInstructor(dto.getIdInstructorInCharge());
         record.setInstructorScheduled(scheduledInstructor);
         record.setInstructorInCharge(resolveInstructorInCharge(scheduledInstructor, authenticatedUserId));
-        record.setChip(findActiveChip(dto.getIdChip()));
+        Chip chip = findActiveChip(dto.getIdChip());
+        validateSessionInstructors(scheduledInstructor, record.getInstructorInCharge(), chip);
+        validateChipHasRegisteredFaces(chip);
+        record.setChip(chip);
         record.setEntryTime(dto.getEntryTime());
         record.setRegistrationMinutes(dto.getRegistrationMinutes());
         record.setExitTime(dto.getExitTime());
@@ -278,6 +297,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
 
     private List<UUID> programIdsForInstructor(Instructor instructor) {
         return instructorProgramRepository.findByInstructor_IdInstructor(instructor.getIdInstructor()).stream()
+                .filter(link -> link.getDeletedAt() == null && link.getProgram().getDeletedAt() == null)
                 .map(InstructorProgram::getProgram)
                 .map(program -> program.getIdProgram())
                 .distinct()
@@ -292,7 +312,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     private Environment findActiveEnvironment(UUID idEnvironment) {
         Environment environment = environmentRepository.findById(idEnvironment)
                 .orElseThrow(() -> new EnvironmentException("Ambiente no encontrado.", HttpStatus.NOT_FOUND));
-        if (environment.getState() != EnvironmentState.ACTIVE) {
+        if (environment.getState() != EnvironmentState.ACTIVE || environment.getDeletedAt() != null) {
             throw new EnvironmentException("Ambiente no encontrado.", HttpStatus.NOT_FOUND);
         }
         return environment;
@@ -303,18 +323,36 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                 .orElseThrow(() -> new EnvironmentException("Instructor no encontrado.", HttpStatus.NOT_FOUND));
     }
 
-    private Instructor resolveInstructorInCharge(Instructor scheduledInstructor, UUID authenticatedUserId) {
-        Instructor authenticatedInstructor = instructorRepository.findByUser_IdUser(authenticatedUserId)
+    private Instructor findAuthenticatedInstructor(UUID authenticatedUserId) {
+        return instructorRepository.findByUser_IdUser(authenticatedUserId)
                 .orElseThrow(() -> new EnvironmentException("Instructor no encontrado.", HttpStatus.NOT_FOUND));
+    }
+
+    private Instructor resolveInstructorInCharge(Instructor scheduledInstructor, UUID authenticatedUserId) {
+        Instructor authenticatedInstructor = findAuthenticatedInstructor(authenticatedUserId);
         return authenticatedInstructor.getIdInstructor().equals(scheduledInstructor.getIdInstructor())
-                ? null
-                : authenticatedInstructor;
+                ? null : authenticatedInstructor;
+    }
+
+    private boolean canUseChip(Instructor instructor, Chip chip) {
+        return instructor.getDeletedAt() == null && instructor.getUser().getDeletedAt() == null
+                && instructor.getUser().getAccountStatus() == AccountStatus.ACTIVE
+                && chip.getDeletedAt() == null && chip.getProgram().getDeletedAt() == null
+                && chip.getProgram().getState() == AcademicState.ACTIVE
+                && (instructor.getInstructorType() == InstructorType.TRANSVERSAL
+                    || programIdsForInstructor(instructor).contains(chip.getProgram().getIdProgram()));
+    }
+
+    private void validateSessionInstructors(Instructor scheduled, Instructor replacement, Chip chip) {
+        if (!canUseChip(scheduled, chip) || replacement != null && !canUseChip(replacement, chip)) {
+            throw new EnvironmentException("El instructor no puede configurar una sesión para esta ficha.", HttpStatus.FORBIDDEN);
+        }
     }
 
     private Chip findActiveChip(UUID idChip) {
         Chip chip = chipRepository.findById(idChip)
                 .orElseThrow(() -> new EnvironmentException("La ficha no está activa.", HttpStatus.BAD_REQUEST));
-        if (chip.getState() != AcademicState.ACTIVE) {
+        if (chip.getState() != AcademicState.ACTIVE || chip.getDeletedAt() != null) {
             throw new EnvironmentException("La ficha no está activa.", HttpStatus.BAD_REQUEST);
         }
         return chip;

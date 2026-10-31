@@ -57,6 +57,8 @@ Install Java 17 and use the committed `mvnw`/`mvnw.cmd`, or compatible Maven. Pr
 
 [application.yaml](src/main/resources/application.yaml) is the configuration source. Supply private environment variables or an ignored local `.env`, read by spring-dotenv. Do not overwrite a working local configuration during a checkout update.
 
+For a new installation, use [.env.example](.env.example) as the template and fill its private values. The initial coordinator is no longer a database seed. Follow the one-time setup below after Liquibase has prepared the schema and roles.
+
 | Variable | Purpose |
 | --- | --- |
 | `DB_URL` | PostgreSQL JDBC connection URL |
@@ -71,14 +73,34 @@ HTTP uses port 8080. Hibernate is configured with `ddl-auto: validate`, and back
 
 The currently checked-out YAML/client still has the legacy facial credential fallback; the coordinated security change is delivered separately. Removing generated files does not certify credential rotation or complete all security findings.
 
+## First coordinator and credential rotation
+
+Account creation belongs to `auth` application services. Liquibase creates the schema and role catalog, without a default user/password. Coordinator setup is disabled by default. Its configuration lives under `facelit.bootstrap.coordinator`; no public registration endpoint is added.
+
+From this backend directory, run one of these commands with the intended document and email:
+
+```powershell
+# New installation: only when no coordinator exists.
+.\scripts\initialize-coordinator.ps1 -Mode Create -Document "<document>" -Email "<email>" -FirstName "<name>" -LastName "<surname>"
+
+# Existing coordinator: keep the same identity/email and choose a different private password.
+.\scripts\initialize-coordinator.ps1 -Mode Rotate -Document "<existing-document>" -Email "<existing-email>"
+```
+
+Replace the placeholders. The script requests password and confirmation using hidden terminal input, not command-line arguments. The existing password policy applies: 8–15 characters, uppercase, number and a permitted symbol. Configure `DB_*`, `JWT_SECRET`, SMTP and facial service values privately first. The helper uses a loopback random port, performs the operation and closes its application context; it restores process environment values afterwards. It does not write the password to `.env` or the repository.
+
+Creation never promotes an existing ordinary account or creates another initial coordinator. A mismatched existing credential requires explicit rotation. Rotation keeps IDs, names, email, roles and historical relations, invalidates sessions/recovery authorizations and cancels pending access mail. Repeating the same completed operation is idempotent. Keep `FACELIT_COORDINATOR_BOOTSTRAP` and `FACELIT_COORDINATOR_ROTATE_PASSWORD` disabled during normal service operation.
+
+If an active coordinator still holds exactly the retired seed's published bcrypt value, startup refuses to proceed until rotation. Detection uses a SHA-256 fingerprint, not a usable password or bcrypt credential. This check does not prove every historically exposed password has been rotated. An operator must perform and record rotation separately in each real environment; replacing Git files alone does not do it. See the [QA delivery record](docs/HU46_COORDINADOR_QA.md).
+
 ## Run and build
 
 From PowerShell in this repository:
 
 ```powershell
 .\mvnw.cmd spring-boot:run
-.\mvnw.cmd -Dspring.profiles.active=test test
-.\mvnw.cmd -Dspring.profiles.active=test package
+.\mvnw.cmd "-Dspring.profiles.active=test" test
+.\mvnw.cmd "-Dspring.profiles.active=test" package
 ```
 
 On Unix-like systems, use `./mvnw` with the same arguments; use `bash mvnw` if the checkout's executable bit is unavailable. Configure isolated mail/JWT values when running tests. [application-test.yaml](src/test/resources/application-test.yaml) uses H2 with disposable schemas. It does not certify PostgreSQL-specific behavior or a production deployment. The explicitly enabled PostgreSQL integration test needs its own local verification environment.
