@@ -107,3 +107,40 @@ ORDER BY r.created_at DESC, f.event_datetime;
 ## Interpretación para QA
 
 Esta entrega aborda el punto 1 del plan del 30 de octubre con el alcance acordado: configuración de sesión y persistencia de su contexto. El CRUD independiente de ambientes se retira de la interfaz activa. QA debe revisar esa delimitación; no se declara cerrado el hallazgo original que exigía ese CRUD completo. Tampoco se afirma un nuevo puntaje, CI verde del nuevo commit ni aceptación física hasta disponer de sus evidencias.
+
+## Seguimiento de revisión — 31 de octubre de 2026
+
+Commits publicados para esta entrega y los demás ajustes de HU46:
+
+| Repositorio | Rama | SHA publicado |
+|---|---|---|
+| FaceLit | `hu-46-dev` | `c6e8cf606d883e8c272f07f712a904f8daf19f20` |
+| FaceLit-Backend | `hu-46-dev` | `c5970522984c014d5a30146c5e0a5c03d6e41b43` |
+| FaceLit-DB | `hu-46-main` | `a5e5f9e27c6d57ee63a224bfa5c5f90dbec376f8` |
+| micro-facial | `hu-46-dev` | `4a94d097d7bd60625c5543a879c8769c2b3df2e2` |
+
+### Evidencia manual aportada por la usuaria
+
+Las capturas de consultas locales muestran una sesión para la ficha `3145555`, ambiente `209-02` e instructor responsable Mariana Ejemplo. La sesión conserva las horas de entrada y salida, tres minutos de registro y la referencia al instructor titular. El suplente es nulo; esto es válido cuando no se designa reemplazo. La captura muestra `active = false`, sin demostrar por sí sola la causa de ese estado.
+
+La consulta agrupada sobre la última sesión devuelve:
+
+| Tipo de evento | Estado de asistencia | Resultado de reconocimiento | Cantidad |
+|---|---|---|---:|
+| ENTRY | ABSENT | ABSENT | 25 |
+| ENTRY | LATE | MATCH | 1 |
+
+Esto acredita en la evidencia aportada una entrada persistida con coincidencia facial, clasificada como tardía. No identifica por sí solo al aprendiz ni demuestra que la clasificación temporal sea correcta; QA debe contrastar su hora efectiva con la ventana configurada. Los 25 registros ABSENT pueden proceder de la inicialización de la sesión: no prueban por sí solos 25 inasistencias definitivas. No se observan eventos EXIT en este resultado.
+
+Las capturas se recibieron en el chat; no se consultó directamente esta base durante esta actualización ni se repitieron las pruebas automatizadas. Para una evidencia reproducible, adjuntar al PR la consulta, el UUID completo de la sesión, el aprendiz verificado y la captura sin secretos. La consulta de «última sesión» debe reemplazarse por ese UUID al repetir el caso, para evitar comparar sesiones diferentes.
+
+### Pendiente para aceptación
+
+- Verificar una salida válida y su persistencia para el mismo aprendiz y sesión; si la sesión terminó, preparar un nuevo recorrido completo conforme a las reglas existentes.
+- Contrastar en la interfaz, después de recargar, los datos de la sesión y sus eventos.
+- Adjuntar las evidencias manuales de permisos y la revisión independiente, junto con el CI del SHA entregado.
+- Resolver y medir la demora de validación facial que la usuaria sigue reportando. Los ajustes de rendimiento publicados no acreditan que esa demora haya quedado resuelta; véase `micro-facial/docs/HU46_RENDIMIENTO_FACIAL_QA.md` en el repositorio hermano.
+
+Estado: **evidencia parcial de persistencia confirmada por capturas; aceptación E2E completa y decisión de QA pendientes**. Esta actualización documental no modifica código ni datos.
+
+Actualización posterior: el ejecutor HTTP recuperado de HU44 pasó sobre las capas actuales, con PostgreSQL temporal y 44 changesets. Su escenario de registro facial, asistencia y consultas usa inferencia simulada y no completa la salida ni la aceptación con cámara. Los resultados, archivos y pasos reproducibles se registran en [HU46_E2E_QA.md](HU46_E2E_QA.md); se mantienen los pendientes manuales anteriores.

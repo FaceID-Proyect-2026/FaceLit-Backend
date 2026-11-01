@@ -214,4 +214,12 @@ No se afirma una prueba con cámara, una entrega en producción ni un nuevo punt
 
 ## Nota posterior de conectividad facial local
 
+### Seguimiento de revisión — 31 de octubre de 2026
+
+Backend publicado en `hu-46-dev`, SHA `c5970522984c014d5a30146c5e0a5c03d6e41b43`; DB publicada en `hu-46-main`, SHA `a5e5f9e27c6d57ee63a224bfa5c5f90dbec376f8`.
+
+La usuaria confirmó que pudo iniciar sesión después de crear el coordinador. Su captura SQL muestra una cuenta con rol COORDINATOR, cuenta y credencial ACTIVE y comprobación de formato BCrypt verdadera. Esta comprobación revisa únicamente el formato almacenado; el ingreso visual comunicado aporta la evidencia de acceso. No se expone la contraseña ni el hash en este documento.
+
+Esto no demuestra rotación de una cuenta anterior, revocación de sus sesiones ni renovación en otros ambientes. Esos casos y la aprobación independiente permanecen pendientes según la lista anterior. Las capturas fueron aportadas en el chat y deben adjuntarse a la revisión con el UUID completo y los SHA correspondientes, sin secretos. No se repitieron las pruebas automatizadas para esta actualización documental.
+
 Después del ingreso confirmado por la usuaria, se diagnosticó un conflicto en el puerto 8090 de Windows y se publicó el microservicio local en 8091. La causa, las dos variables privadas modificadas y los pasos para QA se documentan en [HU46_PUERTO_FACIAL_QA.md](HU46_PUERTO_FACIAL_QA.md). Es un ajuste local de conectividad, separado de la inicialización del coordinador; no declara un cambio de puerto en producción ni una aceptación facial E2E.
