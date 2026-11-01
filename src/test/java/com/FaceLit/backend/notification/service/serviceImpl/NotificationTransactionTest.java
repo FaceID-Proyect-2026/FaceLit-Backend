@@ -37,7 +37,7 @@ class NotificationTransactionTest {
         var target = new com.FaceLit.backend.auth.service.serviceImpl.roleandpermission.LoginServiceImpl(credentials, mock(UserRoleRepository.class),
                 mock(com.FaceLit.backend.auth.repository.roleandpermission.RolePermissionRepository.class), encoder,
                 mock(com.FaceLit.backend.auth.service.roleandpermission.JwtService.class), notices,
-                mock(com.FaceLit.backend.auth.repository.legal.AcceptanceTermsRepository.class), mock(com.FaceLit.backend.auth.repository.security.UserSessionRepository.class), jdbc);
+                mock(com.FaceLit.backend.auth.repository.legal.AcceptanceTermsRepository.class), mock(com.FaceLit.backend.auth.repository.security.UserSessionRepository.class));
         org.springframework.test.util.ReflectionTestUtils.setField(target, "entityManager", mock(jakarta.persistence.EntityManager.class));
         var factory = new ProxyFactory(target); factory.addAdvice(new TransactionInterceptor(manager, new AnnotationTransactionAttributeSource()));
         var service = (com.FaceLit.backend.auth.service.roleandpermission.LoginService) factory.getProxy();

@@ -32,19 +32,22 @@ public interface RecordEnvironmentRepository extends JpaRepository<RecordEnviron
     @Query("""
             SELECT record
             FROM RecordEnvironment record
+            JOIN record.instructorScheduled scheduled
+            LEFT JOIN record.instructorInCharge replacement
             WHERE record.active = true
+              AND record.deletedAt IS NULL
               AND (
-                    record.instructorInCharge.user.idUser = :authenticatedUserId
+                    replacement.user.idUser = :authenticatedUserId
                     OR (
-                        record.instructorInCharge IS NULL
-                        AND record.instructorScheduled.user.idUser = :authenticatedUserId
+                        replacement IS NULL
+                        AND scheduled.user.idUser = :authenticatedUserId
                     )
               )
               AND record.shutdownTime > CURRENT_TIMESTAMP
-            ORDER BY record.entryTime DESC
+            ORDER BY record.entryTime DESC, record.createdAt DESC, record.idRecordEnvironment DESC
             """)
-    Optional<RecordEnvironment> findCurrentActiveSessionByInstructor(
-            @Param("authenticatedUserId") UUID authenticatedUserId);
+    List<RecordEnvironment> findCurrentActiveSessionsByInstructor(
+            @Param("authenticatedUserId") UUID authenticatedUserId, org.springframework.data.domain.Pageable page);
 
     Optional<RecordEnvironment> findFirstByCreatedByAndActiveTrueAndDeletedAtIsNullAndShutdownTimeAfterOrderByEntryTimeDesc(
             String createdBy, OffsetDateTime now);
@@ -52,8 +55,10 @@ public interface RecordEnvironmentRepository extends JpaRepository<RecordEnviron
     @Query("""
             SELECT DISTINCT record.chip.idChip
             FROM RecordEnvironment record
-            WHERE record.instructorScheduled.idInstructor = :idInstructor
-               OR record.instructorInCharge.idInstructor = :idInstructor
+            JOIN record.instructorScheduled scheduled
+            LEFT JOIN record.instructorInCharge replacement
+            WHERE record.deletedAt IS NULL
+              AND (scheduled.idInstructor = :idInstructor OR replacement.idInstructor = :idInstructor)
             """)
     List<UUID> findDistinctChipIdsByInstructor(@Param("idInstructor") UUID idInstructor);
 

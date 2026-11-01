@@ -14,6 +14,9 @@ import java.util.List;
 
 @Repository
 public interface PasswordRecoveryRepository extends JpaRepository<PasswordRecovery, UUID> {
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("update PasswordRecovery r set r.used = true, r.resetTokenHash = null where r.user.idUser = :userId and r.used = false")
+    int invalidateAllForUser(@Param("userId") UUID userId);
 
     //// Busca el token exacto que el usuario ingresa para restablecer la contraseña
     Optional<PasswordRecovery> findByToken(String token);

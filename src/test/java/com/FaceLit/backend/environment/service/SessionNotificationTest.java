@@ -34,7 +34,8 @@ class SessionNotificationTest {
     private final NotificationService notifications = mock(NotificationService.class);
     private final EnvironmentServiceImpl service = new EnvironmentServiceImpl(environments, sessions, instructors,
             mock(InstructorProgramRepository.class), chips, learners, devices, mock(LoginService.class),
-            new EnvironmentSessionNotifier(instructors, learners, notifications));
+            new EnvironmentSessionNotifier(instructors, learners, notifications),
+            mock(com.FaceLit.backend.facial.repository.FacialEventRepository.class));
     private final Instructor creator = instructor("Camila", "Perez");
     private final Instructor selected = instructor("Luis", "Gomez");
     private final RecordEnvironmentRequestDTO dto = new RecordEnvironmentRequestDTO();
@@ -45,6 +46,8 @@ class SessionNotificationTest {
         environment.setIdEnvironment(UUID.randomUUID()); environment.setEnvironmentName("Aula \"2\"");
         environment.setState(EnvironmentState.ACTIVE);
         Chip chip = new Chip(); chip.setIdChip(UUID.randomUUID()); chip.setChipCode("3145555"); chip.setState(AcademicState.ACTIVE);
+        Program program = new Program(); program.setIdProgram(UUID.randomUUID()); program.setState(AcademicState.ACTIVE);
+        chip.setProgram(program);
         Device device = new Device(); device.setIdDevice(UUID.randomUUID()); device.setDeviceCode("camera-1");
         device.setEnvironment(environment); device.setStatus("ACTIVE");
         dto.setIdEnvironment(environment.getIdEnvironment()); dto.setIdChip(chip.getIdChip());
@@ -112,7 +115,9 @@ class SessionNotificationTest {
 
     private static Instructor instructor(String first, String last) {
         User user = new User(); user.setIdUser(UUID.randomUUID()); user.setFirstName(first); user.setLastName(last);
+        user.setAccountStatus(com.FaceLit.backend.auth.model.enums.AccountStatus.ACTIVE);
         Instructor instructor = new Instructor(); instructor.setIdInstructor(UUID.randomUUID()); instructor.setUser(user);
+        instructor.setInstructorType(com.FaceLit.backend.academic.model.enums.InstructorType.TRANSVERSAL);
         return instructor;
     }
 }

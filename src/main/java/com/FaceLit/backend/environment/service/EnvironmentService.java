@@ -19,7 +19,7 @@ public interface EnvironmentService {
 
     List<InstructorResponseDTO> findInstructorsForSession(UUID authenticatedUserId);
 
-    List<ChipResponseDTO> findChipsForInstructor(UUID idInstructor);
+    List<ChipResponseDTO> findChipsForInstructor(UUID idInstructor, UUID authenticatedUserId);
 
     RecordEnvironmentResponseDTO createSession(RecordEnvironmentRequestDTO dto, UUID authenticatedUserId);
 
