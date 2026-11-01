@@ -222,4 +222,14 @@ La usuaria confirmó que pudo iniciar sesión después de crear el coordinador. 
 
 Esto no demuestra rotación de una cuenta anterior, revocación de sus sesiones ni renovación en otros ambientes. Esos casos y la aprobación independiente permanecen pendientes según la lista anterior. Las capturas fueron aportadas en el chat y deben adjuntarse a la revisión con el UUID completo y los SHA correspondientes, sin secretos. No se repitieron las pruebas automatizadas para esta actualización documental.
 
+### Seguimiento de revisión independiente PR #75 — 1 de noviembre de 2026
+
+QA reprodujo que `scripts/initialize-coordinator.ps1` podía dejar `FACELIT_COORDINATOR_BOOTSTRAP` definida como cadena vacía cuando originalmente no existía. La siguiente inicialización de Spring en la misma terminal podía fallar al enlazar esa variable booleana. No se atribuyó a la lógica de credenciales ni a PostgreSQL.
+
+Corrección preparada en la rama HU: la restauración distingue entre variables ausentes y variables con valor previo. Una variable ausente se elimina explícitamente del entorno del proceso; las demás recuperan exactamente su valor previo. La corrección no imprime, cambia ni persiste contraseñas.
+
+Regresión: `scripts/tests/test-environment-restoration.ps1` comprueba los caminos de éxito y error, variables originalmente ausentes y preexistentes, y que el inicializador invoque la restauración dentro de `finally`. Aprobó en PowerShell 7.6.5 y Windows PowerShell 5.1. No se volvió a ejecutar el flujo de bootstrap ni se usaron credenciales reales para esta corrección.
+
+Estado: corrección y regresión preparadas para el nuevo SHA. Pendientes: CI verde, nueva revisión de QA y comprobación de arranque normal en la terminal del operador después del inicializador. La evidencia automatizada no sustituye esa comprobación.
+
 Después del ingreso confirmado por la usuaria, se diagnosticó un conflicto en el puerto 8090 de Windows y se publicó el microservicio local en 8091. La causa, las dos variables privadas modificadas y los pasos para QA se documentan en [HU46_PUERTO_FACIAL_QA.md](HU46_PUERTO_FACIAL_QA.md). Es un ajuste local de conectividad, separado de la inicialización del coordinador; no declara un cambio de puerto en producción ni una aceptación facial E2E.

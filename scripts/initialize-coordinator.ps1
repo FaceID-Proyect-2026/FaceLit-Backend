@@ -7,6 +7,7 @@ param(
     [string]$MavenCommand = (Join-Path $PSScriptRoot '../mvnw.cmd')
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Restore-ProcessEnvironment.ps1')
 if ($Mode -eq 'Create' -and (!$FirstName.Trim() -or !$LastName.Trim())) { throw 'FirstName and LastName are required for creation.' }
 if ($Document -notmatch '^[0-9]{6,15}$') { throw 'Document must contain 6 to 15 digits.' }
 $secret = Read-Host 'Nueva contraseña (entrada oculta; no se guarda en el historial)' -AsSecureString
@@ -44,7 +45,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'La inicialización falló. Revisa el mensaje; no se imprime la contraseña.' }
     } finally { Pop-Location }
 } finally {
-    foreach ($key in $previous.Keys) { [Environment]::SetEnvironmentVariable($key, $previous[$key], 'Process') }
+    Restore-ProcessEnvironment -Snapshot $previous
     if ($secretPointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($secretPointer) }
     if ($confirmationPointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($confirmationPointer) }
     $password = $null

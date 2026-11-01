@@ -86,4 +86,12 @@ Preparación local para el PR: revisar el diff y las evidencias, hacer commit en
 
 No se eliminan ramas acumuladas: primero deben compararse y clasificarse como absorbidas, pendientes u obsoletas con revisión del equipo. La recuperación local no equivale a integración en main ni aprobación independiente.
 
+### Seguimiento de PR #64/#75 — limpieza de variables de entorno
+
+Las revisiones independientes del 1 de noviembre reprodujeron que restaurar un valor `$null` con `SetEnvironmentVariable` podía dejar una variable definida como cadena vacía. Se corrigieron los tres scripts de prueba de FaceLit-DB y el inicializador de coordinador del backend mediante una función de restauración que elimina expresamente las variables originalmente ausentes y restaura el valor exacto de las demás.
+
+Las regresiones `scripts/tests/test-environment-restoration.ps1` de backend y DB pasaron en PowerShell 7.6.5 y Windows PowerShell 5.1. El camino temprano de error del ejecutor E2E se comprobó con el puerto 55439 ocupado a propósito; restauró variables ausentes y preexistentes sin iniciar Docker. La prueba completa E2E no se repitió con esta corrección, y el runner de bootstrap no se ejecutó contra PostgreSQL para este cambio.
+
+Pendiente: comprobar que CI queda verde en los nuevos SHA y repetir la revisión. En la terminal de operación, comprobar además que el backend inicia normalmente después de usar el inicializador. Esta corrección no cambia los datos, el seed activo ni la lógica de rotación.
+
 El siguiente paso separado es el punto 4: ejecutar las pruebas PostgreSQL y de migración en CI, conservar sus artefactos y demostrar que una prueba rota bloquea el PR. Los workflows actuales revisados aún no activan esos escenarios del backend y microservicio; no se declara resuelto ese punto con una ejecución local.
