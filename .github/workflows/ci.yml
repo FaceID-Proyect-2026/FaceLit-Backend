@@ -12,6 +12,8 @@ permissions:
 jobs:
   backend-tests:
     name: Maven tests and JaCoCo coverage
+    needs: postgres-integration
+    if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -22,6 +24,11 @@ jobs:
       SPRING_MAIL_HOST: localhost
       SPRING_MAIL_PORT: '1025'
     steps:
+      # Keep the existing required check red when PostgreSQL fails or is skipped.
+      - name: Require successful PostgreSQL integration
+        if: ${{ needs.postgres-integration.result != 'success' }}
+        run: exit 1
+
       - name: Checkout backend
         uses: actions/checkout@v4
 
@@ -53,3 +60,89 @@ jobs:
             target/site/jacoco/
             target/jacoco.exec
           if-no-files-found: warn
+
+  postgres-integration:
+    name: PostgreSQL integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      POSTGRES_DB: facelit_integration
+      POSTGRES_USER: facelit_ci
+      POSTGRES_PASSWORD: ci-only-disposable-password
+      POSTGRES_PORT: '127.0.0.1:5439'
+      FACELIT_SESSION_TEST_DB: jdbc:postgresql://127.0.0.1:5439/facelit_integration
+      FACELIT_SESSION_TEST_DRIVER: org.postgresql.Driver
+      FACELIT_SESSION_TEST_USER: facelit_ci
+      FACELIT_SESSION_TEST_PASSWORD: ci-only-disposable-password
+      FACELIT_SESSION_TEST_DDL: validate
+      FACELIT_SESSION_TEST_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      FACELIT_DB_URL: jdbc:postgresql://127.0.0.1:5439/facelit_integration
+      FACELIT_DB_USER: facelit_ci
+      FACELIT_DB_PASSWORD: ci-only-disposable-password
+      FACIAL_EMBEDDING_API_KEY: ci-only-internal-key
+    steps:
+      - name: Checkout backend
+        uses: actions/checkout@v4
+
+      - name: Checkout reviewed database schema
+        uses: actions/checkout@v4
+        with:
+          repository: FaceID-Proyect-2026/FaceLit-DB
+          ref: 74c1af01ccc8690080f746b745a037555a85547e
+          path: database
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Migrate disposable PostgreSQL with pgvector
+        run: |
+          mkdir -p ci-logs
+          docker compose -f database/docker-compose.yml -p backend-ci up -d --wait postgres
+          docker compose -f database/docker-compose.yml -p backend-ci --profile tooling run --rm liquibase validate 2>&1 | tee ci-logs/validate.log
+          docker compose -f database/docker-compose.yml -p backend-ci --profile tooling run --rm liquibase update 2>&1 | tee ci-logs/update.log
+
+      - name: Run session HTTP and JPA schema integration on PostgreSQL
+        run: |
+          chmod +x mvnw
+          ./mvnw -B -ntp -Dtest=EnvironmentSessionIntegrationTest,SchemaValidationPostgresIT -Dsurefire.failIfNoSpecifiedTests=true test 2>&1 | tee ci-logs/postgres-tests.log
+
+      - name: Require both PostgreSQL suites to run without skips
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          reports = Path('target/surefire-reports')
+          for suite in ('com.FaceLit.backend.environment.EnvironmentSessionIntegrationTest',
+                        'com.FaceLit.backend.SchemaValidationPostgresIT'):
+              result = ET.parse(reports / f'TEST-{suite}.xml').getroot()
+              assert int(result.attrib['tests']) > 0, f'{suite}: no tests executed'
+              for field in ('failures', 'errors', 'skipped'):
+                  assert int(result.attrib[field]) == 0, f'{suite}: {field} must be zero'
+          PY
+
+      - name: Preserve PostgreSQL logs
+        if: always()
+        run: |
+          mkdir -p ci-logs
+          docker compose -f database/docker-compose.yml -p backend-ci logs --no-color > ci-logs/postgres.log 2>&1
+
+      - name: Upload PostgreSQL integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-postgres-integration
+          path: |
+            ci-logs/
+            target/surefire-reports/
+          if-no-files-found: error
+
+      - name: Remove disposable PostgreSQL
+        if: always()
+        run: docker compose -f database/docker-compose.yml -p backend-ci down --volumes --remove-orphans
