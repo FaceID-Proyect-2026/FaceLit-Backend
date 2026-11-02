@@ -45,6 +45,8 @@ public class SecurityConfig {
                         // ─── PÚBLICOS — no necesitan token ───────────────────────
                         .requestMatchers("/api/auth/logout", "/api/auth/change-password", "/api/auth/verify-password").authenticated()
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/health").permitAll()
+                        .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml").hasRole("COORDINATOR")
                         // El token se valida como primer mensaje del canal WebSocket.
                         .requestMatchers("/ws/realtime").permitAll()
 

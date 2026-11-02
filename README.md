@@ -165,7 +165,15 @@ The [Dockerfile](Dockerfile) builds a new JAR from `pom.xml` and `src/`, using `
 docker build -t facelit-backend:review .
 ```
 
-Supply runtime environment through the host configuration. The team identified `srv2068863.hstgr.cloud` as its Hostinger target, but source readiness is not proof that the final commit is deployed. Container hardening and health probes belong to the separately preserved HU-MEJ-015 work, not this cleanup branch.
+Supply runtime environment through the host configuration. The team identified `srv2068863.hstgr.cloud` as its Hostinger target, but source readiness is not proof that the final commit is deployed.
+
+The runtime uses UID/GID `10001:10001`. Docker probes the anonymous `GET /health`
+endpoint every 30 seconds after a 120-second startup grace period. It reports
+process availability only; it does not run facial inference, contact SMTP or test
+the microservice/database. Startup still validates the database schema. A probe
+adds no wait to registration or attendance. The JAR is read-only to this user;
+Java can write temporary files under `/tmp`. Do not mount secrets into the build
+context: `.dockerignore` excludes environment files and local build caches.
 
 ## Repository hygiene and release acceptance
 
@@ -174,5 +182,21 @@ Supply runtime environment through the host configuration. The team identified `
 This README is the single maintained explanatory document. Historical notes, reports and screenshots were archived outside the source checkout before removal and remain recoverable through Git history. Runtime email images, source comments, tests and executable configuration remain present.
 
 Before acceptance, record the final commits and applicable CI checks; verify startup, login per role, academic/environment behavior, enrollment/reset, attendance, notifications and SMTP on a coordinated deployment. Unit/H2 tests do not replace PostgreSQL integration or real camera acceptance. Obtain independent review before merging.
+
+## OpenAPI contract
+
+Springdoc generates the current API contract at `GET /v3/api-docs` (or
+`/v3/api-docs.yaml`). A valid coordinator Bearer token is required; anonymous and
+other roles cannot read this catalog. The document declares contract version
+`1.0.0`, JWT authentication and the request/response schemas inferred from the
+existing controllers and DTO validation. Public authentication operations are
+identified separately. Denied legacy enrollment endpoints are excluded.
+
+The metadata version is not a new URL prefix: current `/api/...` routes remain
+unchanged for frontend/native compatibility. Introducing `/api/v1` routes and
+migrating consumers is a separate coordinated contract change, not completed here.
+Swagger UI is not installed; use a JSON/YAML viewer or API client with the exported
+contract. Catalog generation runs on documentation requests and does not invoke
+the facial service or add work to capture requests.
 
 Related repositories: [frontend](https://github.com/FaceID-Proyect-2026/FaceLit), [database](https://github.com/FaceID-Proyect-2026/FaceLit-DB), [facial service](https://github.com/FaceID-Proyect-2026/micro-facial).
