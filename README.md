@@ -1,5 +1,7 @@
 # FaceLit backend
 
+# Documentación : https://github.com/FaceID-Proyect-2026/facelit-docs
+
 The application retains three layers: controllers/DTOs, application services/rules,
 and repositories/external clients. The Java application remains one modular monolith.
 CSV imports keep their transactional facade and original processing order; focused
