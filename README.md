@@ -25,8 +25,7 @@ sibling DB repository's `scripts/test-architecture-e2e.ps1`; it creates and remo
 separate Docker project. It does not use the normal database. Browser verification
 is optional and requires Playwright tooling plus an available browser.
 
-The recovery, current HU46 execution evidence and acceptance limits are recorded in
-[HU46 E2E review](docs/HU46_E2E_QA.md). The runner must report an executed test without
+The runner must report an executed test without
 failures or skips; a local pass does not establish CI or camera acceptance.
 
 Spring Boot REST backend for FaceLit's account access, academic management, environment sessions, facial attendance and notifications. This repository uses Java 17 and Spring Boot 3.4.1, as declared in [pom.xml](pom.xml). Its Java package is `com.FaceLit.backend`.
@@ -61,7 +60,7 @@ Install Java 17 and use the committed `mvnw`/`mvnw.cmd`, or compatible Maven. Pr
 
 [application.yaml](src/main/resources/application.yaml) is the configuration source. Supply private environment variables or an ignored local `.env`, read by spring-dotenv. Do not overwrite a working local configuration during a checkout update.
 
-For a new installation, use [.env.example](.env.example) as the template and fill its private values. The initial coordinator is no longer a database seed. Follow the one-time setup below after Liquibase has prepared the schema and roles.
+For a new installation, configure the database, mail, JWT and internal facial-service environment variables with private values. The initial coordinator is no longer a database seed. Follow the one-time setup below after Liquibase has prepared the schema and roles.
 
 | Variable | Purpose |
 | --- | --- |
@@ -95,7 +94,7 @@ Replace the placeholders. The script requests password and confirmation using hi
 
 Creation never promotes an existing ordinary account or creates another initial coordinator. A mismatched existing credential requires explicit rotation. Rotation keeps IDs, names, email, roles and historical relations, invalidates sessions/recovery authorizations and cancels pending access mail. Repeating the same completed operation is idempotent. Keep `FACELIT_COORDINATOR_BOOTSTRAP` and `FACELIT_COORDINATOR_ROTATE_PASSWORD` disabled during normal service operation.
 
-If an active coordinator still holds exactly the retired seed's published bcrypt value, startup refuses to proceed until rotation. Detection uses a SHA-256 fingerprint, not a usable password or bcrypt credential. This check does not prove every historically exposed password has been rotated. An operator must perform and record rotation separately in each real environment; replacing Git files alone does not do it. See the [QA delivery record](docs/HU46_COORDINADOR_QA.md).
+If an active coordinator still holds exactly the retired seed's published bcrypt value, startup refuses to proceed until rotation. Detection uses a SHA-256 fingerprint, not a usable password or bcrypt credential. This check does not prove every historically exposed password has been rotated. An operator must perform and record rotation separately in each real environment; replacing Git files alone does not do it.
 
 ## Run and build
 
