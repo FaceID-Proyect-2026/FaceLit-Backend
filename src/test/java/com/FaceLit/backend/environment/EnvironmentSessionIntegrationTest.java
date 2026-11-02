@@ -231,6 +231,18 @@ class EnvironmentSessionIntegrationTest {
                 .content("{\"state\":\"INACTIVE\"}")).andExpect(status().isConflict());
     }
 
+    @Test void coordinatorCanListWithoutAFilterAndSearchByName() throws Exception {
+        UUID room = room();
+        var coordinator = as(user().getIdUser(), "COORDINATOR");
+        var all = json.readTree(mvc.perform(get("/api/admin/environments").with(coordinator))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(all.findValuesAsText("idEnvironment")).contains(room.toString());
+        mvc.perform(get("/api/admin/environments").with(coordinator).param("search", roomName))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].idEnvironment").value(room.toString()));
+        mvc.perform(get("/api/admin/environments").with(coordinator).param("search", "   "))
+                .andExpect(status().isOk());
+    }
+
     private String roomName;
     private UUID room() throws Exception {
         roomName = unique();

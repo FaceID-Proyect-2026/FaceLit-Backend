@@ -31,7 +31,7 @@ public class EnvironmentAdministrationService {
     @Transactional(readOnly = true)
     public List<EnvironmentResponseDTO> search(String query) {
         String normalized = normalize(query);
-        return environments.searchAllForAdministration(normalized.isBlank() ? null : normalized).stream()
+        return environments.searchAllForAdministration(normalized).stream()
                 .map(EnvironmentResponseDTO::new)
                 .toList();
     }

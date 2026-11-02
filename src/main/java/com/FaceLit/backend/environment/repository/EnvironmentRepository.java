@@ -32,7 +32,7 @@ public interface EnvironmentRepository extends JpaRepository<Environment, UUID> 
     @Query("""
             select e from Environment e
             where e.deletedAt is null
-              and (:search is null or lower(e.environmentName) like lower(concat('%', :search, '%')))
+              and lower(e.environmentName) like lower(concat('%', :search, '%'))
             order by e.environmentName asc
             """)
     List<Environment> searchAllForAdministration(@Param("search") String search);
