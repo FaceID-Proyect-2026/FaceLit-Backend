@@ -19,7 +19,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(FacialEmbeddingController.class)
+@WebMvcTest({FacialEmbeddingController.class, com.FaceLit.backend.shared.controller.HealthController.class})
 @Import({SecurityConfig.class, JwtFilter.class})
 class FacialEmbeddingHttpTest {
     @Autowired MockMvc mvc;
@@ -29,6 +29,11 @@ class FacialEmbeddingHttpTest {
     @MockitoBean FacialEmbeddingVerificationClient client;
     @MockitoBean com.FaceLit.backend.realtime.RealtimeWebSocketHandler realtime;
     final UUID owner=UUID.randomUUID();
+    @Test void healthProbeWorksWithoutLoginAndDoesNotRunInference() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/health"))
+                .andExpect(status().isOk()).andExpect(content().json("{\"status\":\"ok\"}"));
+        verifyNoInteractions(client, jwt);
+    }
     org.springframework.test.web.servlet.request.RequestPostProcessor as(String role) {
         return authentication(new UsernamePasswordAuthenticationToken(owner,null,List.of(new SimpleGrantedAuthority("ROLE_"+role))));
     }

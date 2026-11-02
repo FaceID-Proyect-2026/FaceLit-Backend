@@ -39,6 +39,10 @@ spring:
 server:
   port: 8080
 
+springdoc:
+  paths-to-match: /api/**
+  paths-to-exclude: /api/facial/challenge,/api/facial/enrollment,/api/facial/profile-photo
+
 jwt:
   secret: ${JWT_SECRET}
   expiration: 28800000

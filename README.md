@@ -25,8 +25,7 @@ sibling DB repository's `scripts/test-architecture-e2e.ps1`; it creates and remo
 separate Docker project. It does not use the normal database. Browser verification
 is optional and requires Playwright tooling plus an available browser.
 
-The recovery, current HU46 execution evidence and acceptance limits are recorded in
-[HU46 E2E review](docs/HU46_E2E_QA.md). The runner must report an executed test without
+The runner must report an executed test without
 failures or skips; a local pass does not establish CI or camera acceptance.
 
 Spring Boot REST backend for FaceLit's account access, academic management, environment sessions, facial attendance and notifications. This repository uses Java 17 and Spring Boot 3.4.1, as declared in [pom.xml](pom.xml). Its Java package is `com.FaceLit.backend`.
@@ -61,7 +60,7 @@ Install Java 17 and use the committed `mvnw`/`mvnw.cmd`, or compatible Maven. Pr
 
 [application.yaml](src/main/resources/application.yaml) is the configuration source. Supply private environment variables or an ignored local `.env`, read by spring-dotenv. Do not overwrite a working local configuration during a checkout update.
 
-For a new installation, use [.env.example](.env.example) as the template and fill its private values. The initial coordinator is no longer a database seed. Follow the one-time setup below after Liquibase has prepared the schema and roles.
+For a new installation, configure the database, mail, JWT and internal facial-service environment variables with private values. The initial coordinator is no longer a database seed. Follow the one-time setup below after Liquibase has prepared the schema and roles.
 
 | Variable | Purpose |
 | --- | --- |
@@ -95,7 +94,7 @@ Replace the placeholders. The script requests password and confirmation using hi
 
 Creation never promotes an existing ordinary account or creates another initial coordinator. A mismatched existing credential requires explicit rotation. Rotation keeps IDs, names, email, roles and historical relations, invalidates sessions/recovery authorizations and cancels pending access mail. Repeating the same completed operation is idempotent. Keep `FACELIT_COORDINATOR_BOOTSTRAP` and `FACELIT_COORDINATOR_ROTATE_PASSWORD` disabled during normal service operation.
 
-If an active coordinator still holds exactly the retired seed's published bcrypt value, startup refuses to proceed until rotation. Detection uses a SHA-256 fingerprint, not a usable password or bcrypt credential. This check does not prove every historically exposed password has been rotated. An operator must perform and record rotation separately in each real environment; replacing Git files alone does not do it. See the [QA delivery record](docs/HU46_COORDINADOR_QA.md).
+If an active coordinator still holds exactly the retired seed's published bcrypt value, startup refuses to proceed until rotation. Detection uses a SHA-256 fingerprint, not a usable password or bcrypt credential. This check does not prove every historically exposed password has been rotated. An operator must perform and record rotation separately in each real environment; replacing Git files alone does not do it.
 
 ## Run and build
 
@@ -166,7 +165,15 @@ The [Dockerfile](Dockerfile) builds a new JAR from `pom.xml` and `src/`, using `
 docker build -t facelit-backend:review .
 ```
 
-Supply runtime environment through the host configuration. The team identified `srv2068863.hstgr.cloud` as its Hostinger target, but source readiness is not proof that the final commit is deployed. Container hardening and health probes belong to the separately preserved HU-MEJ-015 work, not this cleanup branch.
+Supply runtime environment through the host configuration. The team identified `srv2068863.hstgr.cloud` as its Hostinger target, but source readiness is not proof that the final commit is deployed.
+
+The runtime uses UID/GID `10001:10001`. Docker probes the anonymous `GET /health`
+endpoint every 30 seconds after a 120-second startup grace period. It reports
+process availability only; it does not run facial inference, contact SMTP or test
+the microservice/database. Startup still validates the database schema. A probe
+adds no wait to registration or attendance. The JAR is read-only to this user;
+Java can write temporary files under `/tmp`. Do not mount secrets into the build
+context: `.dockerignore` excludes environment files and local build caches.
 
 ## Repository hygiene and release acceptance
 
@@ -175,5 +182,21 @@ Supply runtime environment through the host configuration. The team identified `
 This README is the single maintained explanatory document. Historical notes, reports and screenshots were archived outside the source checkout before removal and remain recoverable through Git history. Runtime email images, source comments, tests and executable configuration remain present.
 
 Before acceptance, record the final commits and applicable CI checks; verify startup, login per role, academic/environment behavior, enrollment/reset, attendance, notifications and SMTP on a coordinated deployment. Unit/H2 tests do not replace PostgreSQL integration or real camera acceptance. Obtain independent review before merging.
+
+## OpenAPI contract
+
+Springdoc generates the current API contract at `GET /v3/api-docs` (or
+`/v3/api-docs.yaml`). A valid coordinator Bearer token is required; anonymous and
+other roles cannot read this catalog. The document declares contract version
+`1.0.0`, JWT authentication and the request/response schemas inferred from the
+existing controllers and DTO validation. Public authentication operations are
+identified separately. Denied legacy enrollment endpoints are excluded.
+
+The metadata version is not a new URL prefix: current `/api/...` routes remain
+unchanged for frontend/native compatibility. Introducing `/api/v1` routes and
+migrating consumers is a separate coordinated contract change, not completed here.
+Swagger UI is not installed; use a JSON/YAML viewer or API client with the exported
+contract. Catalog generation runs on documentation requests and does not invoke
+the facial service or add work to capture requests.
 
 Related repositories: [frontend](https://github.com/FaceID-Proyect-2026/FaceLit), [database](https://github.com/FaceID-Proyect-2026/FaceLit-DB), [facial service](https://github.com/FaceID-Proyect-2026/micro-facial).
