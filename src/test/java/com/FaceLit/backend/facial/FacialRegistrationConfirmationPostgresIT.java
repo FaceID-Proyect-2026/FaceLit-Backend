@@ -57,9 +57,9 @@ class FacialRegistrationConfirmationPostgresIT {
         TransactionTemplate transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         NotificationService notifications = new JdbcNotificationService(jdbc);
         mvc = MockMvcBuilders.standaloneSetup(new FacialEnrollmentController(
-            jdbc, transactions, null, notifications,
             new com.FaceLit.backend.facial.service.FacialRegistrationService(
-                new com.FaceLit.backend.facial.repository.FacialRegistrationStatusRepository(jdbc), transactions, notifications)))
+                new com.FaceLit.backend.facial.repository.FacialRegistrationStatusRepository(jdbc), transactions, notifications),
+            new com.FaceLit.backend.facial.service.FacialCapabilities("", "")))
             .setCustomArgumentResolvers(new AuthenticatedUserResolver())
             .build();
 

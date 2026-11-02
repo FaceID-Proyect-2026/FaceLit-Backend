@@ -98,12 +98,9 @@ public class EnvironmentServiceImpl implements EnvironmentService {
         return environmentRepository.findByNormalizedName(environmentName)
                 .map(environment -> {
                     if (environment.getState() != EnvironmentState.ACTIVE) {
-                        environment.setState(EnvironmentState.ACTIVE);
-                        environment.setUpdatedBy(authenticatedUserId.toString());
-                        if (dto.getCapacity() != null) {
-                            environment.setCapacity(dto.getCapacity());
-                        }
-                        return new EnvironmentResponseDTO(environmentRepository.save(environment));
+                        throw new EnvironmentException(
+                                "El ambiente está inactivo. Solicita a coordinación que lo reactive.",
+                                HttpStatus.CONFLICT);
                     }
                     return new EnvironmentResponseDTO(environment);
                 })

@@ -20,15 +20,25 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest({FacialEmbeddingController.class, com.FaceLit.backend.shared.controller.HealthController.class})
-@Import({SecurityConfig.class, JwtFilter.class})
+@Import({SecurityConfig.class, JwtFilter.class, com.FaceLit.backend.facial.service.FacialEmbeddingRegistrationService.class})
 class FacialEmbeddingHttpTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @MockitoBean JwtService jwt;
     @MockitoBean RecoveryRateLimiter limiter;
     @MockitoBean FacialEmbeddingVerificationClient client;
+    @MockitoBean com.FaceLit.backend.academic.repository.ApprenticeRepository apprentices;
     @MockitoBean com.FaceLit.backend.realtime.RealtimeWebSocketHandler realtime;
     final UUID owner=UUID.randomUUID();
+    final UUID apprenticeId=UUID.randomUUID();
+    @org.junit.jupiter.api.BeforeEach void activeApprentice() {
+        var user = new com.FaceLit.backend.auth.model.security.User();
+        user.setAccountStatus(com.FaceLit.backend.auth.model.enums.AccountStatus.ACTIVE);
+        var apprentice = new com.FaceLit.backend.academic.model.academic.Apprentice();
+        apprentice.setIdApprentice(apprenticeId);
+        apprentice.setUser(user);
+        when(apprentices.findByUser_IdUser(owner)).thenReturn(Optional.of(apprentice));
+    }
     @Test void healthProbeWorksWithoutLoginAndDoesNotRunInference() throws Exception {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/health"))
                 .andExpect(status().isOk()).andExpect(content().json("{\"status\":\"ok\"}"));
@@ -55,7 +65,9 @@ class FacialEmbeddingHttpTest {
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.id").value("saved")).andExpect(jsonPath("$.embedding").doesNotExist());
         verify(client).registerFromImage(argThat(value -> {
             Map<?,?> body=(Map<?,?>)value;
-            return owner.equals(body.get("user_id")) && owner.toString().equals(body.get("created_by"));
+            return apprenticeId.equals(body.get("apprentice_id"))
+                    && owner.equals(body.get("reset_owner_user_id"))
+                    && owner.toString().equals(body.get("created_by"));
         }));
     }
     @Test void internalCredentialFailureDoesNotLogOutUser() throws Exception {

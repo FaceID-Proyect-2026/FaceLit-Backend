@@ -6,6 +6,7 @@ public enum Language {
     ES,
     EN,
     DE,
+    PT,
     PR,
     FR;
 
@@ -16,6 +17,7 @@ public enum Language {
         }
 
         return switch (value.trim().toUpperCase()) {
+            case "PR", "PT" -> PT;
             case "FR", "FRA", "FRANCES", "FRANCAIS", "FRANÇAIS" -> FR;
             default -> valueOf(value.trim().toUpperCase());
         };

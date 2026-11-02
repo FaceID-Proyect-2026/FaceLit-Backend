@@ -2,6 +2,7 @@ package com.FaceLit.backend.facial.service.serviceImpl;
 
 import com.FaceLit.backend.academic.model.academic.Apprentice;
 import com.FaceLit.backend.academic.model.enums.AcademicState;
+import com.FaceLit.backend.auth.model.enums.AccountStatus;
 import com.FaceLit.backend.academic.repository.ApprenticeRepository;
 import com.FaceLit.backend.academic.repository.UserChipRepository;
 import com.FaceLit.backend.environment.model.RecordEnvironment;
@@ -179,7 +180,8 @@ public class FacialEventServiceImpl implements FacialEventService {
         VerificationResponse verification;
         try {
             verification = verificationClient.verifySession(
-                    dto.getIdRecordEnvironment(),
+                    userChipRepository.findActiveApprenticeIdsByChip(
+                            record.getChip().getIdChip(), AcademicState.ACTIVE, AccountStatus.ACTIVE),
                     dto.getImageBase64(),
                     dto.getImageFrames(),
                     dto.getLivenessChallenge(),

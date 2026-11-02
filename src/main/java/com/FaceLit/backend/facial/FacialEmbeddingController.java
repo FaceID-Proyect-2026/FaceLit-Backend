@@ -1,15 +1,12 @@
 package com.FaceLit.backend.facial;
 
-import java.util.List;
 import java.util.Map;
+import com.FaceLit.backend.facial.service.FacialEmbeddingRegistrationService;
+import com.FaceLit.backend.facial.dto.request.FacialEmbeddingRegistrationRequest;
+import com.FaceLit.backend.facial.dto.request.FacialLivenessRequest;
 import java.util.UUID;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,53 +18,21 @@ import org.springframework.web.client.RestClientResponseException;
 @RestController
 @RequestMapping("/api/facial/embeddings")
 public class FacialEmbeddingController {
-    private final FacialEmbeddingVerificationClient client;
+    private final FacialEmbeddingRegistrationService service;
 
-    public FacialEmbeddingController(FacialEmbeddingVerificationClient client) {
-        this.client = client;
+    public FacialEmbeddingController(FacialEmbeddingRegistrationService service) {
+        this.service = service;
     }
 
-    public record Registration(
-            @JsonProperty("user_id") @NotNull UUID userId,
-            @JsonProperty("image_base64") @NotBlank @Size(max = 5000000) String imageBase64,
-            @JsonProperty("image_frames") @Size(max = 18) List<@NotBlank @Size(max = 5000000) String> imageFrames,
-            @JsonProperty("liveness_challenge") @Size(max = 40) String livenessChallenge,
-            @JsonProperty("liveness_challenges") @Size(max = 3) List<@NotBlank @Size(max = 40) String> livenessChallenges,
-            @JsonProperty("photo_reference") @Size(max = 500) String photoReference,
-            @JsonProperty("replace_existing") boolean replaceExisting,
-            @JsonProperty("reset_token") UUID resetToken) {}
-
-    public record Liveness(
-            @JsonProperty("image_frames") @NotNull @Size(min = 3, max = 18) List<@NotBlank @Size(max = 5000000) String> imageFrames,
-            @JsonProperty("liveness_challenge") @Size(max = 40) String livenessChallenge) {}
-
     @PostMapping("/from-image")
-    public ResponseEntity<?> register(@Valid @RequestBody Registration request, @AuthenticationPrincipal UUID userId) {
-        if (!request.userId().equals(userId)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Solo puedes registrar tu propio rostro."));
-        }
-        // Identity and audit author come from the validated session, never from a client claim.
-        Map<String, Object> payload = new java.util.LinkedHashMap<>();
-        payload.put("user_id", userId);
-        payload.put("created_by", userId.toString());
-        payload.put("image_base64", request.imageBase64());
-        payload.put("image_frames", request.imageFrames() == null ? List.of() : request.imageFrames());
-        payload.put("liveness_challenge", request.livenessChallenge());
-        payload.put("liveness_challenges", request.livenessChallenges() == null ? List.of() : request.livenessChallenges());
-        payload.put("photo_reference", request.photoReference());
-        payload.put("replace_existing", request.replaceExisting());
-        payload.put("reset_token", request.resetToken());
-        return ResponseEntity.status(HttpStatus.CREATED).body(withoutBiometricVector(client.registerFromImage(payload)));
+    public ResponseEntity<JsonNode> register(@Valid @RequestBody FacialEmbeddingRegistrationRequest request,
+            @AuthenticationPrincipal UUID userId) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.register(request, userId));
     }
 
     @PostMapping("/liveness-check")
-    public JsonNode checkLiveness(@Valid @RequestBody Liveness request) {
-        return client.checkLiveness(request);
-    }
-
-    private JsonNode withoutBiometricVector(JsonNode response) {
-        if (response instanceof ObjectNode object) object.remove("embedding");
-        return response;
+    public JsonNode checkLiveness(@Valid @RequestBody FacialLivenessRequest request) {
+        return service.checkLiveness(request);
     }
 
     @ExceptionHandler(RestClientResponseException.class)

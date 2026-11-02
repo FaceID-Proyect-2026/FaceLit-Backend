@@ -128,7 +128,7 @@ The actual controllers and [SecurityConfig](src/main/java/com/FaceLit/backend/co
 | Personal profile | `/api/profile/me`, `/api/profile/configuration` |
 | Academic management | `/api/academic/programs`, `/chips`, `/instructors`, `/csv` and `/me` |
 | Environment sessions | `/api/environment/environments`, `/sessions`, `/sessions/active` and session exit-password verification |
-| Facial enrollment | `/api/facial/me`, `/registration-status`, `/profile-photo`, `/challenge`, `/enrollment`, `/registration-confirmation` |
+| Facial registration status | `/api/facial/me`, `/registration-status`, `/registration-confirmation` |
 | Facial reset | `POST /api/facial/reset-requests`, `GET /api/facial/reset-requests/me` |
 | Notifications | `/api/notifications`, read/read-all and recipient-bound facial-request resolution |
 | Realtime | `/ws/realtime`, with token validation through its existing protocol |
@@ -200,3 +200,29 @@ contract. Catalog generation runs on documentation requests and does not invoke
 the facial service or add work to capture requests.
 
 Related repositories: [frontend](https://github.com/FaceID-Proyect-2026/FaceLit), [database](https://github.com/FaceID-Proyect-2026/FaceLit-DB), [facial service](https://github.com/FaceID-Proyect-2026/micro-facial).
+
+## Revision-tagged container release (HU-48)
+
+The manual `.github/workflows/container-release.yml` first runs this repository's
+reusable CI. Only a successful result permits building/publishing to GHCR. The
+artifact `container-release-reference` records the source revision and registry
+digest. Publication is an explicit workflow dispatch; no image was published as
+part of the local implementation. Publish the coordinated database branch before
+dispatching CI that references it. Deployment and rollback use recorded digests
+and a compatible database schema; see the workspace `deploy/README.md` and the
+HU-48 assessment in facelit-docs. A passing local test is not production acceptance.
+
+The tracked `.env.example` lists required process variables. Spring Boot does
+not load a `.env` file automatically: export those variables or supply them
+through the deployment environment. Never execute a configuration file as code.
+
+## Facial boundaries after the HU-48 refactor
+
+FacialEmbeddingController delegates to FacialEmbeddingRegistrationService; DTOs
+retain existing JSON validation and OpenAPI schema names. The application service
+resolves the authenticated apprentice and calls the facial client without keeping
+a database transaction open for inference. FacialEnrollmentController now serves
+only /me, /registration-status and /registration-confirmation. Security still
+denies the retired /challenge, /enrollment and /profile-photo routes; their
+incompatible SQL and old PAD adapter were removed. The legacy /me padAvailable
+flag remains configuration metadata for response compatibility.

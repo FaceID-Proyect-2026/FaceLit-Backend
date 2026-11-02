@@ -28,4 +28,12 @@ public interface EnvironmentRepository extends JpaRepository<Environment, UUID> 
             where lower(trim(e.environmentName)) = lower(trim(:environmentName))
             """)
     Optional<Environment> findByNormalizedName(@Param("environmentName") String environmentName);
+
+    @Query("""
+            select e from Environment e
+            where e.deletedAt is null
+              and (:search is null or lower(e.environmentName) like lower(concat('%', :search, '%')))
+            order by e.environmentName asc
+            """)
+    List<Environment> searchAllForAdministration(@Param("search") String search);
 }

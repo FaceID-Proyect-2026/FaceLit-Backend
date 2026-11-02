@@ -1,6 +1,7 @@
 package com.FaceLit.backend.environment.dto.request;
 
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -11,5 +12,6 @@ public class EnvironmentRequestDTO {
     @Size(max = 100, message = "El nombre del ambiente no puede superar 100 caracteres.")
     private String environmentName;
 
+    @Positive(message = "La capacidad debe ser mayor que cero.")
     private Integer capacity;
 }

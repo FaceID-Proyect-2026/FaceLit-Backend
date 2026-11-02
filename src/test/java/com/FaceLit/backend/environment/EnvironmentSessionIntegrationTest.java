@@ -200,6 +200,37 @@ class EnvironmentSessionIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM facialrecognition.facial_event f JOIN environment.record_environment r ON r.id_record_environment=f.id_record_environment WHERE f.id_facial_event=? AND r.id_chip=? AND r.id_environment=? AND r.id_instructor_scheduled=?", Integer.class, eventId, chip.getIdChip(), room, teacher.getIdInstructor())).isEqualTo(1);
     }
 
+    @Test void coordinatorCatalogPersistsChangesAndInstructorCannotAdministerIt() throws Exception {
+        UUID coordinator = user().getIdUser();
+        String name = "Catalog " + unique();
+        JsonNode value = json.readTree(mvc.perform(post("/api/admin/environments").with(as(coordinator, "COORDINATOR"))
+                .contentType("application/json").content(json.writeValueAsString(Map.of("environmentName", name, "capacity", 25))))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+        String path = "/api/admin/environments/" + value.path("idEnvironment").asText();
+        mvc.perform(get(path).with(as(teacher))).andExpect(status().isForbidden());
+        mvc.perform(put(path).with(as(coordinator, "COORDINATOR")).contentType("application/json")
+                .content(json.writeValueAsString(Map.of("environmentName", name, "capacity", 30))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.capacity").value(30));
+        mvc.perform(patch(path + "/state").with(as(coordinator, "COORDINATOR"))
+                .contentType("application/json").content("{\"state\":\"INACTIVE\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("INACTIVE"));
+        em.flush(); em.clear();
+        mvc.perform(get(path).with(as(coordinator, "COORDINATOR")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("INACTIVE"));
+        // Session setup must not silently reactivate a coordinator-disabled room.
+        mvc.perform(post("/api/environment/environments").with(as(teacher)).contentType("application/json")
+                .content(json.writeValueAsString(Map.of("environmentName", name))))
+                .andExpect(status().isConflict());
+    }
+
+    @Test void coordinatorCannotDeactivateARoomWithAnActiveSession() throws Exception {
+        UUID room = room();
+        create(room, teacher, teacher);
+        mvc.perform(patch("/api/admin/environments/" + room + "/state")
+                .with(as(user().getIdUser(), "COORDINATOR")).contentType("application/json")
+                .content("{\"state\":\"INACTIVE\"}")).andExpect(status().isConflict());
+    }
+
     private String roomName;
     private UUID room() throws Exception {
         roomName = unique();

@@ -48,5 +48,20 @@ public interface UserChipRepository extends JpaRepository<UserChip, UUID> {
     @EntityGraph(attributePaths = {"apprentice", "apprentice.user", "chip", "chip.program"})
     List<UserChip> findByChip_IdChipAndState(UUID idChip, AcademicState state);
 
+    @Query("""
+            select uc.apprentice.idApprentice
+            from UserChip uc
+            where uc.chip.idChip = :idChip
+              and uc.state = :state
+              and uc.deletedAt is null
+              and uc.apprentice.deletedAt is null
+              and uc.apprentice.user.deletedAt is null
+              and uc.apprentice.user.accountStatus = :accountStatus
+            """)
+    List<UUID> findActiveApprenticeIdsByChip(
+            @Param("idChip") UUID idChip,
+            @Param("state") AcademicState state,
+            @Param("accountStatus") com.FaceLit.backend.auth.model.enums.AccountStatus accountStatus);
+
     List<UserChip> findByApprentice_User_IdUser(UUID idUser);
 }
