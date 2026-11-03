@@ -42,9 +42,7 @@ public class AttendanceMatrixService {
             LocalDate dateFrom,
             LocalDate dateTo,
             UUID authenticatedUserId) {
-        if (dateFrom == null || dateTo == null || dateFrom.isAfter(dateTo)) {
-            throw new FacialEventException("El rango de fechas no es válido.", HttpStatus.BAD_REQUEST);
-        }
+        AttendanceDateRangePolicy.validate(dateFrom, dateTo);
 
         UUID ownUserId = null;
         UUID idInstructor = null;

@@ -16,12 +16,15 @@ import com.FaceLit.backend.notification.service.NotificationService;
 import com.FaceLit.backend.shared.service.UserDisplayNameService;
 import java.util.List;
 import java.util.UUID;
+import java.time.OffsetDateTime;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class NotificationServiceImpl implements NotificationService {
+
+    private static final int NOTIFICATION_RETENTION_DAYS = 30;
 
     private final NotificationRepository notificationRepository;
     private final EmailLogRepository emailLogRepository;
@@ -47,7 +50,8 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional(readOnly = true)
     @Override
     public List<NotificationResponseDTO> findForUser(UUID userId) {
-        return notificationRepository.findByIdUserAppOrderByCreatedAtDesc(userId)
+        return notificationRepository.findByIdUserAppAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
+                userId, OffsetDateTime.now().minusDays(NOTIFICATION_RETENTION_DAYS))
                 .stream()
                 .filter(notification -> !"EMAIL".equals(notification.getChannel())
                         && !"attendance_exit_reminder".equals(notification.getType()))
@@ -70,7 +74,9 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional
     @Override
     public List<NotificationResponseDTO> markAllRead(UUID userId) {
-        List<Notification> notifications = notificationRepository.findByIdUserAppOrderByCreatedAtDesc(userId).stream()
+        List<Notification> notifications = notificationRepository
+                .findByIdUserAppAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(
+                        userId, OffsetDateTime.now().minusDays(NOTIFICATION_RETENTION_DAYS)).stream()
                 .filter(notification -> !"EMAIL".equals(notification.getChannel())
                         && !"attendance_exit_reminder".equals(notification.getType())).toList();
         notifications.forEach(Notification::markRead);
