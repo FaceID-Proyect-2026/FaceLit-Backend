@@ -273,6 +273,7 @@ public class AccountAccessService {
                 .ifPresent(c -> { throw new PasswordRecoveryException("Ya existe un usuario con ese correo"); });
         updateEmailAndAudit(credential, request.getTargetEmail());
         credential.setPassword(encoder.encode(dto.getNewPassword()));
+        credential.getUser().setInitialPasswordChanged(true);
         credential.setFailedAttempts(0); credential.setLockedUntil(null);
         sessions.revokeAll(credential.getUser().getIdUser());
         credentials.saveAndFlush(credential);

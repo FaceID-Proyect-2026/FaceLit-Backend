@@ -72,6 +72,7 @@ public class CoordinatorBootstrapServiceImpl implements CoordinatorBootstrapServ
         users.save(user);
         Credential credential = new Credential(); credential.setUser(user); credential.setEmail(request.email().trim().toLowerCase(Locale.ROOT));
         credential.setPassword(encoder.encode(request.password())); credential.setCredentialStatus(CredentialStatus.ACTIVE);
+        user.setInitialPasswordChanged(false);
         credential.setCreatedBy(AUDIT_ACTOR); credentials.save(credential); user.setCredential(credential);
         UserRole assignment = new UserRole(); assignment.setUser(user); assignment.setRole(role);
         assignment.setAssignedAt(OffsetDateTime.now()); assignment.setCreatedBy(AUDIT_ACTOR); assignments.save(assignment);
@@ -92,6 +93,7 @@ public class CoordinatorBootstrapServiceImpl implements CoordinatorBootstrapServ
         if (!request.rotatePassword()) throw failure("La cuenta ya existe. Habilita la rotación explícita para cambiar su contraseña.");
 
         credential.setPassword(encoder.encode(request.password())); credential.setFailedAttempts(0); credential.setLockedUntil(null);
+        user.setInitialPasswordChanged(true);
         credential.setUpdatedBy(AUDIT_ACTOR); credentials.save(credential);
         sessions.revokeAll(user.getIdUser());
         recoveries.invalidateAllForUser(user.getIdUser());

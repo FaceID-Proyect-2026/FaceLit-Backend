@@ -152,7 +152,7 @@ class EnvironmentSessionIntegrationTest {
     }
 
     @Test void apprenticeAndCoordinatorCannotConfigureInstructorSessionsAndAnonymousGets401() throws Exception {
-        for (String role : List.of("APPRENTICE", "COORDINATOR")) {
+        for (String role : List.of("APPRENTICE")) {
             mvc.perform(get("/api/environment/sessions/active").with(as(UUID.randomUUID(),role)))
                     .andExpect(status().isForbidden());
             mvc.perform(post("/api/environment/environments").with(as(UUID.randomUUID(), role))
@@ -161,7 +161,70 @@ class EnvironmentSessionIntegrationTest {
             mvc.perform(post("/api/environment/sessions").with(as(UUID.randomUUID(), role))
                     .contentType("application/json").content("{}")) .andExpect(status().isForbidden());
         }
+        mvc.perform(get("/api/environment/environments").with(as(UUID.randomUUID(), "COORDINATOR")))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/environment/environments").with(as(UUID.randomUUID(), "COORDINATOR"))
+                .contentType("application/json").content("{\"environmentName\":\"Coordinator room\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/environment/sessions").with(as(UUID.randomUUID(), "COORDINATOR"))
+                .contentType("application/json").content("{}")) .andExpect(status().isForbidden());
         mvc.perform(get("/api/environment/sessions/active")).andExpect(status().isUnauthorized());
+    }
+
+    @Test void coordinatorCanManageEnvironmentAndFichaAssignment() throws Exception {
+        UUID actor = UUID.randomUUID();
+        JsonNode created = json.readTree(mvc.perform(post("/api/environment/environments")
+                .with(as(actor, "COORDINATOR"))
+                .contentType("application/json")
+                .content("{\"environmentName\":\"Coordinator managed room\",\"capacity\":2}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        String environmentId = created.path("idEnvironment").asText();
+
+        mvc.perform(patch("/api/environment/environments/" + environmentId)
+                .with(as(actor, "COORDINATOR"))
+                .contentType("application/json")
+                .content("{\"environmentName\":\"Coordinator managed room updated\",\"capacity\":3}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.environmentName").value("Coordinator managed room updated"));
+        em.flush(); em.clear();
+        assertThat(jdbc.queryForObject("select environment_name from environment.environment where id_environment = ?",
+                String.class, UUID.fromString(environmentId))).isEqualTo("Coordinator managed room updated");
+
+        mvc.perform(post("/api/environment/environments/" + environmentId + "/fichas")
+                .with(as(actor, "COORDINATOR"))
+                .contentType("application/json")
+                .content("{\"idChip\":\"" + chip.getIdChip() + "\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.fichaCode").value(chip.getChipCode()));
+        em.flush(); em.clear();
+        assertThat(jdbc.queryForObject("select count(*) from environment.chip_environment where id_environment = ? and id_chip = ? and state = 'ACTIVE' and deleted_at is null",
+                Integer.class, UUID.fromString(environmentId), chip.getIdChip())).isEqualTo(1);
+
+        mvc.perform(get("/api/environment/environments").param("idChip", chip.getIdChip().toString())
+                .with(as(actor, "INSTRUCTOR")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].idEnvironment").value(environmentId));
+        mvc.perform(get("/api/environment/environments").param("idChip", UUID.randomUUID().toString())
+                .with(as(actor, "INSTRUCTOR")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(delete("/api/environment/environments/" + environmentId + "/fichas/" + chip.getIdChip())
+                .with(as(actor, "COORDINATOR"))).andExpect(status().isNoContent());
+        mvc.perform(delete("/api/environment/environments/" + environmentId)
+                .with(as(actor, "COORDINATOR"))).andExpect(status().isNoContent());
+        em.flush(); em.clear();
+        assertThat(jdbc.queryForObject("select state from environment.environment where id_environment = ?",
+                String.class, UUID.fromString(environmentId))).isEqualTo("INACTIVE");
+        mvc.perform(get("/api/environment/environments")
+                .param("includeInactive", "true")
+                .with(as(actor, "COORDINATOR")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].idEnvironment").value(environmentId))
+                .andExpect(jsonPath("$[0].state").value("INACTIVE"));
+        mvc.perform(patch("/api/environment/environments/" + environmentId)
+                .with(as(actor, "COORDINATOR"))
+                .contentType("application/json")
+                .content("{\"state\":\"ACTIVE\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("ACTIVE"));
+        em.flush(); em.clear();
+        assertThat(jdbc.queryForObject("select state from environment.environment where id_environment = ? and deleted_at is null",
+                String.class, UUID.fromString(environmentId))).isEqualTo("ACTIVE");
     }
 
     @Test void deletedSessionsAreNotRestoredOrUsedAsAssignments() throws Exception {

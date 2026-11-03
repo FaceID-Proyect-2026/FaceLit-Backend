@@ -154,7 +154,10 @@ public class LoginServiceImpl implements LoginService {
                 .map(rp -> rp.getPermission().getNamePermission())
                 .collect(Collectors.toList());
 
-        boolean firstAccessPasswordPrompt = consumeInitialPasswordPrompt(user);
+        boolean firstAccessPasswordPrompt = !user.isInitialPasswordChanged();
+        if (firstAccessPasswordPrompt && !user.isInitialPasswordPromptSeen()) {
+            user.setInitialPasswordPromptSeen(true);
+        }
 
         // 11. Generar el JWT con userId, email, rol y permisos
         String token = jwtService.generateToken(user, roleName, permissions);
@@ -162,7 +165,8 @@ public class LoginServiceImpl implements LoginService {
         // La emisión del JWT registra y vincula exactamente una sesión (sid).
 
         // 12. Devolver la respuesta con el token
-        return LoginResponseDTO.success(token, roleName, permissions, user.getIdUser(), firstAccessPasswordPrompt);
+        return LoginResponseDTO.success(token, roleName, permissions, user.getIdUser(), firstAccessPasswordPrompt,
+                !user.isInitialPasswordChanged());
     }
 
     @Override
@@ -186,13 +190,6 @@ public class LoginServiceImpl implements LoginService {
                 .map(user -> acceptanceTermsRepository.existsByUserAndAcceptedTrueAndNoticeVersion(
                         user, PrivacyNoticePolicy.CURRENT_VERSION))
                 .orElse(false);
-    }
-
-    private boolean consumeInitialPasswordPrompt(User user) {
-        boolean hadSuccessfulSessionBefore = userSessionRepository.existsByUser_IdUser(user.getIdUser());
-        boolean shouldPrompt = !hadSuccessfulSessionBefore && !user.isInitialPasswordPromptSeen();
-        user.setInitialPasswordPromptSeen(true);
-        return shouldPrompt;
     }
 
     private void notifyFailedLogin(User user, int failedAttempts) {

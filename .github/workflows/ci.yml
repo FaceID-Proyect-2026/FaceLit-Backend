@@ -92,8 +92,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FaceID-Proyect-2026/FaceLit-DB
-          # Schema revision that introduces notice_version for consent records.
-          ref: 29ce180f28ce145770135edd92576e0ac6838ca0
+          # Includes notice_version and the initial_password_changed user flag.
+          ref: 872bbc9dfffec1a1c3930caccb91644787ede4da
           path: database
 
       - name: Setup Java 17
@@ -109,6 +109,14 @@ jobs:
           docker compose -f database/docker-compose.yml -p backend-ci up -d --wait postgres
           docker compose -f database/docker-compose.yml -p backend-ci --profile tooling run --rm liquibase validate 2>&1 | tee ci-logs/validate.log
           docker compose -f database/docker-compose.yml -p backend-ci --profile tooling run --rm liquibase update 2>&1 | tee ci-logs/update.log
+
+      - name: Deactivate retired historical seed in disposable test database
+        run: |
+          # The pinned historical migration still inserts the retired seed.
+          # Keep the production startup guard enabled; test suites create their own users.
+          docker compose -f database/docker-compose.yml -p backend-ci exec -T postgres \
+            psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+            -c "UPDATE security.user_app SET account_status = 'INACTIVE' WHERE number_document = '1000000000' AND created_by = 'liquibase-seed';"
 
       - name: Run session HTTP and JPA schema integration on PostgreSQL
         run: |
