@@ -1,15 +1,19 @@
 package com.FaceLit.backend.facial;
 
 import java.util.List;
+import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.FaceLit.backend.facial.FacialEmbeddingRegistrationService.Registration;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,51 +27,57 @@ import org.springframework.web.client.RestClientResponseException;
 public class FacialEmbeddingController {
     private final FacialEmbeddingVerificationClient client;
 
-    public FacialEmbeddingController(FacialEmbeddingVerificationClient client) {
-        this.client = client;
-    }
+    private final FacialEmbeddingRegistrationService registrationService;
 
-    public record Registration(
-            @JsonProperty("user_id") @NotNull UUID userId,
-            @JsonProperty("image_base64") @NotBlank @Size(max = 5000000) String imageBase64,
-            @JsonProperty("image_frames") @Size(max = 18) List<@NotBlank @Size(max = 5000000) String> imageFrames,
-            @JsonProperty("liveness_challenge") @Size(max = 40) String livenessChallenge,
-            @JsonProperty("liveness_challenges") @Size(max = 3) List<@NotBlank @Size(max = 40) String> livenessChallenges,
-            @JsonProperty("photo_reference") @Size(max = 500) String photoReference,
-            @JsonProperty("replace_existing") boolean replaceExisting,
-            @JsonProperty("reset_token") UUID resetToken) {}
+    public FacialEmbeddingController(FacialEmbeddingVerificationClient client,
+                                     FacialEmbeddingRegistrationService registrationService) {
+        this.client = client;
+        this.registrationService = registrationService;
+    }
 
     public record Liveness(
             @JsonProperty("image_frames") @NotNull @Size(min = 3, max = 18) List<@NotBlank @Size(max = 5000000) String> imageFrames,
             @JsonProperty("liveness_challenge") @Size(max = 40) String livenessChallenge) {}
 
+    @Schema(name = "FacialRegistrationResponse", description = "Registration metadata without the biometric vector.")
+    private record RegistrationResult(
+            UUID id,
+            @JsonProperty("user_id") UUID userId,
+            @JsonProperty("embedding_dimension") int embeddingDimension,
+            @JsonProperty("model_name") String modelName,
+            @JsonProperty("photo_reference") @Schema(nullable = true) String photoReference,
+            String status,
+            @JsonProperty("created_at") OffsetDateTime createdAt) {}
+
+    @Schema(name = "FacialLivenessResponse")
+    private record LivenessResult(boolean live, String reason) {}
+
+    @Schema(name = "FacialServiceError")
+    private record FacialError(String message) {}
+
+    @ApiResponse(responseCode = "201", description = "Facial registration created",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = RegistrationResult.class)))
+    @ApiResponse(responseCode = "409", description = "The face is already registered to another account",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = FacialError.class)))
+    @ApiResponse(responseCode = "502", description = "Facial service unavailable",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = FacialError.class)))
     @PostMapping("/from-image")
     public ResponseEntity<?> register(@Valid @RequestBody Registration request, @AuthenticationPrincipal UUID userId) {
-        if (!request.userId().equals(userId)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Solo puedes registrar tu propio rostro."));
-        }
-        // Identity and audit author come from the validated session, never from a client claim.
-        Map<String, Object> payload = new java.util.LinkedHashMap<>();
-        payload.put("user_id", userId);
-        payload.put("created_by", userId.toString());
-        payload.put("image_base64", request.imageBase64());
-        payload.put("image_frames", request.imageFrames() == null ? List.of() : request.imageFrames());
-        payload.put("liveness_challenge", request.livenessChallenge());
-        payload.put("liveness_challenges", request.livenessChallenges() == null ? List.of() : request.livenessChallenges());
-        payload.put("photo_reference", request.photoReference());
-        payload.put("replace_existing", request.replaceExisting());
-        payload.put("reset_token", request.resetToken());
-        return ResponseEntity.status(HttpStatus.CREATED).body(withoutBiometricVector(client.registerFromImage(payload)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(registrationService.register(request, userId));
     }
 
+    @ApiResponse(responseCode = "200", description = "Liveness evaluated, including negative results",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = LivenessResult.class)))
+    @ApiResponse(responseCode = "502", description = "Facial service unavailable",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = FacialError.class)))
     @PostMapping("/liveness-check")
     public JsonNode checkLiveness(@Valid @RequestBody Liveness request) {
         return client.checkLiveness(request);
     }
 
-    private JsonNode withoutBiometricVector(JsonNode response) {
-        if (response instanceof ObjectNode object) object.remove("embedding");
-        return response;
+    @ExceptionHandler(FacialEmbeddingRegistrationService.OwnershipException.class)
+    public ResponseEntity<Map<String, String>> ownershipError(FacialEmbeddingRegistrationService.OwnershipException error) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", error.getMessage()));
     }
 
     @ExceptionHandler(RestClientResponseException.class)

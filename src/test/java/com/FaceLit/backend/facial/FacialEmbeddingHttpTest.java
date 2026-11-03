@@ -20,7 +20,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest({FacialEmbeddingController.class, com.FaceLit.backend.shared.controller.HealthController.class})
-@Import({SecurityConfig.class, JwtFilter.class})
+@Import({SecurityConfig.class, JwtFilter.class, FacialEmbeddingRegistrationService.class})
 class FacialEmbeddingHttpTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
