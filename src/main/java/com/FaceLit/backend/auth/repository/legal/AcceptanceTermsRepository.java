@@ -12,13 +12,8 @@ import com.FaceLit.backend.auth.model.security.User;
 @Repository
 public interface AcceptanceTermsRepository extends JpaRepository<AcceptanceTerms, UUID> {
 
-    // Verifica si el usuario yaa acepto los terminos
-    // Se usa para no registrar duplicacion
-    boolean existsByUser(User user);
+    boolean existsByUserAndAcceptedTrueAndNoticeVersion(User user, String noticeVersion);
 
-    boolean existsByUserAndAcceptedTrue(User user);
-
-    // Busca la aceptación de términos del usuario, para poder eliminarla
-    Optional<AcceptanceTerms> findByUser(User user);
+    Optional<AcceptanceTerms> findByUserAndNoticeVersion(User user, String noticeVersion);
 
 }

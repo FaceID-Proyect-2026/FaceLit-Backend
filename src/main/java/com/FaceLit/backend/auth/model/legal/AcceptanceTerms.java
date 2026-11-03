@@ -35,8 +35,11 @@ public class AcceptanceTerms extends AuditBase {
     @Column(name = "accepted", nullable = false)
     private boolean accepted = false;
 
+    // Identifies the privacy notice version for which this decision was made.
+    @Column(name = "notice_version", nullable = false, length = 64)
+    private String noticeVersion;
 
-    // Relación con el usuario que aceptó los términos
+    // Relación con el usuario que tomó la decisión sobre el aviso.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_user_app", nullable = false)
     private User user;

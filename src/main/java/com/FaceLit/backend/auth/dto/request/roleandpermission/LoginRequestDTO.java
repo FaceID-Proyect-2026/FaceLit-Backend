@@ -22,7 +22,7 @@ public class LoginRequestDTO {
     @NotBlank(message = "La contraseña es obligatoria")
     private String password;
 
-    // El backend registra este consentimiento únicamente cuando las credenciales son válidas.
+    // El backend registra la decisión de privacidad únicamente después de validar las credenciales.
     private boolean privacyAccepted;
 
     public String resolveIdentifier() {
