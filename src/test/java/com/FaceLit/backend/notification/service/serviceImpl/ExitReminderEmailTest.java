@@ -75,7 +75,8 @@ class ExitReminderEmailTest {
     @Test void emailOnlyNotificationsAreExcludedFromAppInboxAndMarkAllRead() {
         var service = new NotificationServiceImpl(notifications, logs, mock(UserRoleRepository.class), new NotificationCatalog(), mock(ApplicationEventPublisher.class), mock(com.FaceLit.backend.shared.service.UserDisplayNameService.class));
         Notification app = new Notification(); app.setIdNotification(UUID.randomUUID()); app.setIdUserApp(userId); app.setType("attendance_late"); app.setChannel("APP_EMAIL");
-        when(notifications.findByIdUserAppOrderByCreatedAtDesc(userId)).thenReturn(List.of(notification, app));
+        when(notifications.findByIdUserAppAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(eq(userId), any()))
+                .thenReturn(List.of(notification, app));
         assertThat(service.findForUser(userId)).extracting(n -> n.type()).containsExactly("attendance_late");
         when(notifications.saveAll(anyList())).thenAnswer(call -> call.getArgument(0));
         service.markAllRead(userId);
@@ -104,7 +105,8 @@ class ExitReminderEmailTest {
         notification.setType("facial_request_resolved"); notification.setChannel("APP_EMAIL");
         String original = "{\"decidedBy\":\"" + coordinator + "\",\"facialDecision\":\"accepted\"}";
         notification.setMetadataJson(original);
-        when(notifications.findByIdUserAppOrderByCreatedAtDesc(userId)).thenReturn(List.of(notification));
+        when(notifications.findByIdUserAppAndCreatedAtGreaterThanEqualOrderByCreatedAtDesc(eq(userId), any()))
+                .thenReturn(List.of(notification));
         assertThat(service.findForUser(userId).get(0).meta()).contains("Maria Rodriguez", coordinator.toString());
         assertThat(notification.getMetadataJson()).isEqualTo(original);
         verify(notifications, never()).save(any());
