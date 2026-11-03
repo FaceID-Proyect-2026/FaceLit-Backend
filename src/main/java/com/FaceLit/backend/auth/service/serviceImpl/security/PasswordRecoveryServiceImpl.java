@@ -144,6 +144,7 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
         // 5. Hashear y actualizar la contraseña
         // La contraseña anterior se sobreescribe — deja de ser válida automáticamente
         credential.setPassword(passwordEncoder.encode(dto.getNewPassword()));
+        user.setInitialPasswordChanged(true);
         // Reseteamos también los intentos fallidos — el usuario recupera acceso limpio
         credential.setFailedAttempts(0);
         credentialRepository.save(credential);

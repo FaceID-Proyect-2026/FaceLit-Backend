@@ -30,9 +30,13 @@ public class LoginResponseDTO {
 
     private boolean firstAccessPasswordPrompt;
 
+    private boolean mustChangeInitialPassword;
+
     // Factory Method: crea la variante de respuesta correspondiente a un login exitoso.
-    public static LoginResponseDTO success(String token, String role, List<String> permissions, UUID userId, boolean firstAccessPasswordPrompt) {
-        return new LoginResponseDTO(token, role, permissions, userId, "Inicio de sesión exitoso", firstAccessPasswordPrompt);
+    public static LoginResponseDTO success(String token, String role, List<String> permissions, UUID userId,
+            boolean firstAccessPasswordPrompt, boolean mustChangeInitialPassword) {
+        return new LoginResponseDTO(token, role, permissions, userId, "Inicio de sesión exitoso",
+                firstAccessPasswordPrompt, mustChangeInitialPassword);
     }
 
 }

@@ -53,6 +53,7 @@ public class ChangePasswordServiceImpl implements ChangePasswordService {
         }
 
         credential.setPassword(passwordEncoder.encode(dto.getNewPassword()));
+        user.setInitialPasswordChanged(true);
         credential.setFailedAttempts(0);
         credential.setLockedUntil(null);
         if (accountAccess != null) accountAccess.cancelWelcome(user);
