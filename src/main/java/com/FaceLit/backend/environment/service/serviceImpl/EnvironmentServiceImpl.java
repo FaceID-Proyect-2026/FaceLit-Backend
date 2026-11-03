@@ -15,13 +15,17 @@ import com.FaceLit.backend.auth.model.enums.AccountStatus;
 import com.FaceLit.backend.auth.service.roleandpermission.LoginService;
 import com.FaceLit.backend.environment.dto.request.EnvironmentRequestDTO;
 import com.FaceLit.backend.environment.dto.request.RecordEnvironmentRequestDTO;
+import com.FaceLit.backend.environment.dto.request.EnvironmentAssignmentRequestDTO;
 import com.FaceLit.backend.environment.dto.response.EnvironmentResponseDTO;
 import com.FaceLit.backend.environment.dto.response.RecordEnvironmentResponseDTO;
+import com.FaceLit.backend.environment.dto.response.EnvironmentAssignmentResponseDTO;
 import com.FaceLit.backend.environment.exception.EnvironmentException;
 import com.FaceLit.backend.environment.model.Environment;
+import com.FaceLit.backend.environment.model.ChipEnvironment;
 import com.FaceLit.backend.environment.model.RecordEnvironment;
 import com.FaceLit.backend.environment.model.enums.EnvironmentState;
 import com.FaceLit.backend.environment.repository.EnvironmentRepository;
+import com.FaceLit.backend.environment.repository.ChipEnvironmentRepository;
 import com.FaceLit.backend.environment.repository.RecordEnvironmentRepository;
 import com.FaceLit.backend.environment.service.EnvironmentService;
 import com.FaceLit.backend.environment.service.EnvironmentSessionNotifier.SessionSnapshot;
@@ -45,6 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class EnvironmentServiceImpl implements EnvironmentService {
     private final EnvironmentRepository environmentRepository;
     private final RecordEnvironmentRepository recordEnvironmentRepository;
+    private final ChipEnvironmentRepository chipEnvironmentRepository;
     private final InstructorRepository instructorRepository;
     private final InstructorProgramRepository instructorProgramRepository;
     private final ChipRepository chipRepository;
@@ -57,6 +62,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     public EnvironmentServiceImpl(
             EnvironmentRepository environmentRepository,
             RecordEnvironmentRepository recordEnvironmentRepository,
+            ChipEnvironmentRepository chipEnvironmentRepository,
             InstructorRepository instructorRepository,
             InstructorProgramRepository instructorProgramRepository,
             ChipRepository chipRepository,
@@ -67,6 +73,7 @@ public class EnvironmentServiceImpl implements EnvironmentService {
             FacialEventRepository attendance) {
         this.environmentRepository = environmentRepository;
         this.recordEnvironmentRepository = recordEnvironmentRepository;
+        this.chipEnvironmentRepository = chipEnvironmentRepository;
         this.instructorRepository = instructorRepository;
         this.instructorProgramRepository = instructorProgramRepository;
         this.chipRepository = chipRepository;
@@ -80,10 +87,34 @@ public class EnvironmentServiceImpl implements EnvironmentService {
     @Override
     @Transactional(readOnly = true)
     public List<EnvironmentResponseDTO> searchEnvironments(String search) {
+        return searchEnvironments(search, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<EnvironmentResponseDTO> findEnvironmentsForChip(UUID idChip) {
+        return chipEnvironmentRepository.findByChip_IdChipAndStateAndDeletedAtIsNull(idChip, AcademicState.ACTIVE)
+                .stream().map(ChipEnvironment::getEnvironment)
+                .filter(environment -> environment.getState() == EnvironmentState.ACTIVE && environment.getDeletedAt() == null)
+                .distinct().sorted(Comparator.comparing(Environment::getEnvironmentName))
+                .map(EnvironmentResponseDTO::new).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<EnvironmentResponseDTO> searchEnvironments(String search, boolean includeInactive) {
         String normalizedSearch = search == null ? "" : search.trim();
-        List<Environment> environments = normalizedSearch.isBlank()
-                ? environmentRepository.findByStateOrderByEnvironmentNameAsc(EnvironmentState.ACTIVE)
-                : environmentRepository.searchActive(normalizedSearch, EnvironmentState.ACTIVE);
+        List<Environment> environments;
+        if (includeInactive) {
+            environments = environmentRepository.findAllByOrderByEnvironmentNameAsc().stream()
+                    .filter(item -> normalizedSearch.isBlank()
+                            || item.getEnvironmentName().toLowerCase().contains(normalizedSearch.toLowerCase()))
+                    .toList();
+        } else {
+            environments = normalizedSearch.isBlank()
+                    ? environmentRepository.findByStateOrderByEnvironmentNameAsc(EnvironmentState.ACTIVE)
+                    : environmentRepository.searchActive(normalizedSearch, EnvironmentState.ACTIVE);
+        }
         return environments.stream().map(EnvironmentResponseDTO::new).toList();
     }
 
@@ -99,6 +130,8 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                 .map(environment -> {
                     if (environment.getState() != EnvironmentState.ACTIVE) {
                         environment.setState(EnvironmentState.ACTIVE);
+                        environment.setDeletedAt(null);
+                        environment.setDeletedBy(null);
                         environment.setUpdatedBy(authenticatedUserId.toString());
                         if (dto.getCapacity() != null) {
                             environment.setCapacity(dto.getCapacity());
@@ -115,6 +148,106 @@ public class EnvironmentServiceImpl implements EnvironmentService {
                     environment.setCreatedBy(authenticatedUserId.toString());
                     return new EnvironmentResponseDTO(environmentRepository.save(environment));
                 });
+    }
+
+    @Override
+    @Transactional
+    public EnvironmentResponseDTO updateEnvironment(UUID idEnvironment, EnvironmentRequestDTO dto, UUID authenticatedUserId) {
+        Environment environment = environmentRepository.findById(idEnvironment)
+                .orElseThrow(() -> new EnvironmentException("Ambiente no encontrado.", HttpStatus.NOT_FOUND));
+        if (environment.getDeletedAt() != null && dto.getState() != EnvironmentState.ACTIVE) {
+            throw new EnvironmentException("Ambiente no encontrado.", HttpStatus.NOT_FOUND);
+        }
+        String name = dto.getEnvironmentName() == null ? environment.getEnvironmentName() : normalizeName(dto.getEnvironmentName());
+        if (name.isBlank()) {
+            throw new EnvironmentException("El nombre del ambiente es obligatorio.", HttpStatus.BAD_REQUEST);
+        }
+        if (dto.getCapacity() != null && dto.getCapacity() <= 0) {
+            throw new EnvironmentException("La capacidad debe ser mayor que cero.", HttpStatus.BAD_REQUEST);
+        }
+        environmentRepository.findByNormalizedName(name).ifPresent(existing -> {
+            if (!existing.getIdEnvironment().equals(idEnvironment)) {
+                throw new EnvironmentException("Ya existe un ambiente con ese nombre.", HttpStatus.CONFLICT);
+            }
+        });
+        environment.setEnvironmentName(name);
+        if (dto.getCapacity() != null) environment.setCapacity(dto.getCapacity());
+        if (dto.getState() != null) {
+            environment.setState(dto.getState());
+            if (dto.getState() == EnvironmentState.ACTIVE) {
+                environment.setDeletedAt(null);
+                environment.setDeletedBy(null);
+            }
+        }
+        environment.setUpdatedBy(authenticatedUserId.toString());
+        return new EnvironmentResponseDTO(environmentRepository.save(environment));
+    }
+
+    @Override
+    @Transactional
+    public void deactivateEnvironment(UUID idEnvironment, UUID authenticatedUserId) {
+        Environment environment = environmentRepository.findById(idEnvironment)
+                .orElseThrow(() -> new EnvironmentException("Ambiente no encontrado.", HttpStatus.NOT_FOUND));
+        if (environment.getDeletedAt() == null) {
+            environment.setState(EnvironmentState.INACTIVE);
+            environment.setDeletedAt(OffsetDateTime.now());
+            environment.setDeletedBy(authenticatedUserId.toString());
+            environment.setUpdatedBy(authenticatedUserId.toString());
+            environmentRepository.save(environment);
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<EnvironmentAssignmentResponseDTO> findAssignments(UUID idEnvironment) {
+        return chipEnvironmentRepository
+                .findByEnvironment_IdEnvironmentAndStateAndDeletedAtIsNull(idEnvironment, AcademicState.ACTIVE)
+                .stream().map(EnvironmentAssignmentResponseDTO::new).toList();
+    }
+
+    @Override
+    @Transactional
+    public EnvironmentAssignmentResponseDTO assignFicha(UUID idEnvironment, EnvironmentAssignmentRequestDTO dto,
+            UUID authenticatedUserId) {
+        Environment environment = environmentRepository.findById(idEnvironment)
+                .orElseThrow(() -> new EnvironmentException("Ambiente no encontrado.", HttpStatus.NOT_FOUND));
+        if (environment.getState() != EnvironmentState.ACTIVE || environment.getDeletedAt() != null) {
+            throw new EnvironmentException("El ambiente no está activo.", HttpStatus.CONFLICT);
+        }
+        Chip chip = chipRepository.findById(dto.getIdChip())
+                .orElseThrow(() -> new EnvironmentException("La ficha no existe.", HttpStatus.NOT_FOUND));
+        if (chip.getState() != AcademicState.ACTIVE || chip.getDeletedAt() != null) {
+            throw new EnvironmentException("La ficha no está activa.", HttpStatus.CONFLICT);
+        }
+        if (chipEnvironmentRepository.findByEnvironment_IdEnvironmentAndChip_IdChipAndStateAndDeletedAtIsNull(
+                idEnvironment, chip.getIdChip(), AcademicState.ACTIVE).isPresent()) {
+            throw new EnvironmentException("La ficha ya está asignada a este ambiente.", HttpStatus.CONFLICT);
+        }
+        if (environment.getCapacity() != null && chipEnvironmentRepository
+                .findByEnvironment_IdEnvironmentAndStateAndDeletedAtIsNull(idEnvironment, AcademicState.ACTIVE).size()
+                >= environment.getCapacity()) {
+            throw new EnvironmentException("La capacidad del ambiente está completa.", HttpStatus.CONFLICT);
+        }
+        ChipEnvironment assignment = new ChipEnvironment();
+        assignment.setEnvironment(environment);
+        assignment.setChip(chip);
+        assignment.setState(AcademicState.ACTIVE);
+        assignment.setCreatedBy(authenticatedUserId.toString());
+        return new EnvironmentAssignmentResponseDTO(chipEnvironmentRepository.save(assignment));
+    }
+
+    @Override
+    @Transactional
+    public void unassignFicha(UUID idEnvironment, UUID idChip, UUID authenticatedUserId) {
+        ChipEnvironment assignment = chipEnvironmentRepository
+                .findByEnvironment_IdEnvironmentAndChip_IdChipAndStateAndDeletedAtIsNull(
+                        idEnvironment, idChip, AcademicState.ACTIVE)
+                .orElseThrow(() -> new EnvironmentException("La asignación no existe.", HttpStatus.NOT_FOUND));
+        assignment.setState(AcademicState.INACTIVE);
+        assignment.setDeletedAt(OffsetDateTime.now());
+        assignment.setDeletedBy(authenticatedUserId.toString());
+        assignment.setUpdatedBy(authenticatedUserId.toString());
+        chipEnvironmentRepository.save(assignment);
     }
 
     @Override

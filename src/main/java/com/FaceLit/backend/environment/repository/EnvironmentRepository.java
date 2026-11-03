@@ -13,11 +13,17 @@ import com.FaceLit.backend.environment.model.enums.EnvironmentState;
 
 public interface EnvironmentRepository extends JpaRepository<Environment, UUID> {
 
-    List<Environment> findByStateOrderByEnvironmentNameAsc(EnvironmentState state);
+    @Query("select e from Environment e where e.state = :state and e.deletedAt is null order by e.environmentName asc")
+    List<Environment> findByStateOrderByEnvironmentNameAsc(@Param("state") EnvironmentState state);
+
+    List<Environment> findByDeletedAtIsNullOrderByEnvironmentNameAsc();
+
+    List<Environment> findAllByOrderByEnvironmentNameAsc();
 
     @Query("""
             select e from Environment e
             where e.state = :state
+              and e.deletedAt is null
               and lower(e.environmentName) like lower(concat('%', :search, '%'))
             order by e.environmentName asc
             """)

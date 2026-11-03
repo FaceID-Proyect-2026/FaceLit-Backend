@@ -27,12 +27,13 @@ import com.FaceLit.backend.notification.service.*;
 class SessionNotificationTest {
     private final EnvironmentRepository environments = mock(EnvironmentRepository.class);
     private final RecordEnvironmentRepository sessions = mock(RecordEnvironmentRepository.class);
+    private final ChipEnvironmentRepository chipEnvironments = mock(ChipEnvironmentRepository.class);
     private final InstructorRepository instructors = mock(InstructorRepository.class);
     private final ChipRepository chips = mock(ChipRepository.class);
     private final UserChipRepository learners = mock(UserChipRepository.class);
     private final DeviceRepository devices = mock(DeviceRepository.class);
     private final NotificationService notifications = mock(NotificationService.class);
-    private final EnvironmentServiceImpl service = new EnvironmentServiceImpl(environments, sessions, instructors,
+    private final EnvironmentServiceImpl service = new EnvironmentServiceImpl(environments, sessions, chipEnvironments, instructors,
             mock(InstructorProgramRepository.class), chips, learners, devices, mock(LoginService.class),
             new EnvironmentSessionNotifier(instructors, learners, notifications),
             mock(com.FaceLit.backend.facial.repository.FacialEventRepository.class));
