@@ -92,7 +92,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FaceID-Proyect-2026/FaceLit-DB
-          ref: 74c1af01ccc8690080f746b745a037555a85547e
+          # Schema revision that introduces notice_version for consent records.
+          ref: 29ce180f28ce145770135edd92576e0ac6838ca0
           path: database
 
       - name: Setup Java 17

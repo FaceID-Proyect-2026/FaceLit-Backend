@@ -12,6 +12,7 @@ import com.FaceLit.backend.auth.dto.request.roleandpermission.LoginRequestDTO;
 import com.FaceLit.backend.auth.dto.response.roleandpermission.LoginResponseDTO;
 import com.FaceLit.backend.auth.exception.LoginException;
 import com.FaceLit.backend.auth.model.legal.AcceptanceTerms;
+import com.FaceLit.backend.auth.model.legal.PrivacyNoticePolicy;
 import com.FaceLit.backend.auth.model.security.Credential;
 import com.FaceLit.backend.auth.model.security.User;
 import com.FaceLit.backend.auth.model.enums.AccountStatus;
@@ -114,9 +115,20 @@ public class LoginServiceImpl implements LoginService {
             throw new LoginException("Usuario o contraseña incorrectos");
         }
 
-        boolean privacyAlreadyAccepted = acceptanceTermsRepository.existsByUserAndAcceptedTrue(user);
-        if (!privacyAlreadyAccepted && !dto.isPrivacyAccepted()) {
-            throw new LoginException("Debes aceptar el aviso de privacidad para continuar.");
+        boolean privacyAlreadyAccepted = acceptanceTermsRepository.existsByUserAndAcceptedTrueAndNoticeVersion(
+                user, PrivacyNoticePolicy.CURRENT_VERSION);
+        if (!privacyAlreadyAccepted) {
+            AcceptanceTerms acceptance = acceptanceTermsRepository
+                    .findByUserAndNoticeVersion(user, PrivacyNoticePolicy.CURRENT_VERSION)
+                    .orElseGet(AcceptanceTerms::new);
+            acceptance.setUser(user);
+            acceptance.setNoticeVersion(PrivacyNoticePolicy.CURRENT_VERSION);
+            acceptance.setAccepted(dto.isPrivacyAccepted());
+            acceptanceTermsRepository.save(acceptance);
+
+            if (!dto.isPrivacyAccepted()) {
+                throw new LoginException("No aceptaste el aviso de privacidad. El acceso requiere autorización para tratar los datos básicos.");
+            }
         }
 
         // 6. Resetear intentos fallidos — login exitoso
@@ -141,14 +153,6 @@ public class LoginServiceImpl implements LoginService {
         List<String> permissions = rolePermissions.stream()
                 .map(rp -> rp.getPermission().getNamePermission())
                 .collect(Collectors.toList());
-
-        if (!privacyAlreadyAccepted) {
-            AcceptanceTerms acceptance = acceptanceTermsRepository.findByUser(user)
-                    .orElseGet(AcceptanceTerms::new);
-            acceptance.setUser(user);
-            acceptance.setAccepted(true);
-            acceptanceTermsRepository.save(acceptance);
-        }
 
         boolean firstAccessPasswordPrompt = consumeInitialPasswordPrompt(user);
 
@@ -179,7 +183,8 @@ public class LoginServiceImpl implements LoginService {
 
         return credentialRepository.findByUser_DocumentNumber(normalizedDocument)
                 .map(Credential::getUser)
-                .map(user -> acceptanceTermsRepository.existsByUserAndAcceptedTrue(user))
+                .map(user -> acceptanceTermsRepository.existsByUserAndAcceptedTrueAndNoticeVersion(
+                        user, PrivacyNoticePolicy.CURRENT_VERSION))
                 .orElse(false);
     }
 
